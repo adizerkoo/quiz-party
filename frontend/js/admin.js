@@ -1,7 +1,21 @@
 let quizQuestions = [];
 
-function toggleOptions() {
-    const type = document.getElementById('q-input-type').value;
+// 3. Профессиональные уведомления вместо алертов
+function showToast(message) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerText = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// 1. Функция переключения типов
+function selectType(type, element) {
+    document.getElementById('q-input-type').value = type;
+    document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
+    element.classList.add('active');
+    
     const fields = document.getElementById('options-fields');
     const correctZone = document.getElementById('correct-answer-zone');
     
@@ -16,26 +30,26 @@ function toggleOptions() {
 
 function addQuestionToList() {
     const textEl = document.getElementById('q-input-text');
-    const typeEl = document.getElementById('q-input-type');
+    const type = document.getElementById('q-input-type').value;
     let correct = "";
     let options = [];
 
     if (!textEl.value.trim()) {
-        alert("Напиши хотя бы короткий вопрос! 😊");
+        showToast("Введите текст вопроса!");
         return;
     }
 
-    if (typeEl.value === 'text') {
+    if (type === 'text') {
         correct = document.getElementById('q-input-correct').value.trim();
         if (!correct) {
-            alert("А какой правильный ответ? Напиши его!");
+            showToast("Укажите правильный ответ!");
             return;
         }
     } else {
         for (let i = 1; i <= 4; i++) {
             const val = document.getElementById(`opt-${i}`).value.trim();
             if (!val) {
-                alert(`Заполни вариант №${i}!`);
+                showToast(`Заполните вариант ${i}!`);
                 return;
             }
             options.push(val);
@@ -46,13 +60,14 @@ function addQuestionToList() {
 
     quizQuestions.push({
         text: textEl.value.trim(),
-        type: typeEl.value,
+        type: type,
         correct: correct,
-        options: typeEl.value === 'options' ? options : null
+        options: type === 'options' ? options : null
     });
 
     renderQuestions();
     clearForm();
+    showToast("Вопрос добавлен!");
 }
 
 function renderQuestions() {
@@ -60,29 +75,15 @@ function renderQuestions() {
     const countEl = document.getElementById('q-count');
     list.innerHTML = "";
     countEl.innerText = quizQuestions.length;
-
     quizQuestions.forEach((q, index) => {
         const div = document.createElement('div');
         div.className = "question-item-complex";
-        
-        let contentHtml = "";
-        if (q.type === 'options') {
-            contentHtml = `<div class="preview-options">`;
-            q.options.forEach(opt => {
-                const isCorrect = (opt.trim() === q.correct.trim());
-                contentHtml += `<span class="preview-opt ${isCorrect ? 'is-correct' : ''}">${opt}</span>`;
-            });
-            contentHtml += `</div>`;
-        } else {
-            contentHtml = `<div class="preview-correct-text">Верный ответ: <span>${q.correct}</span></div>`;
-        }
-
         div.innerHTML = `
             <div class="q-header">
                 <b>${index + 1}. ${q.text}</b>
-                <button onclick="removeQuestion(${index})" class="btn-remove">&times;</button>
+                <button onclick="removeQuestion(${index})" class="btn-remove" style="background:none; border:none; color:red; cursor:pointer;">&times;</button>
             </div>
-            ${contentHtml}
+            <div style="font-size:0.8rem; opacity:0.7;">Тип: ${q.type} | Ответ: ${q.correct}</div>
         `;
         list.appendChild(div);
     });
@@ -99,55 +100,41 @@ function removeQuestion(index) {
     renderQuestions();
 }
 
-// Функция для генерации случайного кода комнаты (например, PARTY-123)
 function generateRoomCode() {
     return 'QUIZ-' + Math.random().toString(36).substr(2, 4).toUpperCase();
 }
 
 async function saveAndGo() {
+    const quizTitle = document.getElementById('quiz-title-input').value.trim();
+    
+    if (!quizTitle) {
+        showToast("Введите название вечеринки!");
+        return;
+    }
+    
     if (quizQuestions.length === 0) {
-        alert("Добавь хотя бы один вопрос для начала праздника! 🎉");
+        showToast("Добавьте хотя бы один вопрос!");
         return;
     }
 
     const roomCode = generateRoomCode();
-    const quizTitle = prompt("Как назовем твой Квиз?", "День Рождения!");
-
-    if (!quizTitle) return; // Если отменили ввод названия
-
-    // Подготавливаем данные для API
-    const quizData = {
-        title: quizTitle,
-        code: roomCode,
-        questions: quizQuestions
-    };
+    const quizData = { title: quizTitle, code: roomCode, questions: quizQuestions };
 
     try {
-        // Отправляем данные на твой FastAPI бэкенд
         const response = await fetch('http://127.0.0.1:8000/api/quizzes', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(quizData),
         });
 
         if (response.ok) {
-            const result = await response.json();
-            console.log("Квиз сохранен в БД:", result);
-            
-            // Сохраняем код комнаты и данные локально для перехода
-            localStorage.setItem('current_room_code', roomCode);
+            // 5. Никаких алертов, сразу в игру
             localStorage.setItem('current_quiz', JSON.stringify(quizQuestions));
-            
-            alert(`Ура! Квиз создан. Код комнаты: ${roomCode}`);
             window.location.href = `game.html?role=host&room=${roomCode}`;
         } else {
-            const errorData = await response.json();
-            alert("Ошибка при сохранении: " + errorData.detail);
+            showToast("Ошибка сохранения!");
         }
     } catch (error) {
-        console.error("Ошибка сети:", error);
-        alert("Не удалось связаться с сервером. Проверь, запущен ли uvicorn!");
+        showToast("Ошибка соединения с сервером!");
     }
 }
