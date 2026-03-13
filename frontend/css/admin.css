@@ -1,0 +1,44 @@
+.question-item {
+    background: rgba(57, 255, 20, 0.1); /* Слегка зеленый фон для вопросов */
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: 12px;
+    border-left: 4px solid #39FF14;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn-admin {
+    background: #39FF14;
+    color: black;
+    font-weight: bold;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.answer-row {
+    background: rgba(255, 255, 255, 0.05);
+    margin: 8px 0;
+    padding: 10px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid transparent;
+    transition: 0.3s;
+}
+
+.btn-check, .btn-wrong {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    border-radius: 5px;
+    margin-left: 5px;
+    padding: 5px;
+}
+
+.btn-check:hover { background: rgba(57, 255, 20, 0.2); }
+.btn-wrong:hover { background: rgba(255, 75, 43, 0.2); }

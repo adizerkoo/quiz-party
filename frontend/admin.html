@@ -1,0 +1,32 @@
+<head>
+    <meta charset="UTF-8">
+    <title>Панель Организатора</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <div id="screen-create" class="glass-card">
+        <h2>Конструктор вопросов</h2>
+        <div id="questions-list"></div>
+        <button onclick="addNewQuestion()" class="btn-admin">Добавить свой вопрос</button>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+<section id="screen-host-panel" style="display: none;">
+    <div class="glass-card">
+        <h2 id="current-question-title">Вопрос №1</h2>
+        <p id="current-question-text" style="font-style: italic; color: #39FF14;">Тут будет текст вопроса</p>
+        
+        <hr>
+        
+        <div id="answers-hub">
+            <p>Ответы игроков:</p>
+            <div id="incoming-answers">
+                </div>
+        </div>
+
+        <button onclick="sendNextQuestion()" class="btn-admin" style="margin-top: 20px;">Следующий вопрос →</button>
+    </div>
+</section>

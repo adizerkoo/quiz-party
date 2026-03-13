@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birthday Quiz</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <section id="screen-menu" class="screen">
+        <div class="glass-card">
+            <h1>QUIZ PARTY</h1>
+            <input type="text" id="join-room-code" placeholder="Код комнаты">
+            <button onclick="joinGame()" class="btn-primary">Присоединиться</button>
+            <hr>
+            <button onclick="showScreen('screen-create')" class="btn-secondary">Создать игру</button>
+        </div>
+    </section>
+
+    <section id="screen-create" class="screen" style="display: none;">
+        <div class="glass-card">
+            <h2>Настройка квиза</h2>
+            
+            <div class="preset-buttons">
+                <button onclick="addPreset('Как зовут собаку именинника?')" class="btn-small">Про собаку 🐶</button>
+                <button onclick="addPreset('Любимый цвет именинника?')" class="btn-small">Про цвет 🎨</button>
+            </div>
+
+            <hr>
+
+            <div id="questions-list">
+                </div>
+
+            <button onclick="addNewQuestion()" class="btn-add">+ Свой вопрос</button>
+            <button onclick="finishCreate()" class="btn-primary">Создать игру</button>
+            <button onclick="showScreen('screen-menu')" class="btn-back">Назад</button>
+        </div>
+    </section>
+
+    <section id="screen-player" class="screen" style="display: none;">
+        <div class="glass-card">
+            <h2 id="player-question-text">Ждем начала...</h2>
+            <div id="player-answer-zone">
+                </div>
+            <p id="player-status">Ожидаем других игроков</p>
+        </div>
+    </section>
+
+    <section id="screen-host" class="screen" style="display: none;">
+        <div class="glass-card">
+            <h2>Управление игрой</h2>
+            <p>Код комнаты: <strong id="room-id-display">0000</strong></p>
+            <div id="host-controls">
+                </div>
+            <button onclick="nextQuestion()" class="btn-primary">Следующий вопрос</button>
+        </div>
+    </section>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
