@@ -3,14 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quiz Party - Меню</title>
+    <title>Quiz Party 🎉 — Главная</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/menu.css">
 </head>
-<body>
-    <div class="glass-card">
-        <h1>QUIZ PARTY</h1>
-        <button onclick="location.href='game.html'" class="btn-primary">Присоединиться к игре</button>
-        <button onclick="location.href='create.html'" class="btn-secondary" style="margin-top:15px;">Создать свою викторину</button>
+<body class="party-bg">
+
+    <div class="balloon balloon-1"></div>
+    <div class="balloon balloon-2"></div>
+    <div class="balloon balloon-3"></div>
+
+    <div class="main-container">
+        <div class="party-card menu-card">
+            <div class="logo-area">
+                <span class="emoji-logo">🎁</span>
+                <h1 class="party-title">QUIZ PARTY</h1>
+                <p class="party-subtitle">Твой праздник — твои правила!</p>
+            </div>
+
+            <div class="menu-grid">
+                <div class="menu-item create" onclick="location.href='create.html'">
+                    <div class="menu-icon">🎨</div>
+                    <div class="menu-text">
+                        <span class="menu-label">Я организатор</span>
+                        <span class="menu-desc">Создать новый квиз</span>
+                    </div>
+                </div>
+
+                <div class="menu-item join" onclick="openJoinModal()">
+                    <div class="menu-icon">🎮</div>
+                    <div class="menu-text">
+                        <span class="menu-label">Я игрок</span>
+                        <span class="menu-desc">Войти в комнату</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-info">
+                Сделано для крутых вечеринок ✨
+            </div>
+        </div>
     </div>
+
+    <div id="join-modal" class="modal">
+        <div class="modal-content glass-card">
+            <h3>Вход в игру</h3>
+            <input type="text" id="player-name" placeholder="Твое имя">
+            <input type="text" id="room-code" placeholder="Код комнаты">
+            <button onclick="startJoining()" class="btn-party-direct">Погнали! 🚀</button>
+            <button onclick="closeJoinModal()" class="btn-close">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        function openJoinModal() {
+            document.getElementById('join-modal').style.display = 'flex';
+        }
+        function closeJoinModal() {
+            document.getElementById('join-modal').style.display = 'none';
+        }
+        function startJoining() {
+            const name = document.getElementById('player-name').value;
+            const code = document.getElementById('room-code').value;
+            if(name && code) {
+                sessionStorage.setItem('quiz_player_name', name);
+                window.location.href = `game.html?room=${code}&role=player`;
+            } else {
+                alert("Введи имя и код комнаты! 😊");
+            }
+        }
+    </script>
 </body>
 </html>

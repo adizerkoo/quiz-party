@@ -1,23 +1,30 @@
 body {
-    margin: 0;
-    padding: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background: radial-gradient(circle at top right, #2b1055, #191970, #000);
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white;
-    overflow-x: hidden;
+    margin: 0; font-family: 'Montserrat', sans-serif;
+    background: linear-gradient(135deg, #fdfcfe 0%, #e0c3fc 100%);
+    min-height: 100vh;
 }
 
-.glass-card {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
-    padding: 30px;
-    width: 90%;
-    max-width: 400px;
-    text-align: center;
+.main-container {
+    display: flex; justify-content: center; padding: 20px;
+}
+
+.party-card {
+    background: rgba(255,255,255,0.9);
+    padding: 30px; border-radius: 30px;
+    width: 100%; max-width: 500px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+.balloon {
+    position: fixed; border-radius: 50%; opacity: 0.4; z-index: 1;
+    animation: float 6s infinite ease-in-out;
+}
+.balloon-1 { width: 80px; height: 100px; background: #ff85a1; top: 10%; left: 5%; }
+.balloon-2 { width: 60px; height: 80px; background: #ffeaa7; top: 50%; right: 5%; animation-delay: 2s; }
+.balloon-3 { width: 90px; height: 110px; background: #a29bfe; bottom: 10%; left: 10%; animation-delay: 4s; }
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
 }

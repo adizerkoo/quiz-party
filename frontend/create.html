@@ -2,16 +2,64 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Создать Викторину</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создать праздничный Квиз! 🎉</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/admin.css">
 </head>
-<body>
-    <div class="glass-card">
-        <h2>Новая Викторина</h2>
-        <div id="questions-list"></div>
-        <button onclick="addNewQuestion()" class="btn-add">+ Свой вопрос</button>
-        <button onclick="saveAndGo()" class="btn-primary">Запустить игру</button>
+<body class="party-bg">
+
+    <div class="balloon balloon-1"></div>
+    <div class="balloon balloon-2"></div>
+    <div class="balloon balloon-3"></div>
+
+    <div class="main-container">
+        <div class="party-card">
+            <h1 class="party-title">🎉 QUIZ PARTY 🎉</h1>
+            <p class="party-subtitle">Создай незабываемую викторину</p>
+
+            <div class="creation-zone">
+                <div class="input-group">
+                    <label>🤔 Текст вопроса:</label>
+                    <input type="text" id="q-input-text" placeholder="Например: Кто лучше всех танцует?">
+                </div>
+                
+                <div class="input-group">
+                    <label>📋 Тип ответа:</label>
+                    <select id="q-input-type" onchange="toggleOptions()">
+                        <option value="text">✍️ Текстовый ответ</option>
+                        <option value="options">🔢 4 варианта (Тест)</option>
+                    </select>
+                </div>
+
+                <div id="options-fields" class="options-creation-zone" style="display: none;">
+                    <p class="section-hint">Введи варианты и отметь верный точкой:</p>
+                    <div class="opt-create-row"><input type="text" id="opt-1" placeholder="Вариант 1" class="opt-input"> <input type="radio" name="correct-opt" value="0" checked></div>
+                    <div class="opt-create-row"><input type="text" id="opt-2" placeholder="Вариант 2" class="opt-input"> <input type="radio" name="correct-opt" value="1"></div>
+                    <div class="opt-create-row"><input type="text" id="opt-3" placeholder="Вариант 3" class="opt-input"> <input type="radio" name="correct-opt" value="2"></div>
+                    <div class="opt-create-row"><input type="text" id="opt-4" placeholder="Вариант 4" class="opt-input"> <input type="radio" name="correct-opt" value="3"></div>
+                </div>
+
+                <div id="correct-answer-zone" class="input-group">
+                    <label>✅ Правильный ответ:</label>
+                    <input type="text" id="q-input-correct" placeholder="Верный ответ для проверки">
+                </div>
+
+                <button onclick="addQuestionToList()" class="btn-party-add">✨ Добавить в список ✨</button>
+            </div>
+
+            <hr class="party-hr">
+
+            <div class="list-zone">
+                <h3 class="list-title">Список вопросов (<span id="q-count">0</span>)</h3>
+                <div id="questions-list" class="party-scroll-list">
+                    <div class="empty-list-msg">Тут пока пусто... Начни добавлять вопросы! 😊</div>
+                </div>
+            </div>
+
+            <button onclick="saveAndGo()" class="btn-party-direct">🚀 Запустить игру! 🚀</button>
+        </div>
     </div>
 
     <script src="js/admin.js"></script>

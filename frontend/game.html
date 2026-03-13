@@ -3,38 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Игра в процессе</title>
+    <title>Quiz Party 🎉 — Игра</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/player.css">
-    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/game.css">
 </head>
-<body>
+<body class="party-bg">
 
-    <div id="player-view" style="display: none;" class="glass-card">
-        <h2 id="q-text">Ожидание вопроса...</h2>
-        <div id="player-answer-zone"></div>
+    <div class="balloon balloon-1"></div>
+    <div class="balloon balloon-2"></div>
+
+    <div class="main-container">
+        <div id="host-screen" class="party-card game-card" style="display: none;">
+            <div class="status-badge">Панель Ведущего</div>
+            <h2 id="host-question-text" class="game-question">Загрузка вопроса...</h2>
+            
+            <div id="answers-stats" class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-val" id="players-joined">0</span>
+                    <span class="stat-label">Игроков</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-val" id="answers-count">0</span>
+                    <span class="stat-label">Ответов</span>
+                </div>
+            </div>
+
+            <div id="host-controls">
+                <button onclick="showResults()" class="btn-party-add">📢 Показать результат</button>
+                <button onclick="nextQuestion()" class="btn-party-direct">Следующий вопрос ➡️</button>
+            </div>
+        </div>
+
+        <div id="player-screen" class="party-card game-card" style="display: none;">
+            <div class="status-badge">Твой ответ</div>
+            <h2 id="player-question-text" class="game-question">Ждем вопрос от ведущего...</h2>
+            
+            <div id="player-answer-area" class="answer-area">
+                <div class="waiting-spinner">🍭</div>
+                <p>Приготовься, скоро начнется!</p>
+            </div>
+        </div>
     </div>
-
-    <div id="host-view" style="display: none;" class="glass-card">
-        <h2>Панель Ведущего</h2>
-        <p id="host-q-text">Текст вопроса</p>
-        <div id="incoming-answers"></div>
-        <button onclick="nextStep()" class="btn-primary">Далее</button>
-    </div>
-
-    <script>
-        // Простая логика: если в ссылке есть ?role=host, показываем админку
-        const urlParams = new URLSearchParams(window.location.search);
-        const role = urlParams.get('role');
-
-        if (role === 'host') {
-            document.getElementById('host-view').style.display = 'block';
-        } else {
-            document.getElementById('player-view').style.display = 'block';
-        }
-    </script>
-    <script src="js/api.js"></script>
-    <script src="js/player.js"></script>
-    <script src="js/admin.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/game.js"></script>
 </body>
 </html>

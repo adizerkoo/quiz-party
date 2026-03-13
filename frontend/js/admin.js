@@ -1,32 +1,97 @@
 let quizQuestions = [];
-let currentQuestionIndex = 0;
 
-function addPreset(text) {
-    quizQuestions.push({ text: text, type: 'text' });
-    renderQuestions();
+function toggleOptions() {
+    const type = document.getElementById('q-input-type').value;
+    const fields = document.getElementById('options-fields');
+    const correctZone = document.getElementById('correct-answer-zone');
+    
+    if (type === 'options') {
+        fields.style.display = 'block';
+        correctZone.style.display = 'none';
+    } else {
+        fields.style.display = 'none';
+        correctZone.style.display = 'block';
+    }
 }
 
-function addNewQuestion() {
-    const text = prompt("Введите текст вопроса:");
-    if (text) {
-        const type = confirm("Сделать 4 варианта ответа? (Ок - Да, Отмена - Поле ввода)") ? 'options' : 'text';
-        quizQuestions.push({ text: text, type: type });
-        renderQuestions();
+function addQuestionToList() {
+    const textEl = document.getElementById('q-input-text');
+    const typeEl = document.getElementById('q-input-type');
+    let correct = "";
+    let options = [];
+
+    if (!textEl.value.trim()) {
+        alert("Напиши хотя бы короткий вопрос! 😊");
+        return;
     }
+
+    if (typeEl.value === 'text') {
+        correct = document.getElementById('q-input-correct').value.trim();
+        if (!correct) {
+            alert("А какой правильный ответ? Напиши его!");
+            return;
+        }
+    } else {
+        for (let i = 1; i <= 4; i++) {
+            const val = document.getElementById(`opt-${i}`).value.trim();
+            if (!val) {
+                alert(`Заполни вариант №${i}!`);
+                return;
+            }
+            options.push(val);
+        }
+        const selectedIndex = document.querySelector('input[name="correct-opt"]:checked').value;
+        correct = options[parseInt(selectedIndex)];
+    }
+
+    quizQuestions.push({
+        text: textEl.value.trim(),
+        type: typeEl.value,
+        correct: correct,
+        options: typeEl.value === 'options' ? options : null
+    });
+
+    renderQuestions();
+    clearForm();
 }
 
 function renderQuestions() {
     const list = document.getElementById('questions-list');
+    const countEl = document.getElementById('q-count');
     list.innerHTML = "";
+    countEl.innerText = quizQuestions.length;
+
     quizQuestions.forEach((q, index) => {
-        const qDiv = document.createElement('div');
-        qDiv.className = "question-item";
-        qDiv.innerHTML = `
-            <span>${index + 1}. ${q.text}</span>
-            <button onclick="removeQuestion(${index})" style="background:none; border:none; color:red; cursor:pointer;">❌</button>
+        const div = document.createElement('div');
+        div.className = "question-item-complex";
+        
+        let contentHtml = "";
+        if (q.type === 'options') {
+            contentHtml = `<div class="preview-options">`;
+            q.options.forEach(opt => {
+                const isCorrect = (opt.trim() === q.correct.trim());
+                contentHtml += `<span class="preview-opt ${isCorrect ? 'is-correct' : ''}">${opt}</span>`;
+            });
+            contentHtml += `</div>`;
+        } else {
+            contentHtml = `<div class="preview-correct-text">Верный ответ: <span>${q.correct}</span></div>`;
+        }
+
+        div.innerHTML = `
+            <div class="q-header">
+                <b>${index + 1}. ${q.text}</b>
+                <button onclick="removeQuestion(${index})" class="btn-remove">&times;</button>
+            </div>
+            ${contentHtml}
         `;
-        list.appendChild(qDiv);
+        list.appendChild(div);
     });
+}
+
+function clearForm() {
+    document.getElementById('q-input-text').value = "";
+    document.getElementById('q-input-correct').value = "";
+    document.querySelectorAll('.opt-input').forEach(i => i.value = "");
 }
 
 function removeQuestion(index) {
@@ -34,49 +99,55 @@ function removeQuestion(index) {
     renderQuestions();
 }
 
-function finishCreate() {
+// Функция для генерации случайного кода комнаты (например, PARTY-123)
+function generateRoomCode() {
+    return 'QUIZ-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+}
+
+async function saveAndGo() {
     if (quizQuestions.length === 0) {
-        alert("Добавьте вопросы!");
+        alert("Добавь хотя бы один вопрос для начала праздника! 🎉");
         return;
     }
-    showScreen('screen-host-panel');
-    startRiddle();
-}
 
-function startRiddle() {
-    const q = quizQuestions[currentQuestionIndex];
-    document.getElementById('current-question-title').innerText = `Вопрос №${currentQuestionIndex + 1}`;
-    document.getElementById('current-question-text').innerText = q.text;
-    document.getElementById('incoming-answers').innerHTML = "";
-}
+    const roomCode = generateRoomCode();
+    const quizTitle = prompt("Как назовем твой Квиз?", "День Рождения!");
 
-function nextQuestion() {
-    if (currentQuestionIndex < quizQuestions.length - 1) {
-        currentQuestionIndex++;
-        startRiddle();
-    } else {
-        alert("Викторина окончена!");
+    if (!quizTitle) return; // Если отменили ввод названия
+
+    // Подготавливаем данные для API
+    const quizData = {
+        title: quizTitle,
+        code: roomCode,
+        questions: quizQuestions
+    };
+
+    try {
+        // Отправляем данные на твой FastAPI бэкенд
+        const response = await fetch('http://127.0.0.1:8000/api/quizzes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(quizData),
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log("Квиз сохранен в БД:", result);
+            
+            // Сохраняем код комнаты и данные локально для перехода
+            localStorage.setItem('current_room_code', roomCode);
+            localStorage.setItem('current_quiz', JSON.stringify(quizQuestions));
+            
+            alert(`Ура! Квиз создан. Код комнаты: ${roomCode}`);
+            window.location.href = `game.html?role=host&room=${roomCode}`;
+        } else {
+            const errorData = await response.json();
+            alert("Ошибка при сохранении: " + errorData.detail);
+        }
+    } catch (error) {
+        console.error("Ошибка сети:", error);
+        alert("Не удалось связаться с сервером. Проверь, запущен ли uvicorn!");
     }
-}
-
-// Для теста: debugSimulateAnswer("Иван", "Пицца") в консоли
-function debugSimulateAnswer(playerName, answerText) {
-    const container = document.getElementById('incoming-answers');
-    const row = document.createElement('div');
-    row.className = "answer-row";
-    row.innerHTML = `
-        <span><strong>${playerName}:</strong> ${answerText}</span>
-        <div>
-            <button onclick="markAnswer(this, true)" class="btn-check">✅</button>
-            <button onclick="markAnswer(this, false)" class="btn-wrong">❌</button>
-        </div>
-    `;
-    container.appendChild(row);
-}
-
-function markAnswer(btn, isCorrect) {
-    const row = btn.parentElement.parentElement;
-    row.style.opacity = "0.5";
-    row.style.borderLeft = isCorrect ? "4px solid #39FF14" : "4px solid #ff4b2b";
-    row.style.pointerEvents = "none";
 }
