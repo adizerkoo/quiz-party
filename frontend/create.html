@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Создание Квиза</title>
+    <title>Создание Quiz Party</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/admin.css">
@@ -26,7 +26,7 @@
             <div class="creation-zone">
                 <div class="input-group">
                     <label>Твой вопрос:</label>
-                    <input type="text" id="q-input-text" placeholder="Кто тут именинник?">
+                    <input type="text" id="q-input-text" placeholder="Кто тут самый крутой?">
                 </div>
 
                 <div class="input-group">
@@ -55,15 +55,15 @@
                     <input type="text" id="q-input-correct" placeholder="Введите текст ответа">
                 </div>
 
-                <button onclick="addQuestionToList()" class="btn-party-add">ДОБАВИТЬ ВОПРОС</button>
+                <button id="add-btn" onclick="addQuestionToList()" class="btn-party-add">ДОБАВИТЬ ВОПРОС</button>
             </div>
 
             <hr class="party-hr">
 
             <div class="list-zone">
-                <h3 class="list-title">Вопросы (<span id="q-count">0</span>)</h3>
+                <h3 class="list-title">Список вопросов (<span id="q-count">0</span>)</h3>
                 <div id="questions-list" class="party-scroll-list">
-                    <div class="empty-list-msg">Добавьте первый вопрос!</div>
+                    <div class="empty-list-msg">Список пока пуст...</div>
                 </div>
             </div>
 
