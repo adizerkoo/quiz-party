@@ -3,76 +3,66 @@
 :root {
     --party-purple: #6c5ce7;
     --party-pink: #ff85a1;
-    --party-bg: #f0f2f5;
-    --party-text: #2d3436;
+    --party-glass: rgba(255, 255, 255, 0.9);
+    --party-grad: linear-gradient(135deg, #fdfcfe 0%, #e0c3fc 100%);
+    --success-green: #2ecc71;
+    --error-red: #ff7675;
 }
 
 body {
-    background-color: var(--party-bg);
-    font-family: 'Montserrat', sans-serif;
-    color: var(--party-text);
     margin: 0;
+    padding: 20px;
+    font-family: 'Montserrat', sans-serif;
+    background: var(--party-grad);
+    min-height: 100vh;
     display: flex;
     justify-content: center;
-    padding: 20px;
+    align-items: flex-start;
 }
 
 .main-container {
     width: 100%;
     max-width: 500px;
+    margin-top: 40px;
 }
 
-/* Основная карточка в твоем стиле */
-.game-card {
-    background: white;
+/* Карточка игры — Glassmorphism */
+.party-card {
+    background: var(--party-glass);
+    backdrop-filter: blur(10px);
     border-radius: 30px;
     padding: 40px 30px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    box-shadow: 0 15px 35px rgba(108, 92, 231, 0.15);
     text-align: center;
-    width: 100%;
-    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    animation: fadeIn 0.5s ease-out;
 }
 
-/* Статус игрока/хоста */
-.status-badge {
-    display: inline-block;
-    padding: 6px 15px;
-    background: rgba(108, 92, 231, 0.1);
-    color: var(--party-purple);
-    border-radius: 50px;
-    font-size: 0.8rem;
-    font-weight: 800;
-    margin-bottom: 20px;
-    text-transform: uppercase;
-}
-
-.game-question {
-    font-weight: 800;
-    font-size: 1.5rem;
-    margin-bottom: 25px;
-    color: var(--party-text);
-}
-
-/* Лобби и мониторинг ответов в стиле твоих "menu-item" */
-.player-row {
-    display: flex;
-    align-items: center;
-    padding: 15px 20px;
+/* Элементы списка игроков/ответов */
+.question-item-complex, .player-row {
     background: white;
     border-radius: 20px;
+    padding: 15px 20px;
     margin-bottom: 12px;
-    border: 2px solid #f8f9fa;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    border: 2px solid #f0f2f5;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    flex-direction: column;
     text-align: left;
-    transition: all 0.3s ease;
 }
 
-.player-row.has-answered {
-    border-color: var(--party-pink);
-    background: #fff9fa;
+.question-item-complex.is-correct {
+    border-color: var(--success-green);
+    background: #f1fdf6;
     transform: scale(1.02);
 }
 
+.question-item-complex.is-wrong {
+    border-color: var(--error-red);
+    background: #fff5f5;
+}
+
+/* Иконки и бейджи */
 .player-icon {
     width: 45px;
     height: 45px;
@@ -82,27 +72,13 @@ body {
     align-items: center;
     justify-content: center;
     color: white;
-    font-weight: bold;
+    font-weight: 800;
     margin-right: 15px;
+    font-size: 0.9rem;
 }
 
-.player-info {
-    display: flex;
-    flex-direction: column;
-}
-
-.player-name {
-    font-weight: 700;
-    font-size: 1.1rem;
-}
-
-.player-status-text {
-    font-size: 0.8rem;
-    opacity: 0.6;
-}
-
-/* Кнопки и инпуты из твоего дизайна */
-.btn-party-main {
+/* Кнопки управления */
+.btn-party-main, .btn-party-direct {
     width: 100%;
     padding: 18px;
     background: var(--party-pink);
@@ -110,53 +86,148 @@ body {
     border: none;
     border-radius: 15px;
     font-weight: 800;
-    font-size: 1.1rem;
+    font-size: 1rem;
     cursor: pointer;
-    box-shadow: 0 4px 15px rgba(255, 133, 161, 0.3);
-    transition: transform 0.2s;
+    box-shadow: 0 8px 20px rgba(255, 133, 161, 0.3);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .btn-party-main:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 25px rgba(255, 133, 161, 0.4);
 }
 
+.btn-party-add {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    padding: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-party-add:hover { opacity: 0.9; }
+
+/* Кнопки ответов для игрока */
 .btn-answer {
     width: 100%;
-    padding: 15px;
+    padding: 16px;
     background: white;
-    border: 2px solid #eee;
-    border-radius: 12px;
+    border: 2px solid #edf2f7;
+    border-radius: 15px;
     margin-bottom: 10px;
     font-family: 'Montserrat', sans-serif;
     font-weight: 600;
+    font-size: 1rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .btn-answer:hover {
     border-color: var(--party-purple);
-    background: rgba(108, 92, 231, 0.05);
+    background: #f8f7ff;
+    transform: translateX(5px);
 }
 
+/* Поля ввода */
 .answer-input {
     width: 100%;
     padding: 15px;
-    border: 2px solid #eee;
-    border-radius: 12px;
+    border: 2px solid #edf2f7;
+    border-radius: 15px;
     margin-bottom: 15px;
     box-sizing: border-box;
     font-family: 'Montserrat', sans-serif;
+    font-size: 1.1rem;
+    text-align: center;
 }
 
-.emoji-logo {
-    font-size: 3.5rem;
-    display: block;
-    margin-bottom: 10px;
-    animation: pulse 2s infinite;
+.answer-input:focus {
+    outline: none;
+    border-color: var(--party-purple);
 }
 
-@keyframes pulse {
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Скроллбар */
+.party-scroll-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.party-scroll-list::-webkit-scrollbar { width: 6px; }
+.party-scroll-list::-webkit-scrollbar-thumb { background: #dcdde1; border-radius: 10px; }
+
+/* --- НОВЫЕ СТИЛИ ДЛЯ СПИСКА ИГРОКОВ С ЭМОДЗИ --- */
+
+/* Компактная строка игрока в Лобби */
+.player-row-lobby {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: white;
+    border-radius: 15px;
+    margin-bottom: 8px;
+    border: 2px solid #f8f9fa;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+    animation: slideInRight 0.3s ease-out;
+}
+
+/* Эмодзи-иконка */
+.player-emoji-icon {
+    font-size: 1.8rem; /* Крупный эмодзи */
+    margin-right: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px; /* Чтобы все имена были на одном уровне */
+}
+
+/* Имя игрока в лобби */
+.player-name-lobby {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--party-text);
+}
+
+/* Компактный заголовок карточки ответа */
+.q-header-compact {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed #eee;
+    padding-bottom: 8px;
+}
+
+/* Иконка галочки/крестика ответа */
+.answer-check-icon {
+    margin-left: auto; /* Прижимаем к правому краю */
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+/* Маленькая анимация появления */
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes tada {
     0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+    10%, 20% { transform: scale(0.9) rotate(-3deg); }
+    30%, 50%, 70%, 90% { transform: scale(1.1) rotate(3deg); }
+    40%, 60%, 80% { transform: scale(1.1) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0); }
+}
+
+.winner-announcement {
+    text-align: center;
 }
