@@ -257,11 +257,6 @@ body {
     cursor: pointer;
 }
 
-.q-step.active {
-    background: var(--party-purple);
-    color: white;
-}
-
 .q-step.done {
     background: var(--success-green);
     color: white;

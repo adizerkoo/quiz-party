@@ -4,17 +4,16 @@ let currentStep = 0;
 let maxReachedStep = 0;
 let currentQuestions = [];
 let scoreChanges = {};
-let scoreOverrides = {}; // Храним ручные правки: { "PlayerName_0": true/false }
+let scoreOverrides = {};
 let answersHistory = {}
 
 
-const scoreOverride = {}; // key = playerName + "_" + step
+const scoreOverride = {};
 const urlParams = new URLSearchParams(window.location.search);
 const roomCode = urlParams.get('room');
 const role = urlParams.get('role');
 const playerName = role === 'host' ? 'HOST' : (sessionStorage.getItem('quiz_player_name') || "Игрок");
 
-// Инициализация игры
 async function init() {
     if (document.getElementById('display-room-code')) {
         document.getElementById('display-room-code').innerText = roomCode;
@@ -47,7 +46,6 @@ async function init() {
     }
 }
 
-// Управление игрой (только для Хоста)
 function startGame() {
 
     currentStep = 0;
@@ -61,7 +59,6 @@ function startGame() {
 
 }
 
-// ИСПРАВЛЕНИЕ 5: Замена стандартного alert/confirm на современный
 function nextQuestion() {
 
     socket.emit("check_answers_before_next", {
@@ -71,7 +68,6 @@ function nextQuestion() {
 
 }
 
-// Новая функция для современного алерта (оставляем твой класс party-card)
 function showModernConfirm(msg, onConfirm) {
     const overlay = document.getElementById('confirm-overlay');
     overlay.style.display = 'flex';
@@ -81,7 +77,6 @@ function showModernConfirm(msg, onConfirm) {
     };
 }
 
-// Функция, которая вызывается, когда мы точно решили идти дальше
 function proceedToNext() {
     if (currentStep < currentQuestions.length - 1) {
         socket.emit("next_question_signal", { room: roomCode });
@@ -90,8 +85,6 @@ function proceedToNext() {
     }
 }
 
-
-// ИСПРАВЛЕНИЕ 2 и 3: Разрешаем менять очки всем (убрана блокировка if(!correct) return;)
 function changeScore(targetName, points) {
     socket.emit("override_score", {
         room: roomCode,
@@ -101,36 +94,31 @@ function changeScore(targetName, points) {
     });
 }
 
-// ИСПРАВЛЕНИЕ 4: Убрана логика 'done' (зеленый цвет для предыдущих)
-// ИСПРАВЛЕНИЕ 4: Отрисовка прогресса с запоминанием пройденного пути
 function renderProgress() {
-
     const container = document.getElementById("questions-progress");
     if (!container) return;
 
     container.innerHTML = currentQuestions.map((_, i) => {
-
-        let stateClass;
-
+        let stateClass = "future";
+        
+        if (i < maxReachedStep) {
+            stateClass = "done";
+        }
         if (i === currentStep) {
             stateClass = "active";
         }
-        else if (i < maxReachedStep) {
-            stateClass = "done";
-        }
-        else {
-            stateClass = "future";
-        }
 
         return `
-        <div class="q-step ${stateClass}" onclick="jumpToQuestion(${i})">
-            ${i === currentStep ? "⬇️" : ""}
-            ${i + 1}
+        <div class="q-step-wrapper" style="display: inline-flex; flex-direction: column; align-items: center; margin: 0 4px; cursor: pointer;">
+            <div style="font-size: 1.2rem; height: 24px; margin-bottom: 2px;">
+                ${i === currentStep ? "⬇️" : ""}
+            </div>
+            <div class="q-step ${stateClass}" onclick="jumpToQuestion(${i})">
+                ${i + 1}
+            </div>
         </div>
         `;
-
     }).join("");
-
 }
 
 function jumpToQuestion(step) {
@@ -180,13 +168,12 @@ function handleScoreClick(playerName, points) {
     socket.emit("get_update", roomCode); 
 }
 
-// Отправка ответа (для Игрока)
 function sendAnswer(val) {
     socket.emit('send_answer', { 
         room: roomCode, 
         name: playerName, 
         answer: val, 
-        questionIndex: currentStep // Передаем индекс текущего вопроса
+        questionIndex: currentStep 
     });
     
     document.getElementById('player-answer-area').innerHTML = `
@@ -197,9 +184,6 @@ function sendAnswer(val) {
     `;
 }
 
-// --- СЛУШАТЕЛИ SOCKET.IO ---
-
-// Массив случайных эмодзи лиц для игроков
 const playerEmojis = [
     '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', 
     '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', 
@@ -214,14 +198,10 @@ const playerEmojis = [
     '💩', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'
 ];
 
-// Функция для получения случайного эмодзи
 function getRandomEmoji() {
     return playerEmojis[Math.floor(Math.random() * playerEmojis.length)];
 }
 
-// --- ОБНОВЛЕННЫЕ СЛУШАТЕЛИ ---
-
-// 1. Обновленный список игроков в ЛОББИ (до начала игры)
 socket.on('update_players', (players) => {
     const list = document.getElementById('lobby-players-list');
     if (list && role === 'host') {
@@ -234,28 +214,28 @@ socket.on('update_players', (players) => {
     }
 });
 
-// ИСПРАВЛЕНИЕ 1: Убрана ошибка renderPlayersList, из-за которой не появлялись игроки
+
 socket.on("game_started", (players) => {
     if (role === "host") {
         document.getElementById("host-lobby").style.display = "none";
         document.getElementById("host-game-area").style.display = "block";
 
-        renderProgress(); // квадратики с номерами вопросов
-        updateHostUI();  // вопрос и правильный ответ
+        renderProgress();
+        updateHostUI();
 
-        // ИСПРАВЛЕНИЕ 1: Показываем игроков сразу со старта
         const grid = document.getElementById("players-answers-grid");
-        grid.innerHTML = players
-            .filter(p => !p.is_host)
-            .map(p => `
-                <div class="answer-card waiting">
-                    <div class="answer-info">
-                        <div class="answer-name">${p.name}</div>
-                        <div class="answer-text">⏳ ожидает ответа</div>
+        grid.innerHTML = players.filter(p => !p.is_host).map(p => `
+            <div class="answer-card waiting">
+                <div class="answer-info">
+                    <div class="answer-name" style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 2rem;">${p.emoji || '👤'}</span> 
+                        <span style="font-size: 1.2rem; font-weight: bold;">${p.name}</span>
                     </div>
-                    <div class="answer-buttons"></div>
+                    <div class="answer-text">⏳ ожидает ответа</div>
                 </div>
-            `).join('');
+                <div class="answer-buttons"></div>
+            </div>
+        `).join('');
 
         renderScoreboard(players);
     } else {
@@ -275,48 +255,45 @@ socket.on("update_answers", (players) => {
     const currentQ = currentQuestions[currentStep];
 
     grid.innerHTML = players.filter(p => !p.is_host).map(p => {
-
         const answers = p.answers_history || {};
         const scores = p.scores_history || {};
 
-        const answerText = answers[currentStep];
-        const questionScore = scores[currentStep];
+        // Явно приводим шаг к строке, так как ключи в JSON — это строки
+        const stepKey = currentStep.toString();
+        const answerText = answers[stepKey];
+        const questionScore = scores[stepKey];
 
-        const isAnswered = answerText !== undefined && answerText !== null;
+        // Строгая проверка, что ответ реально существует
+        const isAnswered = answerText !== undefined && answerText !== null && answerText.trim() !== "";
 
         let statusClass = "waiting";
         let displayAnswer = "⏳ ожидает ответа...";
         let btnHTML = "";
 
+        // Кнопки генерируются ТОЛЬКО если игрок уже ответил
         if (isAnswered) {
-
             displayAnswer = answerText;
+            
+            // Если балл еще не выставлен вручную, проверяем автоматически
+            const isCorrect = answerText.toLowerCase().trim() === currentQ.correct.toLowerCase().trim();
+            const currentStatus = questionScore !== undefined ? questionScore : (isCorrect ? 1 : 0);
 
-            if (questionScore === 1) {
-
+            if (currentStatus === 1) {
                 statusClass = "correct";
-
-                btnHTML = `
-                    <button class="btn-score btn-minus"
-                    onclick="changeScore('${p.name}', -1)">−1</button>
-                `;
-
+                btnHTML = `<button class="btn-score btn-minus" onclick="changeScore('${p.name}', -1)">−1</button>`;
             } else {
-
                 statusClass = "wrong";
-
-                btnHTML = `
-                    <button class="btn-score btn-plus"
-                    onclick="changeScore('${p.name}', 1)">+1</button>
-                `;
+                btnHTML = `<button class="btn-score btn-plus" onclick="changeScore('${p.name}', 1)">+1</button>`;
             }
-
         }
 
         return `
             <div class="answer-card ${statusClass}">
                 <div class="answer-info">
-                    <div class="answer-name">${p.emoji} ${p.name}</div>
+                    <div class="answer-name" style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 2rem;">${p.emoji || '👤'}</span> 
+                        <span style="font-size: 1.2rem; font-weight: bold;">${p.name}</span>
+                    </div>
                     <div class="answer-text">${displayAnswer}</div>
                 </div>
                 <div class="answer-buttons">${btnHTML}</div>
@@ -325,46 +302,11 @@ socket.on("update_answers", (players) => {
     }).join("");
 });
 
-function renderHostAnswersGrid(players) {
-    const grid = document.getElementById("players-answers-grid");
-    const currentQ = currentQuestions[currentStep];
-
-    grid.innerHTML = players.filter(p => !p.is_host).map(p => {
-        // Берем ответ из истории, если мы вернулись назад (ПУНКТ 3)
-        const histAnswer = answersHistory[currentStep] ? answersHistory[currentStep][p.name] : null;
-        const displayAnswer = p.answer || histAnswer;
-        
-        const isAnswered = !!displayAnswer;
-        const isCorrect = isAnswered && displayAnswer.toLowerCase().trim() === currentQ.correct.toLowerCase().trim();
-        const statusClass = isAnswered ? (isCorrect ? "correct" : "wrong") : "waiting";
-
-        // ПУНКТ 2: Кнопки только если есть ответ
-        let buttons = "";
-        if (isAnswered) {
-            buttons = isCorrect 
-                ? `<button class="btn-score btn-minus" onclick="changeScore('${p.name}', -1)">-1</button>`
-                : `<button class="btn-score btn-plus" onclick="changeScore('${p.name}', 1)">+1</button>`;
-        }
-
-        return `
-            <div class="answer-card ${statusClass}">
-                <div class="answer-info">
-                    <div class="answer-name">${p.emoji || '👤'} ${p.name}</div>
-                    <div class="answer-text">${isAnswered ? displayAnswer : '⏳ ожидает...'}</div>
-                </div>
-                <div class="answer-buttons">${buttons}</div>
-            </div>
-        `;
-    }).join("");
-}
-
 socket.on('show_results', (data) => {
     document.getElementById('host-screen').style.display = 'none';
     document.getElementById('player-screen').style.display = 'none';
     document.getElementById('finish-screen').style.display = 'block';
-
     const resultsList = document.getElementById('final-results-list');
-    // Теперь данные берем напрямую из того, что прислал сервер (data.results)
     resultsList.innerHTML = data.results.map((p, i) => `
         <div class="player-row-lobby" style="${i === 0 ? 'border: 2px solid gold' : ''}">
             <span class="player-emoji-icon">${p.emoji || '👤'}</span>
@@ -375,15 +317,11 @@ socket.on('show_results', (data) => {
 });
 
 socket.on("move_to_next", (data) => {
-
     currentStep = data.step;
-
     if (currentStep > maxReachedStep) {
         maxReachedStep = currentStep;
     }
-
     refreshUI();
-
 });
 
 socket.on("answers_check_result", (data) => {
@@ -400,7 +338,6 @@ socket.on("answers_check_result", (data) => {
 
 });
 
-// Вспомогательные функции
 function refreshUI() {
     renderProgress();
     if (role === 'host') {
