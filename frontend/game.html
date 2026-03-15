@@ -47,7 +47,10 @@
             </p>
             <p id="copy-msg" class="copy-msg">Скопировано!</p>
 
-            <div id="lobby-players-list" class="party-scroll-list"></div>
+            <div class="players-party-container host-variant">
+                <span class="mini-label">УЧАСТНИКИ</span>
+                <div id="lobby-players-list" class="party-avatars-grid"></div>
+            </div>
 
             <button onclick="startGame()" class="btn-party-direct" style="margin-top:20px;">
                 ПОГНАЛИ 🚀
@@ -106,8 +109,7 @@
                 
                 <div class="players-party-container">
                     <span class="mini-label">В КОМНАТЕ</span>
-                    <div id="player-lobby-list" class="party-avatars-grid">
-                        </div>
+                    <div id="player-lobby-list" class="party-avatars-grid"></div>
                 </div>
             </div>
             

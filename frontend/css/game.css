@@ -548,7 +548,7 @@ body::after {
 }
 
 .shiny-waiting {
-    font-size: 2rem;
+    font-size: 1.2rem;
     font-weight: 800;
     text-align: center;
     letter-spacing: 1px;
@@ -711,4 +711,56 @@ body::after {
 
 .avatar-slot.it-is-me .avatar-name {
     color: var(--party-purple);
+}
+
+.players-party-container {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 20px;
+    padding: 15px;
+    margin-top: 20px;
+}
+.host-variant {
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px dashed rgba(108, 92, 231, 0.3);
+}
+.party-avatars-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.avatar-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 70px;
+    animation: popIn 0.3s ease-out forwards;
+}
+.avatar-emoji { font-size: 2rem; margin-bottom: 5px; }
+.avatar-name { font-size: 0.7rem; font-weight: 800; color: #2d3436; text-align: center; width: 100%; overflow: hidden; }
+
+.it-is-me .avatar-emoji { transform: scale(1.2); filter: drop-shadow(0 0 10px #6c5ce7); }
+.it-is-me .avatar-name { color: #6c5ce7; }
+
+.mini-label { font-size: 0.6rem; font-weight: 800; opacity: 0.5; letter-spacing: 1px; }
+
+@keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.pop-animation { animation: ballPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+@keyframes ballPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+    100% { transform: scale(1); }
+}
+
+/* Надпись QUIZ PARTY (верхний подзаголовок) */
+.quiz-sub {
+    font-size: 0.5rem !important; /* Было около 0.8rem */
+    letter-spacing: 4px !important;
+    font-weight: 800 !important;
+    margin-bottom: 5px;
 }

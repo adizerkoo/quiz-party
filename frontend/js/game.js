@@ -207,27 +207,15 @@ function sendAnswer(val) {
 }
 
 socket.on('update_players', (players) => {
-    // Оставляем логику для Хоста (она у тебя в другом блоке)
-    if (role === 'host') {
-        const hostList = document.getElementById('lobby-players-list');
-        if (hostList) {
-            hostList.innerHTML = players.filter(p => !p.is_host).map(p => `
-                <div class="player-row-lobby">
-                    <span class="player-emoji-icon">${p.emoji || '👤'}</span>
-                    <span class="player-name-lobby">${p.name}</span>
-                </div>
-            `).join('');
-        }
-        return;
-    }
+    // Функция-помощник для отрисовки плиток
+    const drawGrid = (containerId) => {
+        const container = document.getElementById(containerId);
+        if (!container) return; // Если элемента нет на текущем экране, просто выходим
 
-    // ЛОГИКА ДЛЯ ИГРОКА: рисуем всех в одну сетку
-    const playerList = document.getElementById('player-lobby-list');
-    if (playerList) {
-        playerList.innerHTML = players
+        container.innerHTML = players
             .filter(p => !p.is_host)
             .map(p => {
-                const isMe = p.name === playerName;
+                const isMe = (role !== 'host' && p.name === playerName);
                 return `
                     <div class="avatar-slot ${isMe ? 'it-is-me' : ''}">
                         <div class="avatar-emoji">${p.emoji || '👤'}</div>
@@ -235,7 +223,11 @@ socket.on('update_players', (players) => {
                     </div>
                 `;
             }).join('');
-    }
+    };
+
+    // Обновляем список и у хоста, и у игрока (сработает там, где найдется ID)
+    drawGrid('lobby-players-list');
+    drawGrid('player-lobby-list');
 });
 
 socket.on("game_started", (players) => {
