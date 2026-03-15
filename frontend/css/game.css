@@ -602,21 +602,6 @@ body::after {
     margin-top: 5px;
 }
 
-.lobby-interactive-zone {
-    margin-top: 30px;
-    padding: 20px;
-    border-top: 2px dashed rgba(108, 92, 231, 0.2);
-}
-
-.bouncing-ball {
-    font-size: 4rem;
-    cursor: pointer;
-    user-select: none;
-    transition: transform 0.1s active;
-    display: inline-block;
-    animation: lobbyFloat 3s ease-in-out infinite;
-}
-
 .bouncing-ball:active {
     transform: scale(0.8);
 }
@@ -637,13 +622,6 @@ body::after {
 .huge-emoji { font-size: 3rem; display: block; }
 .wait-name { font-weight: 800; color: var(--party-purple); font-size: 1.2rem; }
 .mini-label { font-size: 0.7rem; font-weight: 700; opacity: 0.5; letter-spacing: 1px; }
-
-.hint-text { font-size: 0.8rem; opacity: 0.6; margin-top: 10px; }
-
-/* Анимация удара по шарику */
-.pop-animation {
-    animation: ballPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
 
 @keyframes ballPop {
     0% { transform: scale(1); }
@@ -679,10 +657,31 @@ body::after {
     width: 100%;
 }
 
-/* Выделение текущего игрока */
+/* Спецэффект для текущего игрока */
 .avatar-slot.it-is-me .avatar-emoji {
-    filter: drop-shadow(0 0 8px rgba(108, 92, 231, 0.4));
-    transform: scale(1.1);
+    filter: drop-shadow(0 0 12px var(--party-purple));
+    animation: avatarDance 1.5s infinite ease-in-out; /* Танцует чуть быстрее */
+    position: relative;
+}
+
+/* Пульсирующее свечение под текущим игроком */
+.avatar-slot.it-is-me::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    width: 40px;
+    height: 40px;
+    background: var(--party-purple);
+    border-radius: 50%;
+    filter: blur(15px);
+    opacity: 0.2;
+    z-index: -1;
+    animation: pulseMe 2s infinite alternate;
+}
+
+@keyframes pulseMe {
+    from { transform: scale(0.8); opacity: 0.1; }
+    to { transform: scale(1.3); opacity: 0.4; }
 }
 
 .avatar-slot.it-is-me .avatar-name {
@@ -796,4 +795,84 @@ body::after {
     #player-wait .party-subtitle {
         font-size: 0.65rem; /* Чуть меньше подзаголовок */
     }
+}
+
+.avatar-slot.it-is-me .avatar-emoji {
+    position: relative;
+    z-index: 1;
+}
+
+.avatar-slot.it-is-me::after {
+    content: '';
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    background: var(--party-purple);
+    filter: blur(20px);
+    opacity: 0.3;
+    border-radius: 50%;
+    z-index: 0;
+    animation: pulseGlow 2s infinite alternate;
+}
+
+@keyframes pulseGlow {
+    from { transform: scale(0.8); opacity: 0.2; }
+    to { transform: scale(1.2); opacity: 0.4; }
+}
+
+/* Анимация танцующей аватарки */
+@keyframes avatarDance {
+    0% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-5px) rotate(-5deg); }
+    50% { transform: translateY(0) rotate(0deg); }
+    75% { transform: translateY(-5px) rotate(5deg); }
+    100% { transform: translateY(0) rotate(0deg); }
+}
+
+/* Применяем анимацию ко всем слотам с аватарками */
+.avatar-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+/* Эмодзи внутри слота теперь "танцует" */
+.avatar-emoji {
+    font-size: 2.2rem;
+    margin-bottom: 5px;
+    display: inline-block;
+    /* Зацикленная анимация: 2 секунды, мягкое начало и конец */
+    animation: avatarDance 2s infinite ease-in-out;
+}
+
+/* Разносим анимацию по времени, чтобы аватарки не прыгали синхронно (эффект толпы) */
+.avatar-slot:nth-child(2n) .avatar-emoji { animation-delay: 0.2s; }
+.avatar-slot:nth-child(3n) .avatar-emoji { animation-delay: 0.5s; }
+.avatar-slot:nth-child(4n) .avatar-emoji { animation-delay: 0.8s; }
+
+.avatar-clicked {
+    animation: jellyPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes jellyPop {
+    0% { transform: scale(1); }
+    30% { transform: scale(0.7, 1.3); } /* Вытягивается вверх */
+    50% { transform: scale(1.3, 0.7); } /* Сплющивается */
+    70% { transform: scale(0.9, 1.1); } /* Небольшая инерция */
+    100% { transform: scale(1); }
+}
+
+.avatar-slot {
+    position: relative;
+}
+
+.click-particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: var(--party-pink);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10;
 }

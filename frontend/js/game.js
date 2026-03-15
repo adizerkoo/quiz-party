@@ -17,25 +17,6 @@ async function init() {
         document.getElementById('display-room-code').innerText = roomCode;
     }
 
-    const toy = document.getElementById('lobby-clicker-toy');
-    if (toy) {
-        toy.onclick = () => {
-            // 1. Список праздничных эмодзи
-            const emojis = ['🎈', '🎉', '🎊', '✨', '🎁', '🦄', '⭐'];
-            toy.innerText = emojis[Math.floor(Math.random() * emojis.length)];
-
-            // 2. Перезапуск анимации
-            toy.classList.remove('pop-animation');
-            void toy.offsetWidth; // Магия JS для принудительного рендеринга (reflow)
-            toy.classList.add('pop-animation');
-
-            // 3. Можно добавить легкую вибрацию на телефоне, если доступно
-            if (navigator.vibrate) {
-                navigator.vibrate(10); 
-            }
-        };
-    }
-
     try {
         const response = await fetch(`/api/quizzes/${roomCode}`);
         if (response.ok) {
@@ -120,6 +101,7 @@ function showModernConfirm(msg, onConfirm) {
         onConfirm();
     };
 }
+
 
 function proceedToNext() {
     if (currentStep < currentQuestions.length - 1) {
@@ -211,7 +193,7 @@ socket.on('update_players', (players) => {
     const drawGrid = (containerId) => {
         const container = document.getElementById(containerId);
         if (!container) return; // Если элемента нет на текущем экране, просто выходим
-
+        
         container.innerHTML = players
             .filter(p => !p.is_host)
             .map(p => {
