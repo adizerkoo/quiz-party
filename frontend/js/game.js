@@ -204,37 +204,31 @@ function sendAnswer(val) {
 }
 
 socket.on('update_players', (players) => {
-    // Функция-помощник для отрисовки плиток
-    const drawGrid = (containerId) => {
-        const container = document.getElementById(containerId);
-        if (!container) return; // Если элемента нет на текущем экране, просто выходим
-        
+    // 1. Отрисовка списка в лобби (у хоста и игрока)
+    const lobbyContainers = ['lobby-players-list', 'player-lobby-list'];
+    
+    lobbyContainers.forEach(id => {
+        const container = document.getElementById(id);
+        if (!container) return;
+
         container.innerHTML = players
             .filter(p => !p.is_host)
-            .map(p => {
-                const isMe = (role !== 'host' && p.name === playerName);
-                return `
-                    <div class="answer-card ${statusClass}">
-                        <div class="answer-info">
-                            <div class="answer-name">
-                                <span class="p-emoji">${p.emoji || '👤'}</span> 
-                                <span class="p-name">${p.name}</span>
-                            </div>
-                            <div class="player-answer-bubble">
-                                ${displayAnswer}
-                            </div>
-                        </div>
-                        <div class="answer-buttons">
-                            ${btnHTML}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-    };
-
-    // Обновляем список и у хоста, и у игрока (сработает там, где найдется ID)
-    drawGrid('lobby-players-list');
-    drawGrid('player-lobby-list');
+            .map(p => `
+                <div class="player-card-lobby" style="
+                    display: flex; 
+                    flex-direction: column; 
+                    align-items: center; 
+                    background: rgba(255,255,255,0.7); 
+                    padding: 15px; 
+                    border-radius: 20px; 
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    animation: popIn 0.3s ease-out;
+                ">
+                    <div style="font-size: 2.5rem; margin-bottom: 5px;">${p.emoji || '👤'}</div>
+                    <div style="font-weight: 800; color: #2d3436; font-size: 0.9rem; text-align: center;">${p.name}</div>
+                </div>
+            `).join('');
+    });
 });
 
 socket.on("game_started", (players) => {
@@ -519,39 +513,47 @@ function renderPlayerQuestion() {
     const title = document.getElementById('player-question-text');
     if (!q) return;
 
+    // 1. Только структура заголовка
     title.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.6); padding: 10px 15px; border-radius: 20px; margin-bottom: 25px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 2rem;">${myEmoji}</span>
-                <div style="text-align: left;">
-                    <div style="font-size: 0.7rem; opacity: 0.6; font-weight: 700;">ИГРОК</div>
-                    <div style="font-weight: 800; font-size: 1rem;">${playerName}</div>
-                </div>
+        <div class="player-header">
+            <div class="player-info-badge">
+                <span style="font-size: 1.2rem;">${myEmoji}</span>
+                <span class="player-name-text">${playerName}</span>
             </div>
-            <div style="text-align: right;">
-                <div style="font-size: 0.7rem; opacity: 0.6; font-weight: 700;">ВОПРОС</div>
-                <div style="font-weight: 800; font-size: 1rem; color: var(--party-purple);">${currentStep + 1} / ${currentQuestions.length}</div>
+            <div class="question-counter">
+                ${currentStep + 1} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
             </div>
         </div>
         
-        <div style="padding: 0 10px;">
-            <div style="font-size: 1.4rem; font-weight: 800; line-height: 1.3; color: #2d3436;">
-                ${q.text}
-            </div>
+        <div class="question-container reveal-anim">
+            <div class="question-main-text">${q.text}</div>
+            <div class="question-line"></div>
         </div>
     `;
     
+    // 2. Только структура контента
     if (q.type === 'options') {
         area.innerHTML = `
-            <div class="menu-grid" style="margin-top: 25px;">
-                ${q.options.map(o => `<button class="btn-answer" onclick="sendAnswer('${o}')">${o}</button>`).join('')}
+            <div class="answers-grid reveal-anim">
+                ${q.options.map(o => `
+                    <button class="btn-answer" onclick="sendAnswer('${o}')">
+                        ${o}
+                    </button>
+                `).join('')}
             </div>
         `;
     } else {
         area.innerHTML = `
-            <div style="margin-top: 25px;">
-                <input type="text" id="ans-text" class="answer-input" maxlength="50" placeholder="Введите ответ...">
-                <button onclick="sendAnswer(document.getElementById('ans-text').value)" class="btn-party-direct">ОТПРАВИТЬ</button>
+            <div class="input-group-container reveal-anim">
+                <div class="input-wrapper">
+                    <input type="text" id="ans-text" class="answer-input-field" maxlength="50" placeholder="Ответ...">
+                    <button class="btn-send-arrow" onclick="sendAnswer(document.getElementById('ans-text').value)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </button>
+                </div>
             </div>
         `;
     }
