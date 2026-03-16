@@ -1,0 +1,479 @@
+/**
+ * Общий модуль логики игры Quiz Party.
+ * Отвечает за состояние игры, инициализацию страницы,
+ * базовые действия хоста и игроков (без обработки событий socket.io).
+ */
+const socket = io();
+
+/**
+ * Заголовок викторины, подтягивается с бэка.
+ * @type {string}
+ */
+let quizTitle = "";
+
+/**
+ * Эмодзи текущего игрока.
+ * @type {string}
+ */
+let myEmoji = "👤";
+
+/**
+ * Текущий отображаемый шаг (вопрос) на клиенте.
+ * Может отличаться от realGameStep, если хост вручную перелистывает историю.
+ * @type {number}
+ */
+let currentStep = 0;
+
+/**
+ * Реальный шаг игры, который считается "текущим" на сервере.
+ * @type {number}
+ */
+let realGameStep = 0;
+
+/**
+ * Максимальный достигнутый шаг (для прогресс-бара).
+ * @type {number}
+ */
+let maxReachedStep = 0;
+
+/**
+ * Массив вопросов текущей викторины.
+ * @type {{text: string, correct: string, type: 'options' | 'text', options?: string[]}[]}
+ */
+let currentQuestions = [];
+
+/**
+ * Параметры URL для получения кода комнаты и роли.
+ */
+const urlParams = new URLSearchParams(window.location.search);
+
+/**
+ * Код комнаты квиза.
+ * @type {string | null}
+ */
+const roomCode = urlParams.get("room");
+
+/**
+ * Роль текущего клиента: "host" или "player".
+ * @type {string | null}
+ */
+const role = urlParams.get("role");
+
+/**
+ * Имя игрока, для хоста фиксированное "HOST".
+ * @type {string}
+ */
+const playerName =
+  role === "host"
+    ? "HOST"
+    : sessionStorage.getItem("quiz_player_name") || "Игрок";
+
+/**
+ * Стартовая инициализация страницы игры.
+ * 1) Подставляет код комнаты в интерфейс.
+ * 2) Запрашивает викторину с бэка.
+ * 3) Подключает к socket.io комнате и запрашивает состояние.
+ * 4) Показывает экран хоста или игрока.
+ */
+async function init() {
+  const displayCodeEl = document.getElementById("display-room-code");
+  if (displayCodeEl) {
+    displayCodeEl.innerText = roomCode;
+  }
+
+  try {
+    const response = await fetch(`/api/quizzes/${roomCode}`);
+
+    if (response.ok) {
+      const data = await response.json();
+      quizTitle = data.title;
+      currentQuestions = data.questions_data;
+
+      renderQuizTitle();
+      renderProgress();
+
+      socket.emit("join_room", {
+        room: roomCode,
+        name: playerName,
+        role: role,
+      });
+      socket.emit("request_sync", { room: roomCode, name: playerName });
+
+      const screenId = role === "host" ? "host-screen" : "player-screen";
+      const screenEl = document.getElementById(screenId);
+      if (screenEl) screenEl.style.display = "block";
+    } else {
+      window.location.href = "index.html?error=not_found";
+    }
+  } catch (e) {
+    console.error("Ошибка инициализации:", e);
+    window.location.href = "index.html";
+  }
+}
+
+/**
+ * Старт игры — только для хоста.
+ * Сбрасывает текущий шаг и отправляет сигнал на сервер.
+ */
+function startGame() {
+  currentStep = 0;
+  socket.emit("start_game_signal", { room: roomCode });
+}
+
+/**
+ * Заполняет заголовки викторины на экранах хоста и игроков.
+ */
+function renderQuizTitle() {
+  const hostTitle = document.getElementById("quiz-title-host");
+  const playerTitle = document.getElementById("quiz-title-player");
+
+  if (hostTitle) hostTitle.innerText = quizTitle;
+  if (playerTitle) playerTitle.innerText = quizTitle;
+}
+
+/**
+ * DOM-элементы для отображения и копирования кода комнаты.
+ */
+const displayRoomCode = document.getElementById("display-room-code");
+const copyRoomBtn = document.getElementById("copy-room-btn");
+const copyMsg = document.getElementById("copy-msg");
+
+/**
+ * Копирует код комнаты в буфер обмена и показывает мини-уведомление.
+ */
+function copyRoomCode() {
+  const code = displayRoomCode.textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    copyMsg.classList.add("show");
+    setTimeout(() => copyMsg.classList.remove("show"), 1500);
+  });
+}
+
+// Привязка обработчиков копирования к кнопке и самому коду комнаты.
+if (copyRoomBtn) {
+  copyRoomBtn.addEventListener("click", copyRoomCode);
+}
+
+if (displayRoomCode) {
+  displayRoomCode.addEventListener("click", copyRoomCode);
+}
+
+/**
+ * Обработчик клика по кнопке "Следующий вопрос" на стороне хоста.
+ * Если хост ушёл в историю — возвращает на текущий шаг, иначе просит сервер
+ * проверить, все ли ответили.
+ */
+function nextQuestion() {
+  if (currentStep !== realGameStep) {
+    currentStep = realGameStep;
+    refreshUI();
+    return;
+  }
+
+  socket.emit("check_answers_before_next", {
+    room: roomCode,
+    step: currentStep,
+  });
+}
+
+/**
+ * Показывает модальное подтверждение с кастомным текстом
+ * и колбэком, который вызывается при подтверждении.
+ * @param {string} msg - текст вопроса/предупреждения
+ * @param {() => void} onConfirm - действие при подтверждении
+ */
+function showModernConfirm(msg, onConfirm) {
+  const overlay = document.getElementById("confirm-overlay");
+  overlay.style.display = "flex";
+  document.getElementById("confirm-proceed-btn").onclick = () => {
+    overlay.style.display = "none";
+    onConfirm();
+  };
+}
+
+/**
+ * Переключение шага игры вперёд:
+ * - если есть ещё вопросы — сигнал next_question_signal
+ * - если это последний вопрос — сигнал finish_game_signal
+ */
+function proceedToNext() {
+  if (currentStep < currentQuestions.length - 1) {
+    socket.emit("next_question_signal", { room: roomCode });
+  } else {
+    socket.emit("finish_game_signal", { room: roomCode });
+  }
+}
+
+/**
+ * Корректировка баллов конкретному игроку за текущий вопрос.
+ * Используется хостом из интерфейса разбора ответов.
+ * @param {string} targetName - имя игрока
+ * @param {1|-1} points - +1 выдать балл, -1 забрать балл
+ */
+function changeScore(targetName, points) {
+  socket.emit("override_score", {
+    room: roomCode,
+    playerName: targetName,
+    points: points,
+    questionIndex: currentStep,
+  });
+}
+
+/**
+ * Рисует прогресс-бар вопросов в верхней части экрана хоста.
+ * Учитывает текущий шаг, максимальный достигнутый шаг и позволяет
+ * хосту переходить по истории кликом.
+ */
+function renderProgress() {
+  const container = document.getElementById("questions-progress");
+  if (!container) return;
+
+  container.innerHTML = currentQuestions
+    .map((_, i) => {
+      let stateClass = "future";
+      if (i < maxReachedStep) stateClass = "done";
+      if (i === currentStep) stateClass = "active";
+
+      const showDot = i === maxReachedStep;
+
+      return `
+        <div class="q-step-wrapper" style="display: inline-flex; flex-direction: column; align-items: center; margin: 0 4px; cursor: pointer;">
+            <div class="q-step ${stateClass}" onclick="jumpToQuestion(${i})">
+                ${i + 1}
+            </div>
+            ${showDot ? '<div class="pulse-dot"></div>' : '<div style="height: 12px; margin-top: 4px;"></div>'}
+        </div>
+        `;
+    })
+    .join("");
+}
+
+/**
+ * Прыжок к конкретному шагу (вопросу) из прогресс-бара.
+ * Работает только у хоста.
+ * @param {number} step - индекс вопроса
+ */
+function jumpToQuestion(step) {
+  if (role !== "host") return;
+  currentStep = step;
+  socket.emit("move_to_step", { room: roomCode, step: step });
+  socket.emit("get_update", roomCode);
+  refreshUI();
+}
+
+/**
+ * Рисует турнирную таблицу очков игроков на экране хоста.
+ * @param {{name: string, score: number, is_host: boolean, emoji: string}[]} players
+ */
+function renderScoreboard(players) {
+  const board = document.getElementById("scoreboard");
+  if (!board) return;
+
+  const sorted = [...players]
+    .filter((p) => !p.is_host)
+    .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  const maxScoreLocal = sorted.length > 0 ? sorted[0].score : 0;
+
+  board.innerHTML = sorted
+    .map((p, i) => {
+      const isLeader = p.score === maxScoreLocal && maxScoreLocal > 0;
+
+      return `
+        <div class="score-row ${isLeader ? "leader-row" : ""}">
+            <span>${isLeader ? "👑" : i + 1 + "."} ${p.name}</span>
+            <span>${p.score || 0} 🏆</span>
+        </div>
+        `;
+    })
+    .join("");
+}
+
+/**
+ * Отправка ответа игрока на сервер и обновление интерфейса
+ * подтверждения отправки.
+ * @param {string} val - текст ответа
+ */
+function sendAnswer(val) {
+  socket.emit("send_answer", {
+    room: roomCode,
+    name: playerName,
+    answer: val,
+    questionIndex: currentStep,
+  });
+
+  const answerArea = document.getElementById("player-answer-area");
+
+  if (answerArea) {
+    answerArea.innerHTML = `
+            <div class="sent-confirmation">
+                <div class="status-badge-sent">Отправлено 🚀</div>
+                
+                <div class="your-answer-preview">
+                    <div class="your-answer-label">Твой ответ:</div>
+                    <div class="your-answer-text">${val}</div>
+                </div>
+
+                <div class="waiting-loader">
+                    <div class="pulse-dot" style="display:inline-block; margin-right:8px;"></div>
+                    <span>Ждем остальных игроков...</span>
+                </div>
+            </div>
+        `;
+  }
+}
+
+/**
+ * Небольшая анимация аватара игрока при клике в лобби.
+ * @param {HTMLElement} element - карточка игрока
+ */
+function handleEmojiClick(element) {
+  const emoji = element.querySelector(".avatar-emoji");
+  if (emoji) {
+    emoji.classList.add("avatar-clicked");
+    setTimeout(() => {
+      emoji.classList.remove("avatar-clicked");
+    }, 500);
+  }
+}
+
+/**
+ * Главная функция обновления UI после смены шага.
+ * - Обновляет прогресс-бар.
+ * - Для хоста: обновляет текст вопроса, кнопку и запрашивает актуальные ответы.
+ * - Для игрока: перерисовывает текущий вопрос и варианты ответа.
+ */
+function refreshUI() {
+  renderProgress();
+  if (role === "host") {
+    updateHostUI();
+    socket.emit("get_update", roomCode);
+    const btn = document.getElementById("next-btn");
+    if (btn) {
+      if (currentStep !== realGameStep) {
+        btn.innerText = "↩ Вернуться к текущему вопросу";
+        btn.onclick = () => {
+          currentStep = realGameStep;
+          refreshUI();
+          socket.emit("get_update", roomCode);
+        };
+      } else {
+        btn.onclick = nextQuestion;
+        btn.innerText =
+          currentStep === currentQuestions.length - 1
+            ? "🏆 ПОДВЕСТИ ИТОГИ"
+            : "СЛЕДУЮЩИЙ ВОПРОС";
+      }
+    }
+  } else {
+    renderPlayerQuestion();
+  }
+}
+
+/**
+ * Обновляет UI хоста под текущий вопрос:
+ * текст вопроса, правильный ответ, внешний вид и текст кнопки "Дальше".
+ */
+function updateHostUI() {
+  const q = currentQuestions[currentStep];
+  const isLastQuestion = currentStep === currentQuestions.length - 1;
+  document.getElementById(
+    "host-question-text"
+  ).innerText = `${currentStep + 1}. ${q.text}`;
+  document.getElementById("correct-answer").innerText =
+    "Правильный ответ: " + q.correct;
+  const nextBtn = document.getElementById("next-btn");
+
+  if (nextBtn) {
+    if (isLastQuestion) {
+      nextBtn.innerText = "🏆 ПОДВЕСТИ ИТОГИ";
+      nextBtn.style.background =
+        "linear-gradient(135deg, #f6d365 0%, #fda085 100%)";
+    } else {
+      nextBtn.innerText = "СЛЕДУЮЩИЙ ВОПРОС";
+      nextBtn.style.background = "var(--party-pink)";
+    }
+  }
+}
+
+/**
+ * Рендерит текущий вопрос и область ответа на стороне игрока.
+ * Варианты: кнопки с вариантами или текстовое поле ввода.
+ */
+function renderPlayerQuestion() {
+  const q = currentQuestions[currentStep];
+  const area = document.getElementById("player-answer-area");
+  const title = document.getElementById("player-question-text");
+  if (!q) return;
+
+  title.innerHTML = `
+        <div class="player-header">
+            <div class="player-info-badge">
+                <span style="font-size: 1.2rem;">${myEmoji}</span>
+                <span class="player-name-text">${playerName}</span>
+            </div>
+            <div class="question-counter">
+                ${currentStep + 1} <span style="opacity: 0.3;">/ ${
+    currentQuestions.length
+  }</span>
+            </div>
+        </div>
+        <div class="question-container reveal-anim">
+            <div class="question-main-text">${q.text}</div>
+            <div class="question-line"></div>
+        </div>
+    `;
+
+  if (q.type === "options") {
+    area.innerHTML = `
+            <div class="answers-grid reveal-anim">
+                ${q.options
+                  .map(
+                    (o) => `
+                    <button class="btn-answer" onclick="sendAnswer('${o}')">
+                        ${o}
+                    </button>
+                `
+                  )
+                  .join("")}
+            </div>
+        `;
+  } else {
+    area.innerHTML = `
+            <div class="input-group-container reveal-anim">
+                <div class="input-wrapper" id="input-box">
+                    <input type="text" id="ans-text" class="answer-input-field" maxlength="50" placeholder="Ответ...">
+                    <button class="btn-send-arrow" onclick="validateAndSend()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+  }
+}
+
+/**
+ * Проверка и отправка текстового ответа:
+ * - если поле пустое — трясём инпут и даём лёгкий вибро-отклик,
+ * - иначе отправляем ответ на сервер через sendAnswer.
+ */
+function validateAndSend() {
+  const input = document.getElementById("ans-text");
+  const val = input.value.trim();
+
+  if (val === "") {
+    const box = document.getElementById("input-box");
+    box.classList.add("shake-anim");
+    setTimeout(() => box.classList.remove("shake-anim"), 500);
+    if (window.navigator.vibrate) window.navigator.vibrate(50);
+    return;
+  }
+  sendAnswer(val);
+}
+
+// Точка входа модуля — инициализация страницы игры.
+window.onload = init;
+

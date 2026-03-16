@@ -193,13 +193,17 @@ async def handle_sync(sid, data):
                 "emoji": player.emoji if player else "👤"
             }, room=sid)
 
-            # Если игра закончена, СРАЗУ отправляем результаты обновившему страницу
             if is_finished:
-                players = db.query(models.Player).filter(models.Player.quiz_id == quiz.id).order_by(models.Player.score.desc()).all()
+                # ДОБАВЛЯЕМ .filter(models.Player.is_host == False)
+                players = db.query(models.Player).filter(
+                    models.Player.quiz_id == quiz.id,
+                    models.Player.is_host == False
+                ).order_by(models.Player.score.desc()).all()
+                
                 results = [{"name": p.name, "score": p.score, "emoji": p.emoji, "answers": p.answers_history} for p in players]
                 await sio_manager.emit('show_results', {
-                "results": results,
-                "questions": quiz.questions_data # Передаем вопросы сюда тоже
+                    "results": results,
+                    "questions": quiz.questions_data
                 }, room=sid)
             
             # Для хоста на обычном шаге шлем ответы
