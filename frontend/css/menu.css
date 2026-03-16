@@ -3,21 +3,107 @@
 }
 
 .logo-area {
-    margin-bottom: 40px;
+    position: relative;
+    margin-bottom: 40px; /* Немного уменьшили отступ, так как нет логотипа */
+    padding: 30px 0;
+    text-align: center;
+    background: radial-gradient(circle at center, rgba(108, 92, 231, 0.02) 0%, rgba(255, 255, 255, 0) 70%); /* Почти незаметное свечение фона */
 }
 
-.emoji-logo {
-    font-size: 4rem;
-    display: block;
-    margin-bottom: 10px;
-    filter: drop-shadow(0 5px 10px rgba(0,0,0,0.1));
-    animation: pulse 2s infinite;
+/* Главный заголовок с эффектом КОНТРАЖУРА (Glow) */
+.party-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800; /* Экстра-жирный шрифт */
+    font-size: 3.2rem; /* Сделали крупнее, раз он теперь главный */
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 3px; /* Увеличили межбуквенный отступ для стильности */
+    position: relative;
+    display: inline-block;
+    
+    /* 1. Цвет самого текста - глубокий фиолетовый */
+    color: #4834d4; 
+    
+    /* 2. МАГИЯ СВЕЧЕНИЯ ЗА ТЕКСТОМ (Мягкий Неон) */
+    text-shadow: 
+        0 0 10px rgba(108, 92, 231, 0.1),  /* Самое ближнее мягкое свечение */
+        0 0 25px rgba(108, 92, 231, 0.15), /* Среднее свечение */
+        0 0 45px rgba(108, 92, 231, 0.1);  /* Дальнее расплывчатое облако света */
+    
+    /* Анимация: Легкое "дыхание" света */
+    animation: quizGlowBreath 4s infinite ease-in-out;
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+/* Анимация пульсации неонового облака */
+@keyframes quizGlowBreath {
+    0%, 100% { 
+        text-shadow: 
+            0 0 10px rgba(108, 92, 231, 0.1),
+            0 0 25px rgba(108, 92, 231, 0.15),
+            0 0 45px rgba(108, 92, 231, 0.1);
+    }
+    50% { 
+        text-shadow: 
+            0 0 15px rgba(108, 92, 231, 0.15),
+            0 0 35px rgba(108, 92, 231, 0.2),
+            0 0 65px rgba(108, 92, 231, 0.15); /* Свечение становится чуть ярче и шире */
+    }
+}
+
+/* Эффект при наведении на всю шапку (для интереса) */
+.logo-area:hover .party-title {
+    color: #6c5ce7; /* Текст становится чуть светлее */
+    transform: scale(1.03); /* Легкое увеличение */
+    transition: all 0.4s ease;
+}
+
+/* Интерактивная полоска под заголовком */
+.party-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    width: 60px;
+    height: 4px;
+    background: #6c5ce7;
+    border-radius: 10px;
+    transform: translateX(-50%);
+    transition: width 0.3s ease, background 0.3s ease;
+}
+
+/* Эффект при наведении на заголовок (для интереса) */
+.logo-area:hover .party-title::after {
+    width: 140px;
+    background: #ff85a1; /* Меняем цвет полоски на розовый при наведении */
+}
+
+/* Подзаголовок: делаем чуть четче и добавляем иконки ✨ */
+.party-subtitle {
+    font-size: 1.05rem;
+    color: #636e72;
+    margin: 15px 0 0;
+    opacity: 0.8;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.party-subtitle::before,
+.party-subtitle::after {
+    font-size: 0.9rem;
+    opacity: 0.4;
+}
+
+/* Анимация появления с задержкой */
+.reveal-anim-delay {
+    animation: subtitleReveal 0.8s ease-out 0.2s both; /* Появляется через 0.2с после загрузки */
+}
+
+@keyframes subtitleReveal {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 0.8; transform: translateY(0); }
 }
 
 .menu-grid {
@@ -26,48 +112,105 @@
     gap: 20px;
 }
 
+/* Основная карточка меню */
 .menu-item {
+    position: relative;
     display: flex;
     align-items: center;
-    padding: 20px;
+    padding: 22px;
     border-radius: 20px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    background: white;
+    background: #ffffff;
     border: 2px solid transparent;
     text-align: left;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    overflow: hidden; /* Важно для эффекта блика */
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 1;
 }
 
+/* Эффект стеклянного блика (Shine) */
+.menu-item::after {
+    content: '';
+    position: absolute;
+    top: 0; 
+    left: -100%;
+    width: 50%; 
+    height: 100%;
+    background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 100%);
+    transform: skewX(-25deg);
+    transition: all 0.5s ease;
+    z-index: -1;
+}
+
+/* Общий hover: подъем карточки и пробегающий блик */
 .menu-item:hover {
-    transform: scale(1.05);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    transform: translateY(-5px) scale(1.02);
+}
+.menu-item:hover::after {
+    left: 150%;
+    transition: all 0.7s ease-in-out;
+}
+
+/* Анимация иконок при наведении */
+@keyframes iconPartyBounce {
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+    25% { transform: translateY(-4px) rotate(-8deg) scale(1.1); }
+    50% { transform: translateY(0) rotate(0deg) scale(1.05); }
+    75% { transform: translateY(-2px) rotate(8deg) scale(1.1); }
+}
+
+.menu-item:hover .menu-icon {
+    animation: iconPartyBounce 0.6s ease-in-out;
+}
+
+/* --- Стили для кнопки ОРГАНИЗАТОРА (Розовая) --- */
+.menu-item.create:hover {
+    border-color: #ff85a1;
+    /* Цветная светящаяся тень вместо серой */
+    box-shadow: 0 15px 30px rgba(255, 133, 161, 0.25); 
 }
 
 .menu-item.create {
     border-color: #ff85a1;
 }
+    
 .menu-item.create .menu-icon {
-    background: #ff85a1;
+    /* Сочный градиент вместо сплошного цвета */
+    background: linear-gradient(135deg, #ff85a1, #ff4757);
+    box-shadow: 0 5px 15px rgba(255, 133, 161, 0.3);
 }
 
 .menu-item.join {
     border-color: #6c5ce7;
 }
-.menu-item.join .menu-icon {
-    background: #6c5ce7;
+
+/* --- Стили для кнопки ИГРОКА (Фиолетовая) --- */
+.menu-item.join:hover {
+    border-color: #6c5ce7;
+    /* Цветная светящаяся тень */
+    box-shadow: 0 15px 30px rgba(108, 92, 231, 0.25);
 }
 
+.menu-item.join .menu-icon {
+    /* Сочный градиент */
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+    box-shadow: 0 5px 15px rgba(108, 92, 231, 0.3);
+}
+
+/* Настраиваем иконку (сделал чуть крупнее и добавил тень тексту) */
 .menu-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 15px;
+    width: 65px;
+    height: 65px;
+    border-radius: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.8rem;
+    font-size: 2rem;
     color: white;
     margin-right: 20px;
+    transition: all 0.3s ease;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .menu-text {
@@ -92,17 +235,6 @@
     opacity: 0.4;
 }
 
-/* Стили для модального окна */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(108, 92, 231, 0.3);
-    backdrop-filter: blur(5px);
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-}
 
 .modal-content {
     width: 90%;
@@ -127,4 +259,373 @@
     margin-top: 10px;
     cursor: pointer;
     font-weight: 600;
+}
+
+/* Светлое модальное окно */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.4); /* Светлая подложка */
+    backdrop-filter: blur(15px);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.light-glass-card {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 40px;
+    padding: 40px;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    animation: slideUp 0.4s ease-out;
+}
+
+.badge-new {
+    display: inline-block;
+    background: #6c5ce7;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 5px 12px;
+    border-radius: 50px;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+}
+
+.modal-header p {
+    font-size: 0.9rem;
+    color: #636e72;
+    margin: 10px 0 30px;
+}
+
+/* Стили полей ввода */
+.input-group-modern {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.input-group-modern label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #b2bec3;
+    margin-left: 15px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper .icon {
+    position: absolute;
+    left: 20px;
+    font-size: 1.1rem;
+}
+
+.light-glass-card input {
+    width: 100%;
+    background: #f1f2f6 !important;
+    border: 2px solid transparent !important;
+    border-radius: 20px !important;
+    padding: 18px 20px 18px 55px !important;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    color: #2d3436 !important;
+    transition: 0.3s;
+}
+
+.light-glass-card input:focus {
+    background: #fff !important;
+    border-color: #6c5ce7 !important;
+    box-shadow: 0 10px 20px rgba(108, 92, 231, 0.1);
+    outline: none;
+}
+
+/* Кнопка */
+.btn-modern-join {
+    background: #6c5ce7;
+    color: white;
+    border: none;
+    width: 100%;
+    padding: 20px;
+    border-radius: 20px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.3);
+    transition: 0.3s;
+    margin-top: 10px;
+}
+
+.btn-modern-join:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(108, 92, 231, 0.4);
+    background: #5b49d6;
+}
+
+.btn-cancel-link {
+    background: none;
+    border: none;
+    color: #b2bec3;
+    margin-top: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-cancel-link:hover {
+    color: #636e72;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.portal-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 25px; /* Увеличили отступ для плавающих подписей */
+    margin-bottom: 35px;
+}
+
+.modern-field {
+    position: relative;
+    width: 100%;
+}
+
+.modern-field input:focus ~ .field-icon {
+    opacity: 1;
+    color: #6c5ce7;
+}
+
+
+/* Убираем лишние отступы, так как убрали бейдж */
+.modal-header h3 {
+    margin-top: 10px;
+}
+
+/* Чтобы розовый текст хорошо читался на сером фоне */
+.modern-field input::selection {
+    background: rgba(255, 133, 161, 0.2);
+    color: #ff85a1;
+}
+
+/* Подсказки: делаем их еле заметными (светло-серыми) */
+.modern-field label {
+    position: absolute;
+    left: 46px;
+    top: 40%;
+    transform: translateY(-50%);
+    color: rgba(0, 0, 0, 0.2); /* Очень прозрачный серый */
+    font-size: 0.8rem;
+    font-weight: 600;
+    pointer-events: none;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 2;
+}
+
+/* Когда поле активно или заполнено */
+.modern-field input:focus ~ label,
+.modern-field input:not(:placeholder-shown) ~ label {
+    top: 15px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: rgba(0, 0, 0, 0.25); /* Остается серым и незаметным даже наверху */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+
+.error-msg {
+    color: #ff85a1;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-top: 8px;
+    text-align: left;
+    display: none;
+}
+
+/* Ошибки: Текст и границы */
+.modern-field.error-active .field-border {
+    background: #ff4757; /* Яркий красный вместо розового */
+    box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+}
+
+.modern-field.error-active .field-icon {
+    filter: drop-shadow(0 0 5px rgba(255, 71, 87, 0.5));
+}
+
+
+/* Основной стиль инпута - теперь без розового текста */
+.modern-field input {
+    width: 100% !important;
+    background: rgba(240, 242, 245, 0.8) !important;
+    border: 2px solid transparent !important; /* Прозрачная рамка для плавности */
+    border-radius: 16px !important;
+    padding: 18px 20px 10px 45px !important;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    color: #2d3436 !important; /* ТЕМНЫЙ ЦВЕТ ТЕКСТА (вместо розового) */
+    font-size: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+/* Эффект фокуса - мягкая фиолетовая рамка (в цвет темы) */
+.modern-field input:focus {
+    background: #ffffff !important;
+    border-color: #6c5ce7 !important; 
+    box-shadow: 0 8px 20px rgba(108, 92, 231, 0.1) !important;
+}
+
+/* Плавающая подпись (Label) - чуть темнее для читаемости */
+.modern-field label {
+    position: absolute;
+    left: 45px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a4b0be; /* Спокойный серый */
+    font-size: 0.9rem;
+    font-weight: 500;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+/* Поднятая подпись (когда текст введен) */
+.modern-field input:focus ~ label,
+.modern-field input:not(:placeholder-shown) ~ label {
+    top: 12px;
+    left: 45px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #6c5ce7; /* Фиолетовый акцент при наборе */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Иконка внутри инпута */
+.modern-field .field-icon {
+    position: absolute;
+    left: 10px;
+    top: 38%;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+    opacity: 0.4;
+    z-index: 3;
+    transition: 0.3s;
+}
+
+/* СТИЛЬ ОШИБКИ */
+.modern-field.error-active input {
+    border-color: #ff4757 !important; /* Красная рамка */
+    background: #fffafa !important; /* Едва заметный красный оттенок фона */
+}
+
+.modern-field.error-active .field-icon {
+    opacity: 1;
+    filter: grayscale(0) brightness(0.8);
+}
+
+.input-hint {
+    font-size: 0.75rem;
+    color: #ff4757; /* Чистый красный */
+    font-weight: 700;
+    margin: -35px 0 15px 10px;
+    display: none; /* Включается через JS */
+    text-align: left;
+    animation: fadeInError 0.6s ease;
+}
+
+@keyframes fadeInError {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Убираем старую рамку у контейнера */
+.error-shake {
+    animation: shake-modern 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    border: none !important; /* УДАЛЯЕМ ЭТУ СТРОЧКУ, ЕСЛИ ОНА БЫЛА */
+    background: none !important; /* УДАЛЯЕМ ФОН */
+}
+@keyframes shake-modern {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+
+/* --- МОБИЛЬНАЯ АДАПТАЦИЯ --- */
+@media screen and (max-width: 480px) {
+    /* 1. Компактная карточка */
+    .menu-card {
+        padding: 30px 20px !important; /* Уменьшили внутренние отступы */
+        border-radius: 30px;
+    }
+
+    /* 2. Компактная шапка */
+    .logo-area {
+        margin-bottom: 20px;
+        padding: 10px 0;
+    }
+
+    .party-title {
+        font-size: 2rem; /* Уменьшили шрифт заголовка */
+        letter-spacing: 1px;
+    }
+
+    .party-subtitle {
+        font-size: 0.9rem; /* Подзаголовок поменьше */
+        margin-top: 10px;
+    }
+
+    /* 3. Компактные кнопки меню */
+    .menu-grid {
+        gap: 12px; /* Уменьшили расстояние между кнопками */
+    }
+
+    .menu-item {
+        padding: 15px; /* Уменьшили отступы внутри кнопок */
+    }
+
+    .menu-icon {
+        width: 50px;  /* Иконки чуть меньше */
+        height: 50px;
+        font-size: 1.5rem;
+        margin-right: 15px;
+        border-radius: 14px;
+    }
+
+    .menu-label {
+        font-size: 1rem; /* Текст кнопок компактнее */
+    }
+
+    .menu-desc {
+        font-size: 0.8rem;
+    }
+
+    /* 4. Адаптация модального окна */
+    .light-glass-card {
+        padding: 25px 20px;
+        border-radius: 30px;
+    }
+
+    .btn-modern-join {
+        padding: 16px;
+        font-size: 1rem;
+    }
+
+    /* Если хочется оставить легкий отклик при нажатии */
+    .logo-area:active {
+        transform: scale(0.98); /* Слегка сжимается при касании */
+        transition: 0.1s;
+    }
 }

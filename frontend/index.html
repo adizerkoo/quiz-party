@@ -17,9 +17,8 @@
     <div class="main-container">
         <div class="party-card menu-card">
             <div class="logo-area">
-                <span class="emoji-logo">🎁</span>
                 <h1 class="party-title">QUIZ PARTY</h1>
-                <p class="party-subtitle">Твой праздник — твои правила!</p>
+                <p class="party-subtitle reveal-anim-delay">Твой праздник — твои правила!</p>
             </div>
 
             <div class="menu-grid">
@@ -47,32 +46,36 @@
     </div>
 
     <div id="join-modal" class="modal">
-        <div class="modal-content glass-card">
-            <h3>Вход в игру</h3>
-            <input type="text" id="player-name" maxlength="15" placeholder="Твое имя">
-            <input type="text" id="room-code" placeholder="Код комнаты">
-            <button onclick="startJoining()" class="btn-party-direct">Погнали! 🚀</button>
-            <button onclick="closeJoinModal()" class="btn-close">Закрыть</button>
+        <div class="modal-content light-glass-card">
+            <div class="modal-header">
+                <h3>Вход в игру</h3>
+                <p>Введи данные, чтобы начать веселье</p>
+            </div>
+            
+            <div class="portal-inputs">
+                <div class="modern-field" id="field-name">
+                    <input type="text" id="player-name" maxlength="15" placeholder=" " required>
+                    <label>Твое имя</label>
+                    <span class="field-icon">👤</span>
+                    <div class="field-border"></div>
+                </div>
+                <span class="input-hint" id="hint-name">Пожалуйста, представься 🎭</span> <div class="modern-field" id="field-code">
+                    <input type="text" id="room-code" placeholder=" " required>
+                    <label>Код комнаты</label>
+                    <span class="field-icon">🔑</span>
+                    <div class="field-border"></div>
+                </div>
+                <span class="input-hint" id="hint-code">Нужен код, чтобы войти 🚪</span>
+            </div>
+
+            <button onclick="startJoining()" class="btn-modern-join">
+                <span>ПОГНАЛИ! 🚀</span>
+            </button>
+            
+            <button onclick="closeJoinModal()" class="btn-cancel-link">Вернуться назад</button>
         </div>
     </div>
 
-    <script>
-        function openJoinModal() {
-            document.getElementById('join-modal').style.display = 'flex';
-        }
-        function closeJoinModal() {
-            document.getElementById('join-modal').style.display = 'none';
-        }
-        function startJoining() {
-            const name = document.getElementById('player-name').value;
-            const code = document.getElementById('room-code').value;
-            if(name && code) {
-                sessionStorage.setItem('quiz_player_name', name);
-                window.location.href = `game.html?room=${code}&role=player`;
-            } else {
-                alert("Введи имя и код комнаты! 😊");
-            }
-        }
-    </script>
+    <script src="js/menu.js"></script>
 </body>
 </html>

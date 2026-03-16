@@ -13,12 +13,15 @@ const role = urlParams.get('role');
 const playerName = role === 'host' ? 'HOST' : (sessionStorage.getItem('quiz_player_name') || "Игрок");
 
 async function init() {
-    if (document.getElementById('display-room-code')) {
-        document.getElementById('display-room-code').innerText = roomCode;
+    // 1. Сразу заполняем код комнаты, если элемент есть
+    const displayCodeEl = document.getElementById('display-room-code');
+    if (displayCodeEl) {
+        displayCodeEl.innerText = roomCode;
     }
 
     try {
         const response = await fetch(`/api/quizzes/${roomCode}`);
+        
         if (response.ok) {
             const data = await response.json();
             quizTitle = data.title;
@@ -27,6 +30,7 @@ async function init() {
             renderQuizTitle();
             renderProgress();
             
+            // Соединяемся с сокетами только если комната реально существует
             socket.emit('join_room', { 
                 room: roomCode, 
                 name: playerName, 
@@ -34,17 +38,20 @@ async function init() {
             });
             socket.emit('request_sync', { room: roomCode, name: playerName });
 
-            if (role === 'host') {
-                document.getElementById('host-screen').style.display = 'block';
-            } else {
-                document.getElementById('player-screen').style.display = 'block';
-            }
+            // Показываем нужный экран
+            const screenId = (role === 'host') ? 'host-screen' : 'player-screen';
+            const screenEl = document.getElementById(screenId);
+            if (screenEl) screenEl.style.display = 'block';
+
         } else {
-            alert("Комната не найдена!");
-            window.location.href = 'index.html';
+            // Если комната не найдена (например, ввели вручную в URL)
+            console.warn("Комната не существует, возвращаемся в меню...");
+            window.location.href = 'index.html?error=not_found';
         }
     } catch (e) {
         console.error("Ошибка инициализации:", e);
+        // В случае критической ошибки сервера тоже лучше уйти на главную
+        window.location.href = 'index.html';
     }
 }
 
