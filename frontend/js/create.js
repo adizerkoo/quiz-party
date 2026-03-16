@@ -1,6 +1,14 @@
 let quizQuestions = [];
 let editIndex = -1; // Индекс редактируемого вопроса
 
+// В самом начале файла можно сразу задать состояние
+document.addEventListener('DOMContentLoaded', () => {
+    // Если мы на странице создания, сбрасываем форму
+    if (document.getElementById('q-input-type')) {
+        clearForm();
+    }
+});
+
 function showToast(message) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -10,29 +18,41 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 3000);
 }
 
+// Исправленная функция выбора типа
 function selectType(type, element) {
-    document.getElementById('q-input-type').value = type;
+    const typeInput = document.getElementById('q-input-type');
+    if (typeInput) typeInput.value = type;
+
+    // Убираем активный класс у всех и добавляем текущему
     document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
-    element.classList.add('active');
+    if (element) element.classList.add('active');
     
     const fields = document.getElementById('options-fields');
     const correctZone = document.getElementById('correct-answer-zone');
     
     if (type === 'options') {
-        fields.style.display = 'block';
-        correctZone.style.display = 'none';
+        if (fields) fields.style.display = 'block';
+        if (correctZone) correctZone.style.display = 'none';
     } else {
-        fields.style.display = 'none';
-        correctZone.style.display = 'block';
+        if (fields) fields.style.display = 'none';
+        if (correctZone) correctZone.style.display = 'block';
     }
 }
 
 function addQuestionToList() {
     const textEl = document.getElementById('q-input-text');
-    const type = document.getElementById('q-input-type').value;
-    let correct = "";
-    let options = [];
+    const typeEl = document.getElementById('q-input-type');
+    
+    if (!textEl || !typeEl) {
+        console.error("Не найдены поля ввода текста или типа вопроса");
+        return;
+    }
 
+    const type = typeEl.value;
+    let correct = "";
+    let options = []; // ОБЯЗАТЕЛЬНО инициализируем массив здесь
+
+    // Проверка самого вопроса
     if (!textEl.value.trim()) {
         showToast("Введите текст вопроса!");
         return;
@@ -45,6 +65,7 @@ function addQuestionToList() {
             return;
         }
     } else {
+        // Логика для типа 'options'
         for (let i = 1; i <= 4; i++) {
             const val = document.getElementById(`opt-${i}`).value.trim();
             if (!val) {
@@ -53,8 +74,14 @@ function addQuestionToList() {
             }
             options.push(val);
         }
-        const selectedIndex = document.querySelector('input[name="correct-opt"]:checked').value;
-        correct = options[parseInt(selectedIndex)];
+        
+        const selectedRadio = document.querySelector('input[name="correct-opt"]:checked');
+        if (!selectedRadio) {
+            showToast("Выберите правильный вариант!");
+            return;
+        }
+        const selectedIndex = parseInt(selectedRadio.value);
+        correct = options[selectedIndex];
     }
 
     const questionData = {
@@ -146,8 +173,12 @@ function clearForm() {
     document.getElementById('q-input-text').value = "";
     document.getElementById('q-input-correct').value = "";
     document.querySelectorAll('.opt-input').forEach(i => i.value = "");
-    // Сброс типа на дефолтный (Выбор)
-    selectType('options', document.querySelectorAll('.type-option')[1]);
+    
+    // Сброс на "Текст" по умолчанию
+    const typeOptions = document.querySelectorAll('.type-option');
+    if (typeOptions.length > 0) {
+        selectType('text', typeOptions[0]);
+    }
 }
 
 function removeQuestion(index) {
@@ -156,21 +187,30 @@ function removeQuestion(index) {
     showToast("Вопрос удален");
 }
 
+// Проверь saveAndGo, чтобы не было ошибок если сервер упал
 async function saveAndGo() {
     const title = document.getElementById('quiz-title-input').value.trim();
     if (!title) { showToast("Введите название вечеринки!"); return; }
-    if (quizQuestions.length === 0) { showToast("Добавьте вопросы!"); return; }
+    if (quizQuestions.length === 0) { showToast("Добавьте хотя бы один вопрос!"); return; }
 
     const roomCode = 'PARTY-' + Math.random().toString(36).substr(2, 4).toUpperCase();
     
+    // Сначала пробуем отправить, если не вышло — ловим ошибку
     try {
         const response = await fetch('http://127.0.0.1:8000/api/quizzes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: title, code: roomCode, questions: quizQuestions }),
         });
+        
         if (response.ok) {
             window.location.href = `game.html?role=host&room=${roomCode}`;
+        } else {
+             showToast("Сервер не принял данные");
         }
-    } catch (e) { showToast("Ошибка сервера"); }
+    } catch (e) {
+        console.error("Server error:", e);
+        showToast("Backend не запущен! Проверь Python.");
+    }
 }
+
