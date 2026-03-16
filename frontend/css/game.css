@@ -611,7 +611,7 @@ body::after {
 /* --- НАЗВАНИЕ ВИКТОРИНЫ --- */
 #quiz-title-host,
 #quiz-title-player {
-    font-size: 1.5rem;
+    font-size: 2.5rem;
     font-weight: 800;
     margin-bottom: 10px;
     padding: 12px 16px;
@@ -1697,36 +1697,8 @@ body::after {
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 20px 0;
-    min-height: 50px;
-}
-
-#display-room-code {
-    font-weight: 800;
-    font-size: 1rem;
-    color: #6c5ce7;
-    letter-spacing: 1px;
-    pointer-events: none; /* Магия: клики будут "пролетать" сквозь текст на родителя */
-    user-select: none !important;
-}
-
-.icon-only-btn {
-    background: #6c5ce7;
-    color: white;
-    border: none;
-    width: 26px;
-    height: 26px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.icon-only-btn:hover {
-    transform: scale(1.1);
-    background: #5b4bc4;
+    margin: 5px 0;
+    min-height: 40px;
 }
 
 /* Состояние при копировании */
@@ -1751,24 +1723,6 @@ body::after {
     transform: translateY(0);
 }
 
-/* Основной контейнер */
-.room-code-wrapper {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(10px);
-    border: 2px solid #6c5ce7;
-    border-radius: 20px;
-    padding: 5px 10px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 8px 20px rgba(108, 92, 231, 0.15);
-    
-    /* ИСПРАВЛЕНИЕ 1: Запрещаем выделение текста мышкой */
-    user-select: none; 
-    -webkit-user-select: none;
-}
-
 #display-room-code {
     font-weight: 800;
     font-size: 1.2rem;
@@ -1780,41 +1734,206 @@ body::after {
     cursor: pointer !important; 
 }
 
+/* Для десктопа */
+#share-room-btn svg, 
+#copy-room-btn svg {
+    width: 20px !important;
+    height: 20px !important;
+    display: block; /* Убирает лишние отступы снизу */
+}
 
-/* АДАПТАЦИЯ ДЛЯ ТЕЛЕФОНОВ */
+
+/* Общий контейнер кода */
+.room-code-wrapper {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 1px 15px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid #6c5ce7;
+    border-radius: 18px;
+}
+
+/* Кнопки-иконки */
+.icon-only-btn {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer !important;
+    width: 25px;  /* Немного увеличим общую площадь кнопки */
+    height: 25px;
+    border-radius: 10px; /* Скругление как у премиум-иконок */
+    
+    /* Красивый фон */
+    background: rgba(108, 92, 231, 0.1); /* Нежно-фиолетовый фон */
+    color: #6c5ce7; /* Цвет иконки */
+    
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+}
+
+/* Эффект при наведении */
+.icon-only-btn:hover {
+    background: #6c5ce7; /* Заливка основным цветом */
+    color: #ffffff;      /* Иконка становится белой */
+    transform: translateY(-0.5px); /* Легкий подъем */
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+}
+
+/* Эффект при нажатии */
+.icon-only-btn:active {
+    transform: translateY(0) scale(0.9);
+}
+
+/* Принудительный размер для SVG */
+.icon-only-btn svg {
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none; /* Клик проходит сквозь иконку на кнопку */
+    display: block;
+}
+
+/* МОБИЛЬНАЯ АДАПТАЦИЯ */
 @media (max-width: 480px) {
     .room-code-wrapper {
-        gap: 8px !important;
-        padding: 1px 4px !important;
-        border-radius: 15px;
+        gap: 10px !important;
+        padding: 1px 5px !important;
     }
 
-    /* Сама кнопка-контейнер */
     .icon-only-btn {
-        width: 22px !important;
-        height: 22px !important;
-        border-radius: 10px !important;
-    }
-
-    /* Сама иконка внутри (SVG) */
-    .icon-only-btn svg {
-        /* Используем !important, чтобы перебить атрибуты width/height в HTML */
-        width: 12px !important; 
-        height: 12px !important;
-        stroke-width: 3; /* Сделаем линии чуть толще, раз иконка меньше */
+        width: 31px !important; /* Вот здесь меняй размер для телефона */
+        height: 19px !important;
     }
 
     #display-room-code {
-        font-size: 0.5rem !important;
-        padding: 4px 6px !important;
+        font-size: 0.8rem !important;
     }
+
+    #share-room-btn svg, #copy-room-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+    display: block;
+    }
+}
+
+
+.code-inner-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px; /* Фиксируем ширину, чтобы блок не прыгал */
+    height: 25px;
+}
+
+.copy-text-node {
+    /* Позиционирование */
+    position: absolute;
+    top: 50%; /* Исправил на 50% для четкого центра */
+    left: 50%; /* Исправил на 50% для четкого центра */
+    transform: translate(-50%, -50%) scale(0.5);
     
-    .room-share-container {
-        margin: 10px 0; /* Уменьшаем отступы */
+    /* Оформление текста */
+    font-size: 0.85rem; 
+    font-weight: 620; /* Сделал жирнее для обводки */
+    color: #23cbc3;
+    -webkit-text-stroke: 0.5px rgba(35, 203, 195, 0.5);
+    white-space: nowrap;
+    line-height: 1;
+    
+    /* Состояние и анимация */
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none;
+}
+
+/* Состояния при клике */
+.is-copied #display-room-code {
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.is-copied .copy-text-node {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+
+#share-room-btn { margin-right: 5px; }
+#copy-room-btn { margin-left: 5px; }
+
+
+.party-subtitle {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800; /* Очень жирный шрифт */
+    font-size: 0.8rem; /* Делаем чуть меньше, но выразительнее */
+    text-transform: uppercase; /* Всегда заглавные */
+    letter-spacing: 2px; /* Раздвигаем буквы для "премиальности" */
+    
+    
+    /* Градиентный текст */
+    background: linear-gradient(45deg, #6c5ce7, #a29bfe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    margin-bottom: 8px;
+    display: block;
+    text-align: center;
+    
+    /* Мягкая тень, чтобы текст "парил" */
+    filter: drop-shadow(0 2px 4px rgba(108, 92, 231, 0.2));
+    
+    /* Анимация появления */
+    animation: fadeInSubtitle 0.8s ease-out forwards;
+    margin-bottom: 4px !important; /* Минимальный отступ до кода */
+    margin-top: 15px; /* Отступ от верхнего заголовка "Ждем гостей" */
+    
+    font-size: 0.75rem;
+    opacity: 0.9;
+    letter-spacing: 1px;
+}
+
+@keyframes fadeInSubtitle {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Адаптация для мобилок */
+@media (max-width: 480px) {
+    .party-subtitle {
+        font-size: 0.7rem;
+        letter-spacing: 1.5px;
     }
 
-    .copy-success-hidden {
-    font-size: 0.8rem;
-
+    .copy-text-node {
+        font-size: 0.5;
     }
+}
+
+body {
+    /* Сайт не станет уже 320 пикселей. Если экран меньше — появится горизонтальный скролл */
+    min-width: 350px; 
+    
+    /* Чтобы контент не прилипал к краям на узких экранах */
+    overflow-x: hidden; 
+}
+
+.main-container {
+    width: 100%;
+    max-width: 500px; /* Ограничение сверху для красоты на ПК */
+    margin: 0 auto;   /* Центрирование */
+    padding: 0 15px;  /* Боковые отступы внутри */
+    box-sizing: border-box;
 }

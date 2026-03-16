@@ -42,3 +42,19 @@ input, select, textarea {
 * {
     -webkit-tap-highlight-color: transparent; /* Убирает синюю рамку при клике на кнопки/инпуты */
 }
+
+body {
+    /* Сайт не станет уже 320 пикселей. Если экран меньше — появится горизонтальный скролл */
+    min-width: 320px; 
+    
+    /* Чтобы контент не прилипал к краям на узких экранах */
+    overflow-x: hidden; 
+}
+
+.main-container {
+    width: 100%;
+    max-width: 500px; /* Ограничение сверху для красоты на ПК */
+    margin: 0 auto;   /* Центрирование */
+    padding: 0 15px;  /* Боковые отступы внутри */
+    box-sizing: border-box;
+}

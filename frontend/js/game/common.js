@@ -501,30 +501,25 @@ function shareRoomLink() {
     }
 }
 
+
+// Функция копирования кода номера
 function handleCopySequence() {
     const area = document.getElementById('room-interactive-area');
-    const msg = document.getElementById('copy-success-msg');
-    const code = document.getElementById('display-room-code').innerText;
+    const codeElement = document.getElementById('display-room-code');
+    const codeText = codeElement.innerText;
 
-    // 1. Копируем текст
-    const shareUrl = `${window.location.origin}/index.html?room=${code}`;
-    navigator.clipboard.writeText(shareUrl);
-
-    // 2. Анимация исчезновения кнопок и кода
-    area.classList.add('fade-out');
-
-    // 3. Показываем "Скопировано"
-    setTimeout(() => {
-        msg.classList.add('copy-success-visible');
+    // 1. Копируем в буфер
+    const shareUrl = `${window.location.origin}/index.html?room=${codeText}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
         
-        // 4. Через 2 секунды возвращаем всё назад
+        // 2. Включаем анимацию замены текста
+        area.classList.add('is-copied');
+
+        // 3. Возвращаем обратно через 1.5 секунды
         setTimeout(() => {
-            msg.classList.remove('copy-success-visible');
-            setTimeout(() => {
-                area.classList.remove('fade-out');
-            }, 300);
-        }, 2000);
-    }, 200);
+            area.classList.remove('is-copied');
+        }, 1500);
+    });
 }
 
 // Добавляем проверку клика по самому тексту кода
