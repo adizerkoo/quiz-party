@@ -6,7 +6,6 @@
     <title>Создание Quiz Party</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-papE4t6p+4Ztgn9D2R4Xj2y74GgHgPoJ+ehvW4QcCj+qMCEZ0R4ULrHav+dTpsI2YErRnHEmfSmB23zZQebxww==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/create.css">
 </head>
@@ -47,12 +46,27 @@
                     </div>
                 </div>
 
-                <div id="options-fields" class="options-creation-zone">
-                    <p class="section-hint">Отметь правильный вариант:</p>
-                    <div class="opt-create-row"><input type="text" id="opt-1" placeholder="Вариант 1" class="opt-input"> <input type="radio" name="correct-opt" value="0" checked></div>
-                    <div class="opt-create-row"><input type="text" id="opt-2" placeholder="Вариант 2" class="opt-input"> <input type="radio" name="correct-opt" value="1"></div>
-                    <div class="opt-create-row"><input type="text" id="opt-3" placeholder="Вариант 3" class="opt-input"> <input type="radio" name="correct-opt" value="2"></div>
-                    <div class="opt-create-row"><input type="text" id="opt-4" placeholder="Вариант 4" class="opt-input"> <input type="radio" name="correct-opt" value="3"></div>
+                <div id="options-fields" class="options-creation-zone" style="display: block;">
+                    <div class="input-group">
+                        <label>Отметь правильный вариант:</label>
+                        
+                        <div class="opt-create-row">
+                            <input type="text" id="opt-1" placeholder="Вариант 1" class="opt-input"> 
+                            <input type="radio" name="correct-opt" value="0" checked>
+                        </div>
+                        <div class="opt-create-row">
+                            <input type="text" id="opt-2" placeholder="Вариант 2" class="opt-input"> 
+                            <input type="radio" name="correct-opt" value="1">
+                        </div>
+                        <div class="opt-create-row">
+                            <input type="text" id="opt-3" placeholder="Вариант 3" class="opt-input"> 
+                            <input type="radio" name="correct-opt" value="2">
+                        </div>
+                        <div class="opt-create-row">
+                            <input type="text" id="opt-4" placeholder="Вариант 4" class="opt-input"> 
+                            <input type="radio" name="correct-opt" value="3">
+                        </div>
+                    </div>
                 </div>
 
                 <div id="correct-answer-zone" class="input-group" style="display: none;">
@@ -82,5 +96,25 @@
         </div>
     </div>
     <script src="js/create.js"></script>
+
+<button class="btn-open-library" onclick="toggleLibrary()">
+    <i class="fa-solid fa-lightbulb"></i> Идеи вопросов
+</button>
+
+<div id="library-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>💡 Готовые вопросы</h2>
+            <button class="close-modal" onclick="toggleLibrary()">×</button>
+        </div>
+        <div class="library-filter">
+            <button class="filter-btn active" onclick="filterLibrary('all')">Все</button>
+            <button class="filter-btn" onclick="filterLibrary('funny')">Юмор</button>
+            <button class="filter-btn" onclick="filterLibrary('friends')">О нас</button>
+        </div>
+        <div id="library-list" class="library-items-container">
+            </div>
+    </div>
+</div>    
 </body>
 </html>

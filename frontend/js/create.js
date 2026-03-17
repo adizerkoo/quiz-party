@@ -203,6 +203,7 @@ function clearForm() {
     if (typeOptions.length > 0) {
         selectType('text', typeOptions[0]);
     }
+    updateCorrectHighlight();
 }
 
 function removeQuestion(index) {
@@ -254,3 +255,134 @@ document.addEventListener('touchend', function (event) {
     }
     lastTouchEnd = now;
 }, false);
+
+
+// Функция для обновления визуальной подсветки правильного варианта
+function updateCorrectHighlight() {
+    document.querySelectorAll('.opt-create-row').forEach((row, index) => {
+        const radio = row.querySelector('input[name="correct-opt"]');
+        if (radio && radio.checked) {
+            row.classList.add('correct-selected');
+        } else {
+            row.classList.remove('correct-selected');
+        }
+    });
+}
+
+// Делегирование события: вешаем один слушатель на всю зону вариантов
+document.addEventListener('change', (e) => {
+    if (e.target.name === 'correct-opt') {
+        updateCorrectHighlight();
+    }
+});
+
+// Вызываем один раз при загрузке, чтобы подсветить вариант по умолчанию
+document.addEventListener('DOMContentLoaded', () => {
+    updateCorrectHighlight();
+});
+
+//Идет код с  библиотекой
+
+// Наша база знаний для вечеринки
+const questionsLibrary = [
+    { text: "Кто из присутствующих чаще всего зависает в TikTok?", type: "options", options: ["Именинник", "Тот кто слева", "Я!", "Все понемногу"], correct: "Именинник", cat: "funny" },
+    { text: "Какое коронное блюдо у хозяина дома?", type: "text", correct: "Пельмени", cat: "friends" },
+    { text: "Кто вероятнее всего забудет ключи внутри квартиры?", type: "options", options: ["Самый умный", "Самый сонный", "Виновник торжества", "Никто"], correct: "Виновник торжества", cat: "funny" },
+    { text: "Как звали первую любовь именинника(цы)?", type: "text", correct: "Секрет", cat: "friends" },
+    { text: "Если бы мы попали на необитаемый остров, кто бы съел всех первым?", type: "options", options: ["Самый голодный", "Тот кто качается", "Тихоня", "Я бы всех спас"], correct: "Тихоня", cat: "funny" }
+];
+
+function toggleLibrary() {
+    const modal = document.getElementById('library-modal');
+    const isVisible = modal.style.display === 'flex';
+    modal.style.display = isVisible ? 'none' : 'flex';
+    if (!isVisible) filterLibrary('all');
+}
+
+function filterLibrary(category) {
+    const container = document.getElementById('library-list');
+    if (!container) return;
+    
+    // 1. Очищаем список перед новой отрисовкой
+    container.innerHTML = "";
+    
+    // 2. Подсветка кнопок фильтров (Все / Юмор / О нас)
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        const btnText = btn.innerText.toLowerCase();
+        const isActive = (category === 'all' && btnText.includes('все')) ||
+                         (category === 'funny' && btnText.includes('юмор')) ||
+                         (category === 'friends' && btnText.includes('о нас'));
+        btn.classList.toggle('active', isActive);
+    });
+
+    // 3. Фильтруем массив вопросов
+    const filtered = category === 'all' 
+        ? questionsLibrary 
+        : questionsLibrary.filter(q => q.cat === category);
+
+    // 4. Отрисовываем карточки
+    filtered.forEach(q => {
+        const item = document.createElement('div');
+        item.className = 'library-item';
+        
+        // Определяем иконку и текст типа как в основном интерфейсе
+        const typeMarkup = q.type === 'text' 
+            ? `<i class="fa-solid fa-pen"></i> Текст` 
+            : `<i class="fa-solid fa-circle-dot"></i> Выбор`;
+
+        item.innerHTML = `
+            <div class="library-item-content">
+                <span class="library-tag">${typeMarkup}</span>
+                <b>${q.text}</b>
+                <div class="library-answer-preview">
+                    <i class="fa-solid fa-check-double"></i> Ответ: ${q.correct}
+                </div>
+            </div>
+        `;
+        
+        item.onclick = () => {
+            importQuestion(q);
+            toggleLibrary();
+        };
+        container.appendChild(item);
+    });
+}
+
+function importQuestion(q) {
+    // 1. Заполняем основной текст вопроса
+    const textEl = document.getElementById('q-input-text');
+    textEl.value = q.text;
+
+    // 2. Выбираем тип вопроса (переключаем табы визуально)
+    const typeOptions = document.querySelectorAll('.type-option');
+    if (q.type === 'text') {
+        selectType('text', typeOptions[0]);
+        document.getElementById('q-input-correct').value = q.correct;
+    } else {
+        selectType('options', typeOptions[1]);
+        // Заполняем варианты ответов
+        if (q.options) {
+            q.options.forEach((opt, i) => {
+                const optInput = document.getElementById(`opt-${i + 1}`);
+                if (optInput) optInput.value = opt;
+                
+                // Отмечаем правильный (если совпадает с q.correct)
+                if (opt === q.correct) {
+                    document.querySelectorAll('input[name="correct-opt"]')[i].checked = true;
+                }
+            });
+        }
+    }
+
+    // 3. Подсвечиваем зону создания, чтобы пользователь понял, что данные перенеслись
+    const zone = document.querySelector('.creation-zone');
+    zone.style.transition = "0.3s";
+    zone.style.boxShadow = "0 0 20px rgba(108, 92, 231, 0.4)";
+    setTimeout(() => zone.style.boxShadow = "none", 1000);
+
+    // 4. Плавно скроллим наверх к форме
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    showToast("Вопрос готов к редактированию! ✨");
+    setTimeout(updateCorrectHighlight, 10);
+}
