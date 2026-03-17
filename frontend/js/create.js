@@ -521,6 +521,14 @@ function importQuestion(q) {
     const typeOptions = document.querySelectorAll('.type-option');
     const typeInput = document.getElementById('q-input-type');
 
+    const inputField = document.getElementById('q-input-text');
+    inputField.value = q.text;
+
+    // 2. Добавляем эффект вспышки (тот же, что и для рандомных идей)
+    inputField.classList.remove('idea-inserted'); // Сбрасываем, если была
+    void inputField.offsetWidth; // Магия для перезапуска анимации (reflow)
+    inputField.classList.add('idea-inserted');
+
     if (!questionInput || !typeInput) return;
 
     questionInput.value = q.text;
@@ -539,4 +547,8 @@ function importQuestion(q) {
         const radios = document.querySelectorAll('input[name="correct-opt"]');
         radios.forEach((r, i) => r.checked = (q.options[i] === q.correct));
     }
+
+    setTimeout(() => {
+        inputField.classList.remove('idea-inserted');
+    }, 800);
 }

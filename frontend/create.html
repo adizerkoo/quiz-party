@@ -28,8 +28,14 @@
             </div>
 
             <div class="creation-zone">
-                <div class="input-group">
-                    <label>Твой вопрос</label>
+               <div class="input-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label style="margin: 0;">Твой вопрос</label>
+                        <button type="button" class="btn-inline-library" onclick="toggleLibrary()">
+                            <i class="fa-solid fa-book-open"></i> Все идеи
+                        </button>
+                    </div>
+
                     <input type="text" id="q-input-text" placeholder="Например: В каком году вышел первый iPhone?">
                     
                     <div class="idea-wrapper" style="display: flex; align-items: center; gap: 8px;">
@@ -105,25 +111,20 @@
         </div>
     </div>
     <script src="js/create.js"></script>
-
-<button class="btn-open-library" onclick="toggleLibrary()">
-    <i class="fa-solid fa-lightbulb"></i> Идеи вопросов
-</button>
-
-<div id="library-modal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>💡 Готовые вопросы</h2>
-            <button class="close-modal" onclick="toggleLibrary()">×</button>
-        </div>
-        <div class="library-filter">
-            <button class="filter-btn active" onclick="filterLibrary('all')">Все</button>
-            <button class="filter-btn" onclick="filterLibrary('funny')">Юмор</button>
-            <button class="filter-btn" onclick="filterLibrary('friends')">О нас</button>
-        </div>
-        <div id="library-list" class="library-items-container">
+    <div id="library-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💡 Готовые вопросы</h2>
+                <button class="close-modal" onclick="toggleLibrary()">×</button>
             </div>
-    </div>
-</div>    
+            <div class="library-filter">
+                <button class="filter-btn active" onclick="filterLibrary('all')">Все</button>
+                <button class="filter-btn" onclick="filterLibrary('funny')">Юмор</button>
+                <button class="filter-btn" onclick="filterLibrary('friends')">О нас</button>
+            </div>
+            <div id="library-list" class="library-items-container">
+                </div>
+        </div>
+    </div>    
 </body>
 </html>
