@@ -38,6 +38,14 @@ def get_players_in_quiz(db: Session, quiz_id: int):
         } for p in players
     ]
 
+frontend_path = os.path.join(os.getcwd(), "frontend")
+
+app.get("/")
+async def read_index():
+    return FileResponse(os.path.join(frontend_path, "index.html"))
+
+app.mount("/data", StaticFiles(directory="data"), name="data")
+app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
 @app.post("/api/quizzes", response_model=schemas.QuizResponse)
 def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):

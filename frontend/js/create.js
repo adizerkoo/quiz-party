@@ -1,75 +1,165 @@
 let quizQuestions = [];
 let editIndex = -1;
-let globalQuestionsLibrary = []; // Сюда загрузим данные из JSON
 
-// В самом начале файла можно сразу задать состояние
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Расширенная база: Вопрос + Ответ
-    const questionIdeas = [
-        { q: "Какая самая большая планета?", a: "Юпитер" },
-        { q: "Сколько океаноПервый человловек в космосе?Первый чеек в космосе?в на Земле?", a: "5" },
-        { q: "Столица ФранцПервый человек в космосе?Первый человек в космосе?Первыйелов космосе?", a: "Юрий Гагарин" },
-        { q: "Квадратный корень из 144?", a: "12" },
-        { q: "Самое глубокое озеро?", a: "Байкал" },
-        { q: "В каком году был 2000 год?", a: "В 2000" }
-    ];
+let questionsLibrary = [];
+let currentIdea = null;
 
-    const ideaTextElement = document.getElementById('random-idea-text');
-    const ideaContainer = document.getElementById('idea-container');
-    const refreshBtn = document.getElementById('refresh-idea');
-    const questionInput = document.getElementById('questionInput');
-    
-    // Ищем первый инпут в зоне вариантов (обычно это правильный ответ)
-    const firstOptionInput = document.querySelector('.opt-input');
+function changeIdea() {
 
-    let currentIdea = null;
+    if (!questionsLibrary.length) return;
 
-    function changeIdea() {
-        ideaTextElement.classList.remove('idea-fade');
-        void ideaTextElement.offsetWidth; 
-        ideaTextElement.classList.add('idea-fade');
+    const ideaText = document.getElementById("random-idea-text");
 
-        const randomIndex = Math.floor(Math.random() * questionIdeas.length);
-        currentIdea = questionIdeas[randomIndex];
-        ideaTextElement.textContent = currentIdea.q;
+    ideaText.style.opacity = 0;
+    ideaText.style.transform = "translateY(5px)";
+
+    setTimeout(() => {
+
+        let randomIndex;
+
+        do {
+            randomIndex = Math.floor(Math.random() * questionsLibrary.length);
+        } 
+        while (questionsLibrary.length > 1 && questionsLibrary[randomIndex] === currentIdea);
+
+        currentIdea = questionsLibrary[randomIndex];
+
+        ideaText.textContent = currentIdea.text;
+
+        ideaText.style.opacity = 1;
+        ideaText.style.transform = "translateY(0)";
+
+    },200);
+
+}
+
+
+fetch('/data/questions.json')
+    .then(res => res.json())
+    .then(data => {
+        questionsLibrary = data;
+
+        renderLibrary("all");
+        changeIdea();
+    })
+    .catch(err => {
+        console.error("Не удалось загрузить questions.json", err);
+    });
+
+function insertIdea() {
+
+    if (!currentIdea) return;
+
+    const questionInput = document.getElementById("q-input-text");
+    const typeOptions = document.querySelectorAll(".type-option");
+
+    if (questionInput) {
+        questionInput.value = currentIdea.text;
+
+        // эффект вставки
+        questionInput.classList.add("idea-inserted");
+
+        setTimeout(() => {
+            questionInput.classList.remove("idea-inserted");
+        }, 800);
     }
 
-    // Авто-смена каждые 6 секунд
-    let autoRefresh = setInterval(changeIdea, 6000);
+    if (currentIdea.type === "text") {
 
-    // Кнопка ручного обновления
-    refreshBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        clearInterval(autoRefresh); // Сбрасываем таймер, чтобы текст не прыгнул сразу после клика
-        changeIdea();
-        autoRefresh = setInterval(changeIdea, 6000); // Запускаем заново
-    });
+        selectType("text", typeOptions[0]);
 
-    // Клик по идее — вставляем и вопрос, и ответ
-    ideaContainer.addEventListener('click', () => {
-        if (!currentIdea) return;
+        const correctInput = document.getElementById("q-input-correct");
 
-        // Вставляем вопрос
-        questionInput.value = currentIdea.q;
-        
-        // Вставляем ответ в первое поле (если оно есть)
-        if (firstOptionInput) {
-            firstOptionInput.value = currentIdea.a;
-            
-            // Если у тебя первый вариант по умолчанию правильный, 
-            // имитируем выбор радиокнопки для красоты
-            const firstRadio = document.querySelector('input[name="correct-opt"]');
-            if (firstRadio) firstRadio.checked = true;
+        if (correctInput) {
+            correctInput.value = currentIdea.correct || "";
         }
 
-        // Эффект вспышки для привлечения внимания
-        questionInput.style.background = "#f0f7ff";
-        setTimeout(() => questionInput.style.background = "white", 300);
+    } else if (currentIdea.type === "options") {
+
+        selectType("options", typeOptions[1]);
+
+        currentIdea.options.forEach((opt, i) => {
+
+            const input = document.getElementById(`opt-${i+1}`);
+
+            if (input) input.value = opt;
+
+            const radios = document.querySelectorAll('input[name="correct-opt"]');
+
+            if (radios[i] && opt === currentIdea.correct) {
+                radios[i].checked = true;
+            }
+
+        });
+        updateCorrectHighlight();
+    }
+
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    fetch('/data/questions.json')
+        .then(res => res.json())
+        .then(data => {
+            questionsLibrary = data;
+            renderLibrary("all");
+            changeIdea();
+            // авто смена идеи каждые 4 секунд
+            setInterval(changeIdea, 4000);
+        })
+        .catch(err => console.error("Не удалось загрузить questions.json", err));
+
+
+    // Клик по идее
+    const ideaContainer = document.getElementById("idea-container");
+
+    if (ideaContainer) {
+        ideaContainer.onclick = insertIdea;
+    }
+
+    // Кнопка смены идеи
+    const refreshBtn = document.getElementById("refresh-idea");
+
+    if (refreshBtn) {
+        refreshBtn.onclick = (e) => {
+            e.preventDefault();
+            changeIdea();
+        };
+    }
+
+});
+
+function renderLibrary(category="all") {
+
+    const container = document.getElementById("library-list");
+
+    container.innerHTML = "";
+
+    const filtered = category === "all"
+        ? questionsLibrary
+        : questionsLibrary.filter(q => q.cat === category);
+
+    filtered.forEach(q => {
+
+        const item = document.createElement("div");
+
+        item.className = "library-item";
+
+        item.innerHTML = `
+            <b>${q.text}</b>
+            <div class="library-answer-preview">
+                Ответ: ${q.correct}
+            </div>
+        `;
+
+        item.onclick = () => importQuestion(q);
+
+        container.appendChild(item);
+
     });
 
-    // Инициализация первой идеи
-    changeIdea();
-});
+}
 
 function showToast(message) {
     const container = document.getElementById('toast-container');
@@ -227,6 +317,31 @@ function renderQuestions() {
     });
 }
 
+document.getElementById("idea-container").onclick = () => {
+
+    if (!currentIdea) return;
+
+    document.getElementById("q-input-text").value = currentIdea.text;
+
+    if (currentIdea.type === "options") {
+
+        currentIdea.options.forEach((opt, i) => {
+            const el = document.getElementById(`opt-${i+1}`);
+            if (el) el.value = opt;
+
+            if (opt === currentIdea.correct) {
+                document.querySelectorAll('input[name="correct-opt"]')[i].checked = true;
+            }
+        });
+
+    } else {
+
+        document.getElementById("q-input-correct").value = currentIdea.correct;
+    }
+
+};
+
+
 function editQuestion(index) {
     const q = quizQuestions[index];
     editIndex = index;
@@ -343,14 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 //Идет код с  библиотекой
 
-// Наша база знаний для вечеринки
-const questionsLibrary = [
-    { text: "Кто из присутствующих чаще всего зависает в TikTok?", type: "options", options: ["Именинник", "Тот кто слева", "Я!", "Все понемногу"], correct: "Именинник", cat: "funny" },
-    { text: "Какое коронное блюдо у хозяина дома?", type: "text", correct: "Пельмени", cat: "friends" },
-    { text: "Кто вероятнее всего забудет ключи внутри квартиры?", type: "options", options: ["Самый умный", "Самый сонный", "Виновник торжества", "Никто"], correct: "Виновник торжества", cat: "funny" },
-    { text: "Как звали первую любовь именинника(цы)?", type: "text", correct: "Секрет", cat: "friends" },
-    { text: "Если бы мы попали на необитаемый остров, кто бы съел всех первым?", type: "options", options: ["Самый голодный", "Тот кто качается", "Тихоня", "Я бы всех спас"], correct: "Тихоня", cat: "funny" }
-];
+
 
 function toggleLibrary() {
     const modal = document.getElementById('library-modal');
@@ -409,40 +517,26 @@ function filterLibrary(category) {
 }
 
 function importQuestion(q) {
-    // 1. Заполняем основной текст вопроса
-    const textEl = document.getElementById('q-input-text');
-    textEl.value = q.text;
-
-    // 2. Выбираем тип вопроса (переключаем табы визуально)
+    const questionInput = document.getElementById('q-input-text');
     const typeOptions = document.querySelectorAll('.type-option');
+    const typeInput = document.getElementById('q-input-type');
+
+    if (!questionInput || !typeInput) return;
+
+    questionInput.value = q.text;
+
+    // Переключаем тип
+    selectType(q.type, q.type === 'text' ? typeOptions[0] : typeOptions[1]);
+
     if (q.type === 'text') {
-        selectType('text', typeOptions[0]);
-        document.getElementById('q-input-correct').value = q.correct;
-    } else {
-        selectType('options', typeOptions[1]);
-        // Заполняем варианты ответов
-        if (q.options) {
-            q.options.forEach((opt, i) => {
-                const optInput = document.getElementById(`opt-${i + 1}`);
-                if (optInput) optInput.value = opt;
-                
-                // Отмечаем правильный (если совпадает с q.correct)
-                if (opt === q.correct) {
-                    document.querySelectorAll('input[name="correct-opt"]')[i].checked = true;
-                }
-            });
-        }
+        document.getElementById('q-input-correct').value = q.correct || '';
+    } else if (q.type === 'options') {
+        q.options.forEach((opt, i) => {
+            const optInput = document.getElementById(`opt-${i+1}`);
+            if (optInput) optInput.value = opt;
+        });
+        // Отмечаем правильный вариант
+        const radios = document.querySelectorAll('input[name="correct-opt"]');
+        radios.forEach((r, i) => r.checked = (q.options[i] === q.correct));
     }
-
-    // 3. Подсвечиваем зону создания, чтобы пользователь понял, что данные перенеслись
-    const zone = document.querySelector('.creation-zone');
-    zone.style.transition = "0.3s";
-    zone.style.boxShadow = "0 0 20px rgba(108, 92, 231, 0.4)";
-    setTimeout(() => zone.style.boxShadow = "none", 1000);
-
-    // 4. Плавно скроллим наверх к форме
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    showToast("Вопрос готов к редактированию! ✨");
-    setTimeout(updateCorrectHighlight, 10);
 }
