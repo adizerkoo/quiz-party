@@ -728,6 +728,22 @@ body {
     animation: slideInRight 0.3s ease-out;
 }
 
+/* Специальный класс для списка рейтинга */
+.player-row-lobby.is-rating-row {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    border-radius: 0; /* Убираем скругления для списка с разделителями */
+    box-shadow: none;
+    margin-bottom: 0;
+    padding: 12px 15px; /* Чуть больше воздуха по вертикали */
+}
+
+/* Убираем линию у последнего игрока в списке */
+.player-row-lobby.is-rating-row:last-child {
+    border-bottom: none;
+}
+
 .player-emoji-icon {
     font-size: 2.8rem;
     margin-right: 15px;
@@ -737,10 +753,22 @@ body {
     min-width: 30px;
 }
 
+/* Имя игрока в итоговой таблице рейтинга */
 .player-name-lobby {
     font-weight: 700;
     font-size: 1.1rem;
-    color: #2d3436;
+    color: #2f2f2f;
+    flex: 1; 
+    text-align: left; 
+    font-size: 1rem; 
+    font-weight: 600;
+}
+
+/* Баллы игрока в итоговой таблице рейтинга */
+.player-score-value {
+    font-weight: 700;
+    opacity: 0.7;
+    font-size: 1rem;
 }
 
 /* ============================================
@@ -1454,6 +1482,39 @@ body {
    11. ФИНАЛЬНЫЙ ЭКРАН (РЕЗУЛЬТАТЫ)
    ============================================ */
 
+/* Контейнер для медали 🥇 */
+.winner-medal-container {
+    font-size: 2rem; /* Сделаем медаль крупной */
+    margin-right: -10px; /* Немного прижмем её к лисе, чтобы они были как единое целое */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* Тень и свечение */
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); 
+    
+    /* Добавим анимацию */
+    animation: medalWiggle 2s infinite ease-in-out;
+    transform-origin: center bottom; /* Медаль будет покачиваться от основания */
+    z-index: 1; /* Чтобы медаль была поверх лисы, если они перекроются */
+}
+
+/* Анимация покачивания медали */
+@keyframes medalWiggle {
+    0%, 100% {
+        transform: rotate(0deg) scale(1);
+    }
+    25% {
+        transform: rotate(-10deg) scale(1.05); /* Легкий наклон влево и увеличение */
+    }
+    50% {
+        transform: rotate(0deg) scale(1.1); /* Центр и максимальное увеличение */
+    }
+    75% {
+        transform: rotate(10deg) scale(1.05); /* Легкий наклон вправо и уменьшение */
+    }
+}
+
 .confetti-wrapper {
     position: relative;
     padding: 10px;
@@ -1463,7 +1524,7 @@ body {
 }
 
 .winner-card-epic {
-    background: white !important;
+    background: rgba(247, 255, 29, 0.263);
     border: 3px solid #FFD700 !important;
     box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
     position: relative;
@@ -1486,15 +1547,86 @@ body {
     -webkit-text-fill-color: transparent;
     animation: shineName 3s linear infinite;
     font-weight: 800;
+    font-size: 1.9rem;
 }
 
 .winner-emoji-container {
     margin-right: 15px;
-    font-size: 2rem;
+    font-size: 2.7rem;
+}
+
+.winner-label {
+    font-size: 0.7rem;
+    font-weight: 850;
+    color: #f1c40f; /* Золотой цвет */
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    opacity: 0.9;
+}
+
+.winner-score-badge {
+    background: #FFD700; 
+    color: #000; 
+    padding: 5px 15px; 
+    border-radius: 15px; 
+    font-weight: 800; 
+    font-size: 1.2rem; 
+    box-shadow: 0 4px 10px rgba(255, 215, 0, 0.3);
+}
+
+/* Текст "Рейтинг игроков" */
+.rating-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--party-purple);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    opacity: 0.5;
+    margin-bottom: 12px;
+    padding-left: 10px;
+    display: block;
+    /* Убедимся, что на маленьких экранах текст не прижимается к краям */
+    width: 100%;
+    text-align: center;
+}
+
+.rank-number {
+    font-weight: 800; 
+    opacity: 0.3; 
+    width: 25px; 
+    font-size: 0.9rem;
+    }
+
+.player-score-lobby {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #6c5ce7;
+    margin-left: auto;
+} 
+
+/* Увеличиваем медали для 2 и 3 места в списке рейтинга */
+.is-rating-row:nth-child(1) .rank-number, 
+.is-rating-row:nth-child(2) .rank-number {
+    opacity: 1;           /* Убираем прозрачность, чтобы сияли */
+    font-size: 1.4rem;    /* Делаем заметно крупнее (было 0.9rem) */
+    width: 35px;          /* Чуть расширим контейнер, чтобы не зажимало */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)); /* Легкое свечение */
+}
+
+/* Небольшая поправка, чтобы эмодзи стояли ровно по центру */
+.is-rating-row .rank-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
 }
 
 .participant-emoji-container {
-    font-size: 1.5rem;
+    font-size: 1.7rem;
 }
 
 .accordion-content {
@@ -1509,13 +1641,215 @@ body {
     opacity: 1;
 }
 
+/* Карточка ответа внутри аккордеона */
 .review-card {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 18px;
+    padding: 15px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    
+    /* Начальное состояние для анимации */
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(15px);
+    
+    /* Настройки анимации */
+    animation: reviewFadeUp 0.4s ease-out forwards;
+}
+
+@keyframes reviewFadeUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .accordion-content.active .review-card {
     animation: slideUpFade 0.4s ease forwards;
+}
+
+
+/* ============================================
+   6. Разбор вопросов (АККОРДЕОН)
+   ============================================ */
+
+/* Шапка аккордеона */
+.review-acc-header {
+    background: rgba(67, 255, 242, 0.03); 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid #f1dbff;
+    border-radius: 15px;
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.3s ease;
+}
+
+.review-acc-header:active {
+    background: rgba(67, 255, 242, 0.08); /* Эффект нажатия */
+}
+
+/* Текст внутри */
+.review-acc-title {
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: #6c5ce7;
+}
+
+/* Стрелочка */
+.review-acc-arrow {
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.7rem;
+    color: #2d3436;
+}
+
+/* Класс, который будет вешаться при открытии */
+.review-acc-header.is-active .review-acc-arrow {
+    transform: rotate(180deg);
+}
+
+/* Текст "вопрос" внутри аккордеона */
+.review-q-number {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #2d3436;
+    opacity: 0.6;
+    margin-bottom: 4px;
+}
+
+.review-q-text {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #6c5ce7;
+    margin-bottom: 12px;
+    line-height: 1.4; /* Добавляем немного межстрочного интервала для читаемости */
+    display: block;
+}
+/* Контейнер-сетка */
+.review-answers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+/* Общий стиль ячейки */
+.answer-box {
+    padding: 8px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.answer-label {
+    font-size: 0.55rem;
+    opacity: 0.6;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+.answer-value {
+    font-weight: 800;
+    font-size: 0.85rem;
+}
+
+/* Блок "ВЕРНО" (левый всегда зеленый) */
+.answer-box.is-correct {
+    background: rgba(67, 242, 128, 0.09);
+}
+.answer-box.is-correct .answer-value {
+    color: #00b894;
+}
+
+/* Блок "ТВОЙ ОТВЕТ" (правый) — Состояние: ВЕРНО */
+.answer-box.is-user.is-correct-status {
+    background: rgba(67, 242, 128, 0.09);
+    border: 1px solid rgba(0, 184, 148, 0.2);
+}
+.answer-box.is-user.is-correct-status .answer-value {
+    color: #00b894;
+}
+
+/* Блок "ТВОЙ ОТВЕТ" (правый) — Состояние: ОШИБКА */
+.answer-box.is-user.is-wrong-status {
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 118, 117, 0.2);
+}
+.answer-box.is-user.is-wrong-status .answer-value {
+    color: #d63031;
+}
+
+/* Заголовок "Другие игроки" */
+.others-label {
+    font-size: 0.55rem;
+    opacity: 0.4;
+    text-transform: uppercase;
+    font-weight: 800;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* Контейнер для горизонтального скролла */
+.others-scroll-area {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Скрываем скроллбар в Firefox */
+}
+
+.others-scroll-area::-webkit-scrollbar {
+    display: none; /* Скрываем скроллбар в Chrome/Safari/Telegram */
+}
+
+/* Карточка другого игрока */
+.other-player-card {
+    display: inline-flex;
+    flex-direction: column;
+    background: rgba(241, 117, 255, 0.08);
+    padding: 8px 12px;
+    border-radius: 12px;
+    min-width: 130px;
+    max-width: 220px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+}
+
+/* Имя другого игрока */
+.other-player-name {
+    font-size: 0.6rem;
+    opacity: 0.6;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Ответ другого игрока */
+.other-player-ans {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #2d3436;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+/* Если ответ правильный */
+.other-player-ans.is-correct {
+    color: #00b894;
 }
 
 /* ============================================

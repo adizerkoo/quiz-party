@@ -236,20 +236,16 @@ socket.on("show_results", (data) => {
             ${winners
               .map(
                 (w) => `
-                <div class="player-row-lobby winner-card-epic" 
-                    onclick="spawnConfetti(event)"
-                    style="padding: 15px 20px; justify-content: flex-start; margin-bottom: 10px; position: relative; overflow: visible; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-                    
-                    <div class="winner-emoji-container" style="margin-right: 15px;">
-                        ${w.emoji}
-                    </div>
-                    
+                <div class="player-row-lobby winner-card-epic" onclick="spawnConfetti(event)">
+                    <div class="winner-medal-container">🥇</div>
+                    <div class="winner-emoji-container">${w.emoji}</div>
+
                     <div style="text-align: left; flex: 1;">
-                        <div style="font-size: 0.7rem; opacity: 0.6; font-weight: 700; text-transform: uppercase;">Победитель</div>
-                        <div class="shiny-text-name" style="font-size: 1.4rem;">${w.name}</div>
+                        <div class="winner-label"">Победитель</div>
+                        <div class="shiny-text-name">${w.name}</div>
                     </div>
                     
-                    <div style="background: #FFD700; color: #000; padding: 5px 15px; border-radius: 15px; font-weight: 800; font-size: 1.2rem; box-shadow: 0 4px 10px rgba(255, 215, 0, 0.3);">
+                    <div class="winner-score-badge">
                         ${w.score}
                     </div>
                 </div>
@@ -262,23 +258,30 @@ socket.on("show_results", (data) => {
           others.length > 0
             ? `
             <div style="margin-top: 25px;">
-                <h4 style="opacity: 0.5; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px; padding-left: 10px;">Рейтинг игроков</h4>
-                <div style="background: rgba(255,255,255,0.3); border-radius: 15px; padding: 5px;">
+                <h4 class="rating-label">Рейтинг игроков</h4>
+                <div>
                     ${others
-                      .map(
-                        (p, i) => `
-                        <div class="player-row-lobby" style="background: transparent; border: none; border-bottom: 1px solid rgba(0,0,0,0.03); box-shadow: none; margin-bottom: 0; padding: 10px 15px; align-items: center;">
-                            <span style="font-weight: 800; opacity: 0.3; width: 25px; font-size: 0.9rem;">#${i + 2}</span>
-                            
-                            <div class="participant-emoji-container" style="margin-right: 10px;">
+                      .map((p, i) => {
+                        const rank = i + 2; 
+                        
+                        // ПРОСТОЕ СЛОЖЕНИЕ СТРОК — VS Code будет счастлив
+                        let rankDisplay = "#" + rank;
+
+                        if (rank === 2) rankDisplay = '🥈';
+                        if (rank === 3) rankDisplay = '🥉';
+
+                        return `
+                        <div class="player-row-lobby is-rating-row">
+                            <span class="rank-number">${rankDisplay}</span>
+                            <div class="participant-emoji-container">
                                 ${p.emoji}
                             </div>
 
-                            <span class="player-name-lobby" style="flex: 1; text-align: left; font-size: 1rem; font-weight: 600;">${p.name}</span>
-                            <span style="font-weight: 700; opacity: 0.7; font-size: 1rem;">${p.score}</span>
+                            <span class="player-name-lobby">${p.name}</span>
+                            <span class="player-score-lobby">${p.score}</span>
                         </div>
-                    `
-                      )
+                        `;
+                      })
                       .join("")}
                 </div>
             </div>
@@ -287,15 +290,9 @@ socket.on("show_results", (data) => {
         }
 
         <div style="margin-top: 30px; padding-bottom: 20px;">
-            <div onclick="
-                    const content = document.getElementById('review-content');
-                    const arrow = document.getElementById('acc-arrow');
-                    content.classList.toggle('active');
-                    arrow.style.transform = content.classList.contains('active') ? 'rotate(180deg)' : 'rotate(0deg)' ;
-                 " 
-                 style="background: rgba(67, 255, 242, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 15px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; border: 1px solid #f1dbff;">
-                <span style="font-weight: 800; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; color: #2d3436; ">Разбор вопросов 🔍</span>
-                <span id="acc-arrow" style="transition: transform 0.4s ease; font-size: 0.7rem; color: #2d3436;">▼</span>
+            <div class="review-acc-header" onclick="toggleReview(this)">
+                <span class="review-acc-title">Разбор вопросов</span>
+                <span id="acc-arrow" class="review-acc-arrow">▼</span>
             </div>
 
             <div id="review-content" class="accordion-content">
@@ -312,62 +309,44 @@ socket.on("show_results", (data) => {
                         const othersList = players
                           .filter((p) => p.name !== playerName)
                           .map((p) => {
-                            const ans =
-                              (p.answers && p.answers[i.toString()]) || "—";
-                            const isAnsCorr =
-                              ans.toLowerCase().trim() ===
-                              q.correct.toLowerCase().trim();
-                            return `
-                                    <div style="display: inline-flex; flex-direction: column; background: rgba(241, 117, 255, 0.08); padding: 8px 12px; border-radius: 12px; margin-right: 8px; min-width: 130px; max-width: 220px; border: 1px solid rgba(255,255,255,0.5);">
-                                        <span style="font-size: 0.6rem; opacity: 0.6; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                            ${p.emoji} ${p.name}
-                                        </span>
-                                        <span style="font-size: 0.85rem; font-weight: 700; color: ${
-                                          isAnsCorr ? "#00b894" : "#2d3436"
-                                        }; word-break: break-word; line-height: 1.2;">
-                                            ${ans}
-                                        </span>
-                                    </div>`;
+                              const ans = (p.answers && p.answers[i.toString()]) || "—";
+                              const isAnsCorr = ans.toLowerCase().trim() === q.correct.toLowerCase().trim();
+                              
+                              return `
+                                  <div class="other-player-card">
+                                      <span class="other-player-name">${p.emoji} ${p.name}</span>
+                                      <span class="other-player-ans ${isAnsCorr ? 'is-correct' : ''}">
+                                          ${ans}
+                                      </span>
+                                  </div>`;
                           })
                           .join("");
 
                         return `
-                        <div class="review-card" style="background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 18px; padding: 15px; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); animation-delay: ${
-                          i * 0.05
-                        }s;">
-                            <div style="font-size: 0.65rem; opacity: 0.5; font-weight: 700; margin-bottom: 4px; text-transform: uppercase;">Вопрос ${
+                        <div class="review-card" style="animation-delay: ${i * 0.05}s;">
+                            <div class="review-q-number">Вопрос ${
                               i + 1
                             }</div>
-                            <div style="font-weight: 700; font-size: 0.95rem; color: #2d3436; margin-bottom: 12px;">${
+                            <div class="review-q-text">${
                               q.text
                             }</div>
                             
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
-                                <div style="background: rgba(67, 242, 128, 0.09); padding: 8px; border-radius: 10px;">
-                                    <div style="font-size: 0.55rem; opacity: 0.6; text-transform: uppercase; font-weight: 800;">Верно</div>
-                                    <div style="color: #00b894; font-weight: 800; font-size: 0.85rem;">${
-                                      q.correct
-                                    }</div>
+                            <div class="review-answers-grid">
+                                <div class="answer-box is-correct">
+                                    <div class="answer-label">Верно</div>
+                                    <div class="answer-value">${q.correct}</div>
                                 </div>
-                                <div style="background: rgba(255, 255, 255, 0.4); padding: 8px; border-radius: 10px; border: 1px solid ${
-                                  isCorrect
-                                    ? "rgba(0, 184, 148, 0.2)"
-                                    : "rgba(255, 118, 117, 0.2)"
-                                }">
-                                    <div style="font-size: 0.55rem; opacity: 0.6; text-transform: uppercase; font-weight: 800;">Твой ответ</div>
-                                    <div style="color: ${
-                                      isCorrect ? "#00b894" : "#d63031"
-                                    }; font-weight: 800; font-size: 0.85rem;">${myAnswer}</div>
+
+                                <div class="answer-box is-user ${isCorrect ? 'is-correct-status' : 'is-wrong-status'}">
+                                    <div class="answer-label">Твой ответ</div>
+                                    <div class="answer-value">${myAnswer || '—'}</div>
                                 </div>
                             </div>
 
                             <div style="margin-top: 10px;">
-                                <div style="font-size: 0.55rem; opacity: 0.4; text-transform: uppercase; font-weight: 800; margin-bottom: 6px; letter-spacing: 0.5px;">Другие игроки:</div>
-                                <div style="display: flex; overflow-x: auto; padding-bottom: 5px; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
-                                    ${
-                                      othersList ||
-                                      '<span style="opacity: 0.5; font-size: 0.75rem;">—</span>'
-                                    }
+                                <div class="others-label">Другие игроки:</div>
+                                <div class="others-scroll-area">
+                                    ${othersList || '<span style="opacity: 0.5; font-size: 0.75rem;">—</span>'}
                                 </div>
                             </div>
                         </div>
@@ -381,6 +360,16 @@ socket.on("show_results", (data) => {
 
   resultsList.innerHTML = html;
 });
+
+function toggleReview(element) {
+    const content = document.getElementById('review-content');
+    
+    // Переключаем класс у контента
+    content.classList.toggle('active');
+    
+    // Переключаем класс у самой шапки для поворота стрелки
+    element.classList.toggle('is-active');
+}
 
 /**
  * Переход к следующему шагу (событие приходит после решения сервера
