@@ -48,7 +48,7 @@ html, body {
 
 /* Убираем синюю рамку и зум при фокусе */
 input, select, textarea {
-    font-size: 12px !important; 
+    font-size: 12px; 
 }
 
 * {

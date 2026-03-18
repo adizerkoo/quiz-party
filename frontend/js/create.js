@@ -94,34 +94,79 @@ function insertIdea() {
         updateCorrectHighlight();
     }
     updateClearButtons();
-
+    // === Сохраняем черновик после вставки ===
+    saveDraftToLocal();
 }
 
 
 document.addEventListener("DOMContentLoaded", () => {
 
+    // ======= 1️⃣ Загружаем сохраненные вопросы =======
+    const savedQuestions = localStorage.getItem('quizQuestions');
+    if (savedQuestions) {
+        quizQuestions = JSON.parse(savedQuestions);
+        renderQuestions();
+    }
+
+    // ======= 2️⃣ Загружаем черновик формы =======
+    const draft = localStorage.getItem('quizDraft');
+    if (draft) {
+        const d = JSON.parse(draft);
+
+        // Название вечеринки
+        document.getElementById('quiz-title-input').value = d.title || '';
+
+        // Текст вопроса
+        document.getElementById('q-input-text').value = d.questionText || '';
+
+        // Тип вопроса
+        selectType(
+            d.type || 'text', 
+            d.type === 'options' ? document.querySelectorAll('.type-option')[1] : document.querySelectorAll('.type-option')[0]
+        );
+
+        // Текст правильного ответа для type=text
+        document.getElementById('q-input-correct').value = d.correctText || '';
+
+        // Варианты для type=options
+        d.options.forEach((opt, i) => {
+            const el = document.getElementById(`opt-${i+1}`);
+            if (el) el.value = opt;
+        });
+
+        // Выбранный правильный вариант
+        const radios = document.querySelectorAll('input[name="correct-opt"]');
+        if (radios[d.selectedIndex]) radios[d.selectedIndex].checked = true;
+
+        // Подсветка правильного варианта и кнопки очистки
+        updateCorrectHighlight();
+        updateClearButtons();
+    }
+
+    // ======= 3️⃣ Загружаем библиотеку вопросов =======
     fetch('/data/questions.json')
         .then(res => res.json())
         .then(data => {
             questionsLibrary = data;
             renderLibrary("all");
             changeIdea();
-            // авто смена идеи каждые 4 секунд
             setInterval(changeIdea, 4000);
         })
         .catch(err => console.error("Не удалось загрузить questions.json", err));
 
+    // ======= 4️⃣ Автосохранение черновика при вводе =======
+    document.addEventListener("input", (e) => {
+        if (['quiz-title-input', 'q-input-text', 'q-input-correct', 'opt-1','opt-2','opt-3','opt-4'].includes(e.target.id) ||
+            e.target.name === 'correct-opt') {
+            saveDraftToLocal();
+        }
+    });
 
-    // Клик по идее
+    // ======= 5️⃣ Слушатели для идеи и смены идеи =======
     const ideaContainer = document.getElementById("idea-container");
+    if (ideaContainer) ideaContainer.onclick = insertIdea;
 
-    if (ideaContainer) {
-        ideaContainer.onclick = insertIdea;
-    }
-
-    // Кнопка смены идеи
     const refreshBtn = document.getElementById("refresh-idea");
-
     if (refreshBtn) {
         refreshBtn.onclick = (e) => {
             e.preventDefault();
@@ -129,6 +174,8 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 
+    // ======= 6️⃣ Подсветка правильного варианта при старте =======
+    updateCorrectHighlight();
 });
 
 function renderLibrary(category="all") {
@@ -256,6 +303,10 @@ function addQuestionToList() {
 
     renderQuestions();
     clearForm();
+
+    // Сохраняем текущие вопросы и название вечеринки в localStorage
+    localStorage.setItem('quizQuestions', JSON.stringify(quizQuestions));
+    localStorage.setItem('quizTitle', document.getElementById('quiz-title-input').value.trim());
 }
 
 function renderQuestions() {
@@ -406,6 +457,10 @@ async function saveAndGo() {
         });
         
         if (response.ok) {
+            // Очистка кеша перед запуском игры
+            localStorage.removeItem('quizQuestions');
+            localStorage.removeItem('quizTitle');
+
             window.location.href = `game.html?role=host&room=${roomCode}`;
         } else {
              showToast("Сервер не принял данные");
@@ -566,6 +621,9 @@ function importQuestion(q) {
         inputField.classList.remove('idea-inserted');
     }, 800);
     updateClearButtons();
+
+    // === Сохраняем черновик после вставки ===
+    saveDraftToLocal();
 }
 
 function clearOptions() {
@@ -609,4 +667,36 @@ function clearSingleInput(el) {
     const input = el.previousElementSibling;
     input.value = "";
     el.style.display = "none";
+}
+
+
+function saveDraftToLocal() {
+    const title = document.getElementById('quiz-title-input').value.trim();
+
+    // Текущий черновик вопроса
+    const questionText = document.getElementById('q-input-text').value.trim();
+    const type = document.getElementById('q-input-type').value;
+    const correctText = document.getElementById('q-input-correct').value.trim();
+    const options = [];
+
+    for (let i = 1; i <= 4; i++) {
+        const val = document.getElementById(`opt-${i}`).value.trim();
+        options.push(val);
+    }
+
+    const selectedRadio = document.querySelector('input[name="correct-opt"]:checked');
+    const selectedIndex = selectedRadio ? parseInt(selectedRadio.value) : 0;
+
+    // ===== Сохраняем уже добавленные вопросы =====
+    localStorage.setItem('quizQuestions', JSON.stringify(quizQuestions));
+
+    // ===== Сохраняем черновик текущего вопроса + название вечеринки =====
+    localStorage.setItem('quizDraft', JSON.stringify({
+        title,
+        questionText,
+        type,
+        correctText,
+        options,
+        selectedIndex
+    }));
 }
