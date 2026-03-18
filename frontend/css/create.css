@@ -138,6 +138,7 @@
     box-shadow: 0 4px 10px rgba(108, 92, 231, 0.1);
 }
 
+
 /* ВАРИАНТЫ ОТВЕТОВ И РАДИО-КНОПКИ */
 .opt-create-row {
     display: flex;
@@ -191,17 +192,8 @@ input[name="correct-opt"]:checked::after {
 }
 
 .opt-create-row.correct-selected .opt-input {
-    background: white;
+    background: rgba(212, 254, 199, 0.563);
     border-color: #2ecc71;
-}
-
-.opt-create-row:has(input[name="correct-opt"]:checked) .opt-input {
-    border-color: #2ecc71 !important;
-    background-color: #f0fff4 !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232ecc71' width='18px' height='18px'%3E%3Cpath d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 40px;
 }
 
 /* =========================================
@@ -264,6 +256,100 @@ input[name="correct-opt"]:checked::after {
 
 .party-scroll-list::-webkit-scrollbar { width: 6px; }
 .party-scroll-list::-webkit-scrollbar-thumb { background: #ff85a1; border-radius: 10px; }
+
+/* КНОПКА ОЧИСТКИ ВАРИАНТОВ */
+.btn-clear-options {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #e75c7c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1.5px solid rgba(108, 92, 231, 0.2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+
+/* Стили иконки внутри */
+.btn-clear-options i {
+    font-size: 0.8rem;
+    color: #e75c7c;
+    transition: transform 0.2s ease;
+}
+
+.btn-clear-options:hover {
+    /* Легкая заливка фона */
+    background: rgba(231, 92, 143, 0.06);
+    
+    /* Делаем рамку чуть активнее */
+    border-color: rgba(231, 92, 157, 0.4);
+    
+    /* Легкое смещение вверх */
+    transform: translateY(-1px);
+    
+    /* Тонкая, едва заметная тень */
+    box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
+}
+
+/* Анимация иконки при наведении */
+.btn-clear-options:hover i {
+    /* Иконка немного поворачивается, привлекая внимание */
+    transform: rotate(10deg);
+}
+
+.btn-clear-options:active {
+    /* Эффект «нажатия»: возвращаем вниз и уменьшаем тень */
+    transform: translateY(0px);
+    box-shadow: 0 1px 3px rgba(231, 92, 182, 0.1);
+    background: rgba(231, 92, 194, 0.12); /* Чуть темнее фон */
+}
+
+/* КНОПКА ОЧИСТКИ ОДНОГО ВАРИАНТА */
+.input-with-clear {
+    position: relative;
+    width: 100%;
+}
+
+.input-with-clear input {
+    width: 100%;
+    padding-right: 30px; /* место под крестик */
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+.clear-input {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 16px;
+    color: #888;
+    display: none; /* скрыт по умолчанию */
+    user-select: none;
+}
+
+.clear-input:hover {
+    color: #e74c3c;
+}
+
+/* Отступ снизу текстового ответа, чтобы кнопка "Добавить вопрос" не прилипала */
+.input-with-clear.correct-text {
+    margin-bottom: 20px; /* или 25px, подгони визуально */
+}
+
 
 /* =========================================
    5. КАРТОЧКИ ВОПРОСОВ И ВАРИАНТЫ

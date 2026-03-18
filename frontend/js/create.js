@@ -93,6 +93,7 @@ function insertIdea() {
         });
         updateCorrectHighlight();
     }
+    updateClearButtons();
 
 }
 
@@ -379,6 +380,7 @@ function clearForm() {
         selectType('text', typeOptions[0]);
     }
     updateCorrectHighlight();
+    updateClearButtons();
 }
 
 function removeQuestion(index) {
@@ -556,9 +558,55 @@ function importQuestion(q) {
         // Отмечаем правильный вариант
         const radios = document.querySelectorAll('input[name="correct-opt"]');
         radios.forEach((r, i) => r.checked = (q.options[i] === q.correct));
+
+        updateCorrectHighlight();
     }
 
     setTimeout(() => {
         inputField.classList.remove('idea-inserted');
     }, 800);
+    updateClearButtons();
+}
+
+function clearOptions() {
+    document.querySelectorAll('.opt-input').forEach(input => {
+        input.value = "";
+    });
+
+    // сбрасываем радиокнопку на первую
+    const radios = document.querySelectorAll('input[name="correct-opt"]');
+    if (radios.length) radios[0].checked = true;
+
+    updateCorrectHighlight();
+}
+
+
+function updateClearButtons() {
+    document.querySelectorAll(".opt-input, .text-correct-input").forEach(input => {
+        const wrapper = input.closest(".input-with-clear");
+        const clearBtn = wrapper.querySelector(".clear-input");
+
+        if (clearBtn) {
+            clearBtn.style.display = input.value ? "block" : "none";
+        }
+    });
+}
+
+document.addEventListener("input", (e) => {
+    if (e.target.classList.contains("opt-input") || 
+        e.target.classList.contains("text-correct-input")) {
+
+        const wrapper = e.target.closest(".input-with-clear");
+        const clearBtn = wrapper.querySelector(".clear-input");
+
+        if (clearBtn) {
+            clearBtn.style.display = e.target.value ? "block" : "none";
+        }
+    }
+});
+
+function clearSingleInput(el) {
+    const input = el.previousElementSibling;
+    input.value = "";
+    el.style.display = "none";
 }

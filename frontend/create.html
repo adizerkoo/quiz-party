@@ -63,22 +63,40 @@
 
                 <div id="options-fields" class="options-creation-zone" style="display: block;">
                     <div class="input-group">
-                        <label>Отметь правильный вариант:</label>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <label style="margin:0;">Отметь правильный вариант:</label>
+                            <button type="button" class="btn-clear-options" onclick="clearOptions()">
+                                <i class="fa-solid fa-broom"></i>
+                                Очистить
+                            </button>
+                        </div>
                         
                         <div class="opt-create-row">
-                            <input type="text" id="opt-1" placeholder="Вариант 1" class="opt-input"> 
+                            <div class="input-with-clear">
+                                <input type="text" id="opt-1" class="opt-input">
+                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
+                            </div>
                             <input type="radio" name="correct-opt" value="0" checked>
                         </div>
                         <div class="opt-create-row">
-                            <input type="text" id="opt-2" placeholder="Вариант 2" class="opt-input"> 
+                            <div class="input-with-clear">
+                                <input type="text" id="opt-2" class="opt-input">
+                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
+                            </div>
                             <input type="radio" name="correct-opt" value="1">
                         </div>
                         <div class="opt-create-row">
-                            <input type="text" id="opt-3" placeholder="Вариант 3" class="opt-input"> 
+                            <div class="input-with-clear">
+                                <input type="text" id="opt-3" class="opt-input">
+                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
+                            </div>
                             <input type="radio" name="correct-opt" value="2">
                         </div>
                         <div class="opt-create-row">
-                            <input type="text" id="opt-4" placeholder="Вариант 4" class="opt-input"> 
+                            <div class="input-with-clear">
+                                <input type="text" id="opt-4" class="opt-input">
+                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
+                            </div>
                             <input type="radio" name="correct-opt" value="3">
                         </div>
                     </div>
@@ -86,7 +104,10 @@
 
                 <div id="correct-answer-zone" class="input-group" style="display: none;">
                     <label>Ответ:</label>
-                    <input type="text" id="q-input-correct" placeholder="Введите текст ответа" maxlength="35">
+                    <div class="input-with-clear correct-text">
+                        <input type="text" id="q-input-correct" class="opt-input">
+                        <span class="clear-input" onclick="clearSingleInput(this)">×</span>
+                    </div>
                 </div>
 
                 <button id="add-btn" onclick="addQuestionToList()" class="btn-party-add">ДОБАВИТЬ ВОПРОС</button>
