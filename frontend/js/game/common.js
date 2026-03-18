@@ -139,24 +139,26 @@ const copyRoomBtn = document.getElementById("copy-room-btn");
 const copyMsg = document.getElementById("copy-msg");
 
 /**
- * Копирует код комнаты в буфер обмена и показывает мини-уведомление.
+ * Копирует код комнаты и запускает анимацию смены текста
  */
 function copyRoomCode() {
   const code = displayRoomCode.textContent;
+  const container = document.querySelector('.code-inner-container');
+
   navigator.clipboard.writeText(code).then(() => {
-    copyMsg.classList.add("show");
-    setTimeout(() => copyMsg.classList.remove("show"), 1500);
+    // Добавляем класс, который прячет код и поднимает "Скопировано!"
+    container.classList.add("is-copied");
+
+    // Через 1.5 секунды возвращаем всё как было
+    setTimeout(() => {
+      container.classList.remove("is-copied");
+    }, 1500);
   });
 }
 
-// Привязка обработчиков копирования к кнопке и самому коду комнаты.
-if (copyRoomBtn) {
-  copyRoomBtn.addEventListener("click", copyRoomCode);
-}
-
-if (displayRoomCode) {
-  displayRoomCode.addEventListener("click", copyRoomCode);
-}
+// Привязка обработчиков
+if (copyRoomBtn) copyRoomBtn.addEventListener("click", copyRoomCode);
+if (displayRoomCode) displayRoomCode.addEventListener("click", copyRoomCode);
 
 /**
  * Обработчик клика по кнопке "Следующий вопрос" на стороне хоста.
