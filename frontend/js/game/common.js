@@ -92,6 +92,9 @@ async function init() {
       renderQuizTitle();
       renderProgress();
 
+      // Инициализируем все socket обработчики
+      initializeSocketHandlers(socket);
+
       socket.emit("join_room", {
         room: roomCode,
         name: playerName,
