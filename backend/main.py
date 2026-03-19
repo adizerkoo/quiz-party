@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -8,20 +10,44 @@ from sqlalchemy.orm import Session
 
 from . import models, schemas, database
 import random
+import logging
+
+# Load environment variables from the backend directory
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path, verbose=True)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.info(f"Loading .env from: {env_path}")
+
+# Log database configuration
+db_url = os.getenv("DATABASE_URL", "sqlite:///./birthday_quiz.db")
+logger.info(f"DATABASE_URL: {db_url}")
+if "postgresql" in db_url:
+    logger.info("✅ Using PostgreSQL")
+else:
+    logger.info("⚠️  Using SQLite")
 
 PLAYER_EMOJIS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵']
 
 
 app = FastAPI()
 
+# Get CORS allowed origins from environment
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost,http://localhost:3000").split(",")
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS]
+
+logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
-sio_manager = socketio.SocketManager(app=app, mount_location='/socket.io', cors_allowed_origins='*')
+sio_manager = socketio.SocketManager(app=app, mount_location='/socket.io', cors_allowed_origins=ALLOWED_ORIGINS)
 
 database.init_db()
 
@@ -38,26 +64,43 @@ def get_players_in_quiz(db: Session, quiz_id: int):
         } for p in players
     ]
 
-frontend_path = os.path.join(os.getcwd(), "frontend")
+BASE_DIR = Path(__file__).parent.parent
+frontend_path = Path(BASE_DIR) / "frontend"
+data_path = Path(BASE_DIR) / "data"
 
-app.get("/")
+logger.info(f"Frontend path: {frontend_path}")
+logger.info(f"Data path: {data_path}")
+
+@app.get("/")
 async def read_index():
-    return FileResponse(os.path.join(frontend_path, "index.html"))
+    index_file = Path(frontend_path) / "index.html"
+    return FileResponse(index_file)
 
-app.mount("/data", StaticFiles(directory="data"), name="data")
-app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
+app.mount("/data", StaticFiles(directory=str(data_path)), name="data")
+app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 
 @app.post("/api/quizzes", response_model=schemas.QuizResponse)
 def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):
-    new_quiz = models.Quiz(
-        title=quiz_data.title,
-        code=quiz_data.code,
-        questions_data=[q.dict() for q in quiz_data.questions]
-    )
-    db.add(new_quiz)
-    db.commit()
-    db.refresh(new_quiz)
-    return new_quiz
+    logger.info(f"📝 Creating quiz: {quiz_data.title} (code: {quiz_data.code})")
+    try:
+        new_quiz = models.Quiz(
+            title=quiz_data.title,
+            code=quiz_data.code,
+            questions_data=[q.dict() for q in quiz_data.questions]
+        )
+        db.add(new_quiz)
+        db.commit()
+        db.refresh(new_quiz)
+        logger.info(f"✅ Quiz created successfully: ID={new_quiz.id}")
+        return new_quiz
+    except Exception as e:
+        logger.error(f"❌ Error creating quiz: {e}")
+        db.rollback()
+        raise
 
 @app.get("/api/quizzes/{code}")
 def get_quiz(code: str, db: Session = Depends(database.get_db)):

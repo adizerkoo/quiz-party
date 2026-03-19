@@ -4,3 +4,6 @@ sqlalchemy
 pydantic
 fastapi-socketio
 python-multipart
+python-dotenv
+psycopg2-binary
+slowapi
