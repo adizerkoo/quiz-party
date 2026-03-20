@@ -51,6 +51,7 @@ function _applyStateSync(data) {
   // Обновление базовых счетчиков
   currentStep = data.currentStep;
   realGameStep = data.currentStep;
+  playerViewStep = data.currentStep;
 
   if (data.maxReachedStep !== undefined) {
     maxReachedStep = data.maxReachedStep;
@@ -58,6 +59,10 @@ function _applyStateSync(data) {
 
   if (data.emoji) {
     myEmoji = data.emoji;
+  }
+
+  if (data.answersHistory) {
+    myAnswersHistory = data.answersHistory;
   }
 
   // Если игра уже завершена, показываем финальный экран

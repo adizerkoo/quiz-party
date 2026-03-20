@@ -31,6 +31,8 @@ function registerGameStartHandler(socket) {
     currentStep = 0;
     maxReachedStep = 0;
     realGameStep = 0;
+    playerViewStep = 0;
+    myAnswersHistory = {};
     
     const me = players.find((p) => p.name === playerName);
     if (me) myEmoji = me.emoji;
@@ -110,6 +112,7 @@ function registerMoveToNextHandler(socket) {
   socket.on("move_to_next", (data) => {
     currentStep = data.step;
     realGameStep = data.step;
+    playerViewStep = data.step;
 
     // Отслеживаем максимально достигнутый шаг
     if (currentStep > maxReachedStep) {

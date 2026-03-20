@@ -26,6 +26,7 @@ def register_sync_handlers(sio_manager):
                     "finished_at": str(quiz.finished_at) if quiz.finished_at else None,
                     "questions": quiz.questions_data if is_finished else None,
                     "playerAnswer": player.answers_history.get(str(quiz.current_step)) if player and player.answers_history else None,
+                    "answersHistory": player.answers_history if player and player.answers_history else {},
                     "score": player.score if player else 0,
                     "emoji": player.emoji if player else "👤"
                 }, room=sid)

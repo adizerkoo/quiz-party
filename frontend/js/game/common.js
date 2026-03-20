@@ -37,6 +37,18 @@ let realGameStep = 0;
 let maxReachedStep = 0;
 
 /**
+ * Шаг, который игрок сейчас просматривает (может листать историю).
+ * @type {number}
+ */
+let playerViewStep = 0;
+
+/**
+ * Локальный кэш ответов игрока: { "0": "ответ", "1": "ответ" }.
+ * @type {Object<string, string>}
+ */
+let myAnswersHistory = {};
+
+/**
  * Массив вопросов текущей викторины.
  * @type {{text: string, correct: string, type: 'options' | 'text', options?: string[]}[]}
  */
@@ -412,6 +424,8 @@ function renderScoreboard(players) {
  * @param {string} val - текст ответа
  */
 function sendAnswer(val) {
+  myAnswersHistory[currentStep.toString()] = val;
+
   socket.emit("send_answer", {
     room: roomCode,
     name: playerName,
@@ -515,13 +529,42 @@ function updateHostUI() {
 
 /**
  * Рендерит текущий вопрос и область ответа на стороне игрока.
+ * Поддерживает навигацию по истории вопросов (playerViewStep).
  * Варианты: кнопки с вариантами или текстовое поле ввода.
  */
-function renderPlayerQuestion() {
-  const q = currentQuestions[currentStep];
+function renderPlayerQuestion(slideDir) {
+  const step = playerViewStep;
+  const q = currentQuestions[step];
   const area = document.getElementById("player-answer-area");
   const title = document.getElementById("player-question-text");
   if (!q) return;
+
+  const canGoBack = step > 0;
+  const canGoForward = step < realGameStep;
+  const showNav = realGameStep > 0;
+
+  // При навигации — slide, при загрузке/переходе — reveal
+  const animClass = slideDir === 'left' ? 'slide-nav-left'
+                  : slideDir === 'right' ? 'slide-nav-right'
+                  : 'reveal-anim';
+
+  const navHTML = showNav ? `
+      <div class="player-nav-arrows">
+          <button class="btn-nav-arrow ${canGoBack ? '' : 'nav-disabled'}" onclick="playerNavBack()" ${canGoBack ? '' : 'disabled'}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <div class="question-counter">
+              ${step + 1} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
+          </div>
+          <button class="btn-nav-arrow ${canGoForward ? '' : 'nav-disabled'}" onclick="playerNavForward()" ${canGoForward ? '' : 'disabled'}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+      </div>
+  ` : `
+      <div class="question-counter">
+          ${step + 1} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
+      </div>
+  `;
 
   title.innerHTML = `
         <div class="player-header">
@@ -529,21 +572,51 @@ function renderPlayerQuestion() {
                 <span style="font-size: 1.2rem;">${myEmoji}</span>
                 <span class="player-name-text">${playerName}</span>
             </div>
-            <div class="question-counter">
-                ${currentStep + 1} <span style="opacity: 0.3;">/ ${
-    currentQuestions.length
-  }</span>
-            </div>
+            ${navHTML}
         </div>
-        <div class="question-container reveal-anim">
+        <div class="question-container ${animClass}">
             <div class="question-main-text">${q.text}</div>
             <div class="question-line"></div>
         </div>
     `;
 
+  // Просмотр прошлого вопроса — только показ ответа
+  if (step < realGameStep) {
+    const pastAnswer = myAnswersHistory[step.toString()];
+    area.innerHTML = `
+        <div class="sent-confirmation ${animClass}">
+            <div class="your-answer-preview">
+                <div class="your-answer-label">Твой ответ:</div>
+                <div class="your-answer-text">${pastAnswer || '—'}</div>
+            </div>
+        </div>
+    `;
+    return;
+  }
+
+  // Текущий вопрос, но уже отвечен
+  if (myAnswersHistory[step.toString()]) {
+    const myAnswer = myAnswersHistory[step.toString()];
+    area.innerHTML = `
+        <div class="sent-confirmation ${animClass}">
+            <div class="status-badge-sent">Отправлено 🚀</div>
+            <div class="your-answer-preview">
+                <div class="your-answer-label">Твой ответ:</div>
+                <div class="your-answer-text">${myAnswer}</div>
+            </div>
+            <div class="waiting-loader">
+                <div class="pulse-dot" style="display:inline-block; margin-right:8px;"></div>
+                <span>Ждем остальных игроков...</span>
+            </div>
+        </div>
+    `;
+    return;
+  }
+
+  // Текущий вопрос, ещё не отвечен — обычный ввод
   if (q.type === "options") {
     area.innerHTML = `
-            <div class="answers-grid reveal-anim">
+            <div class="answers-grid ${animClass}">
                 ${q.options
                   .map(
                     (o) => `
@@ -557,7 +630,7 @@ function renderPlayerQuestion() {
         `;
   } else {
     area.innerHTML = `
-            <div class="input-group-container reveal-anim">
+            <div class="input-group-container ${animClass}">
                 <div class="input-wrapper" id="input-box">
                     <input type="text" id="ans-text" class="answer-input-field" maxlength="50" placeholder="Ответ...">
                     <button class="btn-send-arrow" onclick="validateAndSend()">
@@ -569,6 +642,26 @@ function renderPlayerQuestion() {
                 </div>
             </div>
         `;
+  }
+}
+
+/**
+ * Навигация игрока на предыдущий вопрос.
+ */
+function playerNavBack() {
+  if (playerViewStep > 0) {
+    playerViewStep--;
+    renderPlayerQuestion('right');
+  }
+}
+
+/**
+ * Навигация игрока на следующий вопрос (не дальше текущего).
+ */
+function playerNavForward() {
+  if (playerViewStep < realGameStep) {
+    playerViewStep++;
+    renderPlayerQuestion('left');
   }
 }
 
