@@ -1,0 +1,32 @@
+/* ============================================
+   BLOCKED SCREEN — Игра уже идёт
+   ============================================ */
+
+.blocked-content {
+    text-align: center;
+    padding: 40px 20px;
+    animation: fadeIn 0.5s ease;
+}
+
+.blocked-icon {
+    font-size: 4rem;
+    margin-bottom: 15px;
+    animation: float 3s infinite ease-in-out;
+}
+
+.blocked-content .party-title {
+    color: var(--party-purple, #6c5ce7);
+    margin-bottom: 10px;
+}
+
+.blocked-content .party-subtitle {
+    color: #636e72;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 30px;
+}
+
+.blocked-content .btn-party-direct {
+    width: 100%;
+    max-width: 280px;
+}

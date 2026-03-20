@@ -63,7 +63,7 @@ const role = urlParams.get("role");
  * Имя игрока, для хоста фиксированное "HOST".
  * @type {string}
  */
-const playerName =
+let playerName =
   role === "host"
     ? "HOST"
     : sessionStorage.getItem("quiz_player_name") || "Игрок";
@@ -127,6 +127,12 @@ async function init() {
 
       // Инициализируем все socket обработчики
       initializeSocketHandlers(socket);
+
+      socket.on("name_assigned", (data) => {
+        playerName = data.name;
+        sessionStorage.setItem("quiz_player_name", playerName);
+        console.log("📝 Имя изменено на:", playerName);
+      });
 
       socket.emit("join_room", {
         room: roomCode,

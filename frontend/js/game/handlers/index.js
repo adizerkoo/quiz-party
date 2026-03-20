@@ -51,6 +51,7 @@ function initializeSocketHandlers(socket) {
   initAnswerHandlers(socket);
   initResultsHandlers(socket);
   initSyncHandlers(socket);
+  initBlockedHandler(socket);
 
   console.log("✅ All socket handlers initialized successfully");
 }

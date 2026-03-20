@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/blocked.css">
 </head>
 
 <body class="party-bg">
@@ -132,6 +133,18 @@
             В ГЛАВНОЕ МЕНЮ
         </button>
     </div>
+
+    <!-- BLOCKED (игра уже идёт) -->
+    <div id="blocked-screen" class="party-card" style="display:none;">
+        <div class="blocked-content">
+            <div class="blocked-icon">🚫</div>
+            <h1 class="party-title">Игра уже идёт</h1>
+            <p class="party-subtitle">К сожалению, эта комната уже в разгаре. Попробуй присоединиться к другой игре!</p>
+            <button onclick="location.href='index.html'" class="btn-party-direct">
+                В ГЛАВНОЕ МЕНЮ
+            </button>
+        </div>
+    </div>
 </div>
 
 
@@ -162,6 +175,7 @@
 <script src="js/game/handlers/answerHandlers.js"></script>
 <script src="js/game/handlers/resultsHandlers.js"></script>
 <script src="js/game/handlers/syncHandlers.js"></script>
+<script src="js/game/handlers/blockedHandler.js"></script>
 <script src="js/game/handlers/index.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
