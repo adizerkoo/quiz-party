@@ -69,6 +69,39 @@ const playerName =
     : sessionStorage.getItem("quiz_player_name") || "Игрок";
 
 /**
+ * Определяет тип устройства, браузер и его версию из userAgent.
+ */
+function getDeviceInfo() {
+  const ua = navigator.userAgent;
+  let device = "desktop";
+  if (/Mobi|Android|iPhone|iPod/i.test(ua)) device = "mobile";
+  else if (/iPad|Tablet/i.test(ua)) device = "tablet";
+
+  const browsers = [
+    { name: "Yandex",  re: /YaBrowser\/(\d+)/ },
+    { name: "Edge",    re: /Edg\/(\d+)/ },
+    { name: "Opera",   re: /OPR\/(\d+)/ },
+    { name: "Chrome",  re: /Chrome\/(\d+)/ },
+    { name: "Firefox", re: /Firefox\/(\d+)/ },
+    { name: "Safari",  re: /Version\/(\d+).*Safari/ },
+  ];
+  let browser = "unknown", browser_version = "unknown";
+  for (const b of browsers) {
+    const m = ua.match(b.re);
+    if (m) { browser = b.name; browser_version = m[1]; break; }
+  }
+
+  // Модель устройства: Android даёт её в UA, Apple — нет
+  let device_model = "unknown";
+  const android = ua.match(/Android[^;]*;\s*([^)]+)\)/);
+  if (android) device_model = android[1].trim();
+  else if (/iPhone/i.test(ua)) device_model = "Apple iPhone";
+  else if (/iPad/i.test(ua))   device_model = "Apple iPad";
+
+  return { device, browser, browser_version, device_model };
+}
+
+/**
  * Стартовая инициализация страницы игры.
  * 1) Подставляет код комнаты в интерфейс.
  * 2) Запрашивает викторину с бэка.
@@ -99,6 +132,7 @@ async function init() {
         room: roomCode,
         name: playerName,
         role: role,
+        ...getDeviceInfo(),
       });
       socket.emit("request_sync", { room: roomCode, name: playerName });
 

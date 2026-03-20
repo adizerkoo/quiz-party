@@ -24,6 +24,7 @@ class QuizResponse(BaseModel):
     status: str
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+    winner_id: Optional[int] = None
 
     class Config:
         from_attributes = True

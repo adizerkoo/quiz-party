@@ -28,6 +28,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _migrate()
+
+def _migrate():
+    """Добавляет новые колонки в существующие таблицы (безопасно при повторном запуске)."""
+    from sqlalchemy import text
+    new_columns = [
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS device VARCHAR",
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser VARCHAR",
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser_version VARCHAR",
+        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS winner_id INTEGER",
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS device_model VARCHAR",
+    ]
+    with engine.connect() as conn:
+        for sql in new_columns:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                pass  # колонка уже существует — игнорируем
 
 def get_db():
     db = SessionLocal()

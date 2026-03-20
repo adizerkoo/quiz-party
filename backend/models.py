@@ -18,6 +18,8 @@ class Quiz(Base):
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
 
+    winner_id = Column(Integer, nullable=True)  # id победителя (Player.id)
+
     # Связь с игроками
     players = relationship("Player", back_populates="quiz", cascade="all, delete-orphan")
 
@@ -32,5 +34,9 @@ class Player(Base):
     emoji = Column(String, nullable=True)
     score = Column(Integer, default=0)
     is_host = Column(Boolean, default=False)
+    device = Column(String, nullable=True)          # mobile / tablet / desktop
+    browser = Column(String, nullable=True)         # Chrome / Firefox / Safari …
+    browser_version = Column(String, nullable=True) # мажорная версия, напр. "124"
+    device_model = Column(String, nullable=True)    # Samsung SM-G991B / Apple iPhone / unknown
     quiz_id = Column(Integer, ForeignKey("quizzes.id"))
     quiz = relationship("Quiz", back_populates="players")
