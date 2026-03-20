@@ -47,6 +47,7 @@ function registerSyncStateHandler(socket) {
  * @param {Object} data - Данные состояния
  */
 function _applyStateSync(data) {
+  const status = data.status || "waiting";
   // Обновление базовых счетчиков
   currentStep = data.currentStep;
   realGameStep = data.currentStep;
@@ -60,7 +61,7 @@ function _applyStateSync(data) {
   }
 
   // Если игра уже завершена, показываем финальный экран
-  if (data.isFinished) {
+  if (data.status === "finished") {
     _showFinishScreen();
     return;
   }
@@ -104,12 +105,12 @@ function _syncPlayerUI(data) {
   }
 
   // Если игра уже началась, переключаемся на игровой экран
-  if (data.isStarted) {
+  if (data.status === "playing") {
     document.getElementById("player-wait").style.display = "none";
     document.getElementById("player-game-area").style.display = "block";
+
     renderPlayerQuestion();
 
-    // Восстанавливаем ответ, если игрок уже ответил
     if (data.playerAnswer) {
       _renderPlayerAnswerPreview(data.playerAnswer);
     }
@@ -149,13 +150,13 @@ function _renderPlayerAnswerPreview(playerAnswer) {
  */
 function _syncHostUI(data) {
   // Если игра еще не началась (шаг < 0), показываем лобби
-  if (currentStep < 0) {
+  if (data.status === "waiting") {
     document.getElementById("host-lobby").style.display = "block";
     document.getElementById("host-game-area").style.display = "none";
   } else {
-    // Если игра началась, показываем игровую зону
     document.getElementById("host-lobby").style.display = "none";
     document.getElementById("host-game-area").style.display = "block";
+
     updateHostUI();
     renderProgress();
   }

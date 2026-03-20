@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, Enum, Integer, String, ForeignKey, JSON, Boolean, DateTime
 from sqlalchemy.orm import relationship, declarative_base
+from datetime import datetime
+
 
 Base = declarative_base()
 
@@ -10,6 +12,12 @@ class Quiz(Base):
     code = Column(String, unique=True, index=True)
     questions_data = Column(JSON)
     current_step = Column(Integer, default=-1)
+
+    # 🆕 Новые поля
+    status = Column(String, default="waiting")
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
     # Связь с игроками
     players = relationship("Player", back_populates="quiz", cascade="all, delete-orphan")
 

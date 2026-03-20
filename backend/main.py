@@ -1,3 +1,4 @@
+import datetime
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -90,7 +91,8 @@ def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.ge
         new_quiz = models.Quiz(
             title=quiz_data.title,
             code=quiz_data.code,
-            questions_data=[q.dict() for q in quiz_data.questions]
+            questions_data=[q.dict() for q in quiz_data.questions],
+            status="waiting"
         )
         db.add(new_quiz)
         db.commit()
@@ -122,8 +124,13 @@ async def handle_join(sid, data):
         quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
         if quiz:
             await sio_manager.enter_room(sid, room)
+            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+
+            if not quiz:
+                return
+
             player = db.query(models.Player).filter(
-                models.Player.quiz_id == quiz.id, 
+                models.Player.quiz_id == quiz.id,
                 models.Player.name == name
             ).first()
             
@@ -152,6 +159,8 @@ async def handle_start(sid, data):
         quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
         if quiz:
             quiz.current_step = 0
+            quiz.status = "playing"
+            quiz.started_at = datetime.datetime.utcnow()
             db.commit()
             # ОТПРАВЛЯЕМ СПИСОК ИГРОКОВ, а не пустой объект
             players = get_players_in_quiz(db, quiz.id)
@@ -219,6 +228,7 @@ async def handle_next_question(sid, data):
 
 @sio_manager.on('request_sync')
 async def handle_sync(sid, data):
+    # вернуть в лобби
     room = data.get('room')
     name = data.get('name')
     db = next(database.get_db())
@@ -231,20 +241,20 @@ async def handle_sync(sid, data):
 
         if quiz:
             # Проверяем, не финиш ли это
-            is_finished = (quiz.current_step == 999)
-
+            is_finished = (quiz.status == "finished")
             await sio_manager.emit('sync_state', {
                 "currentStep": quiz.current_step,
                 "maxReachedStep": quiz.current_step,
-                "isStarted": quiz.current_step >= 0 and not is_finished,
-                "isFinished": is_finished, # Передаем этот флаг
+                "status": quiz.status,
+                "started_at": str(quiz.started_at) if quiz.started_at else None,
+                "finished_at": str(quiz.finished_at) if quiz.finished_at else None,
                 "questions": quiz.questions_data if is_finished else None, # Добавляем вопросы
                 "playerAnswer": player.answers_history.get(str(quiz.current_step)) if player and player.answers_history else None,
                 "score": player.score if player else 0,
                 "emoji": player.emoji if player else "👤"
             }, room=sid)
 
-            if is_finished:
+            if quiz.status == "finished":
                 # ДОБАВЛЯЕМ .filter(models.Player.is_host == False)
                 players = db.query(models.Player).filter(
                     models.Player.quiz_id == quiz.id,
@@ -256,11 +266,15 @@ async def handle_sync(sid, data):
                     "results": results,
                     "questions": quiz.questions_data
                 }, room=sid)
-            
+            elif quiz.status == "playing":
             # Для хоста на обычном шаге шлем ответы
-            elif player and player.is_host:
-                players_data = get_players_in_quiz(db, quiz.id)
-                await sio_manager.emit('update_answers', players_data, room=sid)
+                if player and player.is_host:
+                    # Хосту — ответы всех игроков
+                    players_data = get_players_in_quiz(db, quiz.id)
+                    await sio_manager.emit('update_answers', players_data, room=sid)
+
+            elif quiz.status == "waiting":
+                pass
     finally:
         db.close()
 
@@ -321,7 +335,9 @@ async def handle_finish(sid, data):
     try:
         quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
         if quiz:
-            quiz.current_step = 999 
+            quiz.current_step = 999
+            quiz.status = "finished"
+            quiz.finished_at = datetime.datetime.utcnow()
             db.commit()
 
             players = db.query(models.Player).filter(
