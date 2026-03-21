@@ -1,0 +1,88 @@
+/* =========================================
+   БАЗА, ФОН И НАВИГАЦИЯ
+   Основная карточка приложения, шапка навигации,
+   кнопка «Назад» и главный заголовок страницы.
+========================================= */
+
+
+/* --- Карточка-контейнер страницы --- */
+.party-card {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+    border-radius: 40px;
+    padding: 20px;
+}
+
+/* --- Шапка навигации --- */
+.header-nav {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: -20px;
+}
+
+/* --- Кнопка «Назад» --- */
+.btn-back {
+    text-decoration: none;
+    color: #6c5ce7;
+    font-weight: 800;
+    font-size: 0.9rem;
+    padding: 8px 15px;
+    background: rgba(108, 92, 231, 0.1);
+    border-radius: 12px;
+    transition: 0.3s;
+}
+
+.btn-back:hover {
+    background: #6c5ce7;
+    color: white;
+}
+
+
+/* =========================================
+   ЗАГОЛОВКИ
+   Главный заголовок «QUIZ PARTY» и блок
+   с вводом названия викторины.
+========================================= */
+
+/* --- Градиентный заголовок --- */
+.party-title {
+    font-size: 2.5rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #4834d4, #ff85a1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 5px 15px rgba(108, 92, 231, 0.3));
+    letter-spacing: -2px;
+    margin: 20px 0;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+/* --- Группа ввода названия вечеринки --- */
+.main-title-group {
+    margin-bottom: 25px;
+    padding: 15px;
+    background: rgba(255, 133, 161, 0.1);
+    border-radius: 20px;
+}
+
+.main-title-input {
+    width: 100%;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #ff85a1;
+    text-align: center;
+    border: 3px solid #ff85a1;
+    background: white;
+    box-shadow: 0 0 20px rgba(255, 133, 161, 0.2);
+    padding: 12px;
+    border-radius: 12px;
+    font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
+}
+
+.main-title-input::placeholder {
+    color: rgba(255, 133, 161, 0.6);
+}

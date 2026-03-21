@@ -1,0 +1,55 @@
+/* =========================================
+   ГЛАВНЫЕ КНОПКИ ДЕЙСТВИЙ
+   «Добавить вопрос» и «Запустить вечеринку»
+   с эффектом свечения (glow).
+========================================= */
+
+
+/* --- Кнопка «Добавить вопрос» --- */
+.btn-party-add {
+    width: 100%;
+    padding: 15px;
+    background: #ff85a1;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* --- Кнопка «Запустить вечеринку» --- */
+.btn-party-launch {
+    position: relative;
+    width: 100%;
+    padding: 20px;
+    margin-top: 20px;
+    background: linear-gradient(45deg, #6c5ce7, #ff85a1);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-weight: 900;
+    font-size: 1.2rem;
+    cursor: pointer;
+    overflow: hidden;
+    transition: 0.3s;
+    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.3);
+}
+
+.btn-party-launch:hover {
+    transform: scale(1.02);
+}
+
+/* --- Эффект бегущего свечения --- */
+.btn-glow {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: shine 2.5s infinite;
+}
+
+@keyframes shine {
+    to { left: 200%; }
+}

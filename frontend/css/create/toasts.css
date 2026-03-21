@@ -1,0 +1,27 @@
+/* =========================================
+   УВЕДОМЛЕНИЯ (TOASTS)
+   Всплывающие сообщения в правом верхнем углу
+   с анимацией выезда справа.
+========================================= */
+
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.toast {
+    background: #2d3436;
+    color: white;
+    padding: 15px 25px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+}

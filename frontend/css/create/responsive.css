@@ -1,0 +1,85 @@
+/* =========================================
+   МОБИЛЬНАЯ АДАПТАЦИЯ (MAX-WIDTH: 480PX)
+   Уменьшенные отступы, шрифты и размеры
+   для комфортного использования на телефонах.
+========================================= */
+
+@media screen and (max-width: 480px) {
+
+    /* --- База и навигация --- */
+    .main-container { padding: 10px; }
+    .party-card { padding: 20px 15px; border-radius: 25px; }
+    .party-title { font-size: 2.2rem; margin: 10px 0 15px; letter-spacing: -1px; }
+
+    .header-nav { margin-bottom: 0; }
+    .btn-back { font-size: 0.75rem; padding: 5px 10px; }
+
+    /* --- Название вечеринки --- */
+    .main-title-group { padding: 10px; margin-bottom: 15px; }
+    .main-title-input { font-size: 1rem !important; padding: 10px !important; }
+
+    /* --- Форма создания --- */
+    .creation-zone { padding: 15px; border-radius: 15px; }
+    .input-group label { font-size: 0.8rem; margin-bottom: 5px; }
+    .input-group input,
+    .opt-input { padding: 10px; font-size: 0.9rem; margin-bottom: 10px; }
+
+    .type-option { padding: 8px; font-size: 0.85rem; }
+    .type-icon,
+    .type-option i { margin-right: 6px; font-size: 1rem; vertical-align: middle; }
+
+    .opt-create-row { gap: 5px; }
+    .opt-create-row input[type="radio"] { width: 20px; height: 20px; }
+
+    /* --- Карточки вопросов --- */
+    .preview-options-grid { grid-template-columns: 1fr; gap: 4px; }
+    .preview-opt-item { padding: 0px 5px; font-size: 0.7rem; }
+
+    .question-text { font-size: 0.75rem; }
+    .question-card { padding: 8px 10px; }
+
+    /* --- Главные кнопки --- */
+    .btn-party-add { padding: 12px; font-size: 0.9rem; }
+    .btn-party-launch { padding: 15px; font-size: 1rem; border-radius: 15px; }
+
+    /* --- Модалка библиотеки (выезжает снизу) --- */
+    .modal-content,
+    .library-content {
+        width: 100% !important;
+        height: 80vh;
+        border-radius: 20px 20px 0 0;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        padding: 15px;
+    }
+
+    .modal-header { margin-bottom: 12px; }
+    .modal-header h2 { font-size: 1.1rem; }
+    .close-modal { width: 30px; height: 30px; font-size: 1.2rem; }
+
+    /* --- Фильтры --- */
+    .library-filter { gap: 5px; margin-bottom: 5px; }
+    .filter-btn {
+        font-size: 13px !important;
+        padding: 6px 12px !important;
+        min-width: 60px !important;
+    }
+    .filter-btn.active {
+        background: #6c5ce7;
+        color: white;
+        border-color: #6c5ce7;
+    }
+
+    /* Скрываем полосу прокрутки фильтров */
+    .library-filter::-webkit-scrollbar {
+        display: none !important;
+        height: 0 !important;
+    }
+
+    /* --- Карточки библиотеки --- */
+    .library-item { padding: 12px; border-radius: 14px; margin-bottom: 8px; }
+    .library-item b { font-size: 0.85rem; margin-bottom: 5px; }
+    .library-tag { font-size: 0.65rem; margin-bottom: 5px; }
+    .library-answer-preview { font-size: 0.7rem; padding: 3px 8px; }
+}

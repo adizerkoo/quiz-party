@@ -1,0 +1,239 @@
+/* =========================================
+   ЗОНА СОЗДАНИЯ ВОПРОСА
+   Форма ввода вопроса: поля ввода, селектор
+   типа вопроса, варианты ответов, радио-кнопки
+   выбора правильного варианта.
+========================================= */
+
+
+/* --- Контейнер зоны создания --- */
+.creation-zone {
+    text-align: left;
+    background: rgba(108, 92, 231, 0.05);
+    padding: 20px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+}
+
+/* --- Лейблы полей ввода --- */
+.input-group label,
+.options-creation-zone label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #6c5ce7;
+    font-size: 0.9rem;
+    text-transform: none;
+}
+
+/* --- Инпуты и селекты --- */
+.input-group input,
+.input-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid rgba(108, 92, 231, 0.2);
+    border-radius: 12px;
+    margin-bottom: 15px;
+    font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
+}
+
+/* Скрытая подсказка секции */
+.section-hint {
+    display: none;
+}
+
+
+/* =========================================
+   СЕЛЕКТОР ТИПА ВОПРОСА
+   Переключатель между «С вариантами» и
+   «Текстовый ответ».
+========================================= */
+
+.type-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.type-option {
+    flex: 1;
+    background: white;
+    padding: 12px;
+    border-radius: 12px;
+    border: 2px solid #eee;
+    cursor: pointer;
+    text-align: center;
+    transition: 0.3s;
+    font-weight: 700;
+}
+
+/* Активный тип подсвечивается фиолетовым */
+.type-option.active {
+    border-color: #6c5ce7;
+    background: #f8f7ff;
+    color: #6c5ce7;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(108, 92, 231, 0.1);
+}
+
+
+/* =========================================
+   ВАРИАНТЫ ОТВЕТОВ
+   Строка варианта: радио-кнопка + инпут.
+   Кастомные радио-кнопки с зелёной точкой.
+========================================= */
+
+/* --- Строка одного варианта --- */
+.opt-create-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    width: 100%;
+}
+
+/* --- Инпут варианта ответа --- */
+.opt-input {
+    flex: 1;
+    margin-bottom: 0 !important;
+    padding: 12px 15px;
+    border-radius: 12px;
+    border: 2px solid rgba(108, 92, 231, 0.2);
+    font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
+}
+
+/* --- Кастомная радио-кнопка «Правильный ответ» --- */
+input[name="correct-opt"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #bdc3c7;
+    border-radius: 50%;
+    margin: 0;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+input[name="correct-opt"]:checked {
+    border-color: #2d3436;
+    background: #2d3436;
+}
+
+/* Зелёная точка внутри выбранного варианта */
+input[name="correct-opt"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: #2ecc71;
+    border-radius: 50%;
+}
+
+/* Подсветка инпута выбранного правильного варианта */
+.opt-create-row.correct-selected .opt-input {
+    background: rgba(212, 254, 199, 0.563);
+    border-color: #2ecc71;
+}
+
+
+/* =========================================
+   КНОПКА ОЧИСТКИ ВСЕХ ВАРИАНТОВ
+   Маленькая кнопка-таблетка «Очистить».
+========================================= */
+
+.btn-clear-options {
+    appearance: none;
+    border: 1.5px solid rgba(108, 92, 231, 0.2);
+    background: transparent;
+    padding: 5px 12px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #e75c7c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 20px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.btn-clear-options i {
+    font-size: 0.8rem;
+    color: #e75c7c;
+    transition: transform 0.2s ease;
+}
+
+.btn-clear-options:hover {
+    background: rgba(231, 92, 143, 0.06);
+    border-color: rgba(231, 92, 157, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
+}
+
+.btn-clear-options:hover i {
+    transform: rotate(10deg);
+}
+
+.btn-clear-options:active {
+    transform: translateY(0px);
+    box-shadow: 0 1px 3px rgba(231, 92, 182, 0.1);
+    background: rgba(231, 92, 194, 0.12);
+}
+
+
+/* =========================================
+   КНОПКА ОЧИСТКИ ОДНОГО ИНПУТА (КРЕСТИК)
+   Абсолютно позиционированный крестик
+   внутри input-with-clear обёртки.
+========================================= */
+
+.input-with-clear {
+    position: relative;
+    width: 100%;
+}
+
+.input-with-clear input {
+    width: 100%;
+    padding-right: 30px; /* место под крестик */
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+.clear-input {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 20px;
+    color: #888;
+    display: none; /* скрыт по умолчанию, показывается JS */
+    user-select: none;
+}
+
+.clear-input:hover {
+    color: #e74c3c;
+}
+
+/* Отступ снизу для текстового ответа */
+.input-with-clear.correct-text {
+    margin-bottom: 20px;
+}
