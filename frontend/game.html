@@ -166,7 +166,13 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="js/game/common.js"></script>
+
+<!-- Основные модули игры -->
+<script src="js/game/state.js"></script>
+<script src="js/game/host-render.js"></script>
+<script src="js/game/player-ui.js"></script>
+<script src="js/game/host-controls.js"></script>
+<script src="js/game/room-sharing.js"></script>
 
 <!-- Socket Handlers Modules -->
 <script src="js/game/handlers/utils.js"></script>
@@ -179,6 +185,9 @@
 <script src="js/game/handlers/index.js"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<!-- Инициализация (после всех модулей и handlers) -->
+<script src="js/game/init.js"></script>
 
 
 </body>
