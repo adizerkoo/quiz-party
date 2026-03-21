@@ -1,6 +1,10 @@
 import datetime
+import logging
 from .. import models, database
 from ..helpers import get_players_in_quiz
+from ..security import rate_limiter
+
+logger = logging.getLogger(__name__)
 
 
 def register_game_handlers(sio_manager):
@@ -23,6 +27,8 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on('send_answer')
     async def handle_answer(sid, data):
+        if not rate_limiter.is_allowed(sid):
+            return
         room = data.get('room')
         name = data.get('name')
         raw_answer = data.get('answer', '')
@@ -31,6 +37,8 @@ def register_game_handlers(sio_manager):
         db = next(database.get_db())
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            if not quiz:
+                return
             player = db.query(models.Player).filter(
                 models.Player.quiz_id == quiz.id,
                 models.Player.name == name
@@ -100,6 +108,8 @@ def register_game_handlers(sio_manager):
         db = next(database.get_db())
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            if not quiz:
+                return
             players = get_players_in_quiz(db, quiz.id)
             await sio_manager.emit(
                 "update_answers",
@@ -111,6 +121,8 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on('override_score')
     async def handle_override(sid, data):
+        if not rate_limiter.is_allowed(sid):
+            return
         room = data.get('room')
         player_name = data.get('playerName')
         points = data.get('points')
@@ -143,12 +155,16 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on("check_answers_before_next")
     async def check_answers(sid, data):
+        if not rate_limiter.is_allowed(sid):
+            return
         room = data.get("room")
         question = str(data.get("question"))
         db = next(database.get_db())
 
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            if not quiz:
+                return
 
             players = db.query(models.Player).filter(
                 models.Player.quiz_id == quiz.id,

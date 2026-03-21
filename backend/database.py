@@ -1,9 +1,12 @@
 import os
+import logging
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from .models import Base
+
+logger = logging.getLogger(__name__)
 
 # Явно указываем путь к файлу .env
 env_path = Path(__file__).parent / ".env"
@@ -14,7 +17,7 @@ DATABASE_URL = os.getenv(
     "sqlite:///./birthday_quiz.db"
 )
 
-print(f"DEBUG DATABASE.PY: Подключаюсь к {DATABASE_URL}") # Временный принт для проверки
+logger.info("Database engine initialized")
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -47,9 +50,10 @@ def _migrate():
             try:
                 conn.execute(text(sql))
                 conn.commit()
-            except Exception:
+                logger.info(f"Migration applied: {sql}")
+            except Exception as e:
                 conn.rollback()
-                pass  # колонка уже существует — игнорируем
+                logger.debug(f"Migration skipped: {sql} — {e}")
 
 def get_db():
     db = SessionLocal()

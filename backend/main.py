@@ -1,7 +1,6 @@
 import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import fastapi_socketio as socketio
 
@@ -28,10 +27,4 @@ register_routes(app)
 register_socket_handlers(sio_manager)
 
 # Catch-all static mount (должен быть последним)
-frontend_path = os.path.join(os.getcwd(), "frontend")
-
-@app.get("/")
-async def read_index():
-    return FileResponse(os.path.join(frontend_path, "index.html"))
-
-app.mount("/", StaticFiles(directory=frontend_path), name="static")
+app.mount("/", StaticFiles(directory=str(FRONTEND_PATH)), name="static")

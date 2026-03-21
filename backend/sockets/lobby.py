@@ -3,6 +3,7 @@ import logging
 from .. import models, database
 from ..config import PLAYER_EMOJIS
 from ..helpers import get_players_in_quiz
+from ..security import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,8 @@ def register_lobby_handlers(sio_manager):
 
     @sio_manager.on('join_room')
     async def handle_join(sid, data):
+        if not rate_limiter.is_allowed(sid):
+            return
         room = data.get('room')
         name = str(data.get('name', 'Игрок'))[:15]
         role = data.get('role')
