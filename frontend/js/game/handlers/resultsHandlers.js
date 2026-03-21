@@ -244,7 +244,7 @@ function _buildReviewSection(questions, myData, allPlayers) {
  * @returns {string} HTML карточки
  */
 function _buildReviewCard(question, index, myData, allPlayers) {
-  const myAnswer = (myData && myData.answers && myData.answers[index]) || "—";
+  const myAnswer = (myData && myData.answers && myData.answers[index + 1]) || "—";
   const isCorrect =
     myAnswer.toLowerCase().trim() === question.correct.toLowerCase().trim();
 
@@ -289,7 +289,7 @@ function _buildOthersAnswersList(question, index, allPlayers) {
   const list = allPlayers
     .filter((p) => p.name !== playerName)
     .map((p) => {
-      const ans = (p.answers && p.answers[index.toString()]) || "—";
+      const ans = (p.answers && p.answers[(index + 1).toString()]) || "—";
       const isAnsCorr =
         ans.toLowerCase().trim() === question.correct.toLowerCase().trim();
 

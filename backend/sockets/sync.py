@@ -19,13 +19,13 @@ def register_sync_handlers(sio_manager):
             if quiz:
                 is_finished = (quiz.status == "finished")
                 await sio_manager.emit('sync_state', {
-                    "currentStep": quiz.current_step,
-                    "maxReachedStep": quiz.current_step,
+                    "currentQuestion": quiz.current_question,
+                    "maxReachedQuestion": quiz.current_question,
                     "status": quiz.status,
                     "started_at": str(quiz.started_at) if quiz.started_at else None,
                     "finished_at": str(quiz.finished_at) if quiz.finished_at else None,
                     "questions": quiz.questions_data if is_finished else None,
-                    "playerAnswer": player.answers_history.get(str(quiz.current_step)) if player and player.answers_history else None,
+                    "playerAnswer": player.answers_history.get(str(quiz.current_question)) if player and player.answers_history else None,
                     "answersHistory": player.answers_history if player and player.answers_history else {},
                     "score": player.score if player else 0,
                     "emoji": player.emoji if player else "👤"

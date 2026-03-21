@@ -39,6 +39,8 @@ def _migrate():
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser_version VARCHAR",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS winner_id INTEGER",
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS device_model VARCHAR",
+        "ALTER TABLE quizzes RENAME COLUMN current_step TO current_question",
+        "UPDATE quizzes SET current_question = 0 WHERE current_question = -1",
     ]
     with engine.connect() as conn:
         for sql in new_columns:

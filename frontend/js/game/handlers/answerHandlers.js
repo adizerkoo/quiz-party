@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file answerHandlers.js
  * @description Обработчики событий ответов игроков (обновление ответов, проверка готовности)
  * @module handlers/answerHandlers
@@ -38,7 +38,7 @@ function registerAnswerUpdateHandler(socket) {
     const grid = document.getElementById("players-answers-grid");
     if (!grid) return;
 
-    const currentQ = currentQuestions[currentStep];
+    const currentQ = currentQuestions[currentQuestion - 1];
 
     grid.innerHTML = players
       .filter((p) => !p.is_host)
@@ -57,7 +57,7 @@ function registerAnswerUpdateHandler(socket) {
 function _renderAnswerCard(player, question) {
   const answers = player.answers_history || {};
   const scores = player.scores_history || {};
-  const stepKey = currentStep.toString();
+  const stepKey = currentQuestion.toString();
   const answerText = answers[stepKey];
   const questionScore = scores[stepKey];
   

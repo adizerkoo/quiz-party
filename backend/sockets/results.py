@@ -11,7 +11,6 @@ def register_results_handlers(sio_manager):
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
-                quiz.current_step = 999
                 quiz.status = "finished"
                 quiz.finished_at = datetime.datetime.utcnow()
 

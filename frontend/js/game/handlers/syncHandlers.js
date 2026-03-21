@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file syncHandlers.js
  * @description Обработчик события синхронизации состояния игры
  * @module handlers/syncHandlers
@@ -29,8 +29,8 @@ function registerSyncStateHandler(socket) {
    * Событие синхронизации состояния
    * @event sync_state
    * @param {Object} data - Данные состояния для синхронизации
-   * @param {number} data.currentStep - Текущий номер вопроса/шага
-   * @param {number} data.maxReachedStep - Максимально достигнутый шаг
+   * @param {number} data.currentQuestion - Текущий номер вопроса/шага
+   * @param {number} data.maxReachedQuestion - Максимально достигнутый шаг
    * @param {string} data.emoji - Эмодзи пользователя
    * @param {boolean} data.isFinished - Завершена ли игра
    * @param {boolean} data.isStarted - Началась ли игра
@@ -49,12 +49,12 @@ function registerSyncStateHandler(socket) {
 function _applyStateSync(data) {
   const status = data.status || "waiting";
   // Обновление базовых счетчиков
-  currentStep = data.currentStep;
-  realGameStep = data.currentStep;
-  playerViewStep = data.currentStep;
+  currentQuestion = data.currentQuestion;
+  realGameQuestion = data.currentQuestion;
+  playerViewQuestion = data.currentQuestion;
 
-  if (data.maxReachedStep !== undefined) {
-    maxReachedStep = data.maxReachedStep;
+  if (data.maxReachedQuestion !== undefined) {
+    maxReachedQuestion = data.maxReachedQuestion;
   }
 
   if (data.emoji) {

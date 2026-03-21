@@ -12,7 +12,7 @@ def register_game_handlers(sio_manager):
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
-                quiz.current_step = 0
+                quiz.current_question = 1
                 quiz.status = "playing"
                 quiz.started_at = datetime.datetime.utcnow()
                 db.commit()
@@ -40,10 +40,10 @@ def register_game_handlers(sio_manager):
                 new_history[q_idx] = answer
                 player.answers_history = new_history
                 idx = int(q_idx)
-                if idx < 0 or idx >= len(quiz.questions_data):
+                if idx < 1 or idx > len(quiz.questions_data):
                     db.commit()
                     return
-                question = quiz.questions_data[idx]
+                question = quiz.questions_data[idx - 1]
                 correct = question["correct"].lower().strip()
                 is_correct = answer.lower().strip() == correct
                 score_history = dict(player.scores_history or {})
@@ -59,30 +59,30 @@ def register_game_handlers(sio_manager):
     @sio_manager.on('next_question_signal')
     async def handle_next_question(sid, data):
         room = data.get('room')
-        expected_step = data.get('expectedStep')
+        expected_question = data.get('expectedQuestion')
         db = next(database.get_db())
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
 
             if quiz:
-                if expected_step is not None and quiz.current_step != expected_step:
+                if expected_question is not None and quiz.current_question != expected_question:
                     await sio_manager.emit(
                         'move_to_next',
-                        {"step": quiz.current_step},
+                        {"question": quiz.current_question},
                         room=room
                     )
                     return
 
-                next_step = quiz.current_step + 1
-                if next_step >= len(quiz.questions_data):
+                next_q = quiz.current_question + 1
+                if next_q > len(quiz.questions_data):
                     return
-                quiz.current_step = next_step
+                quiz.current_question = next_q
                 db.commit()
 
                 players = get_players_in_quiz(db, quiz.id)
                 await sio_manager.emit(
                     'move_to_next',
-                    {"step": quiz.current_step},
+                    {"question": quiz.current_question},
                     room=room
                 )
                 await sio_manager.emit(
@@ -96,7 +96,7 @@ def register_game_handlers(sio_manager):
     @sio_manager.on('move_to_step')
     async def handle_move_step(sid, data):
         room = data.get('room')
-        step = data.get('step')
+        question = data.get('question')
         db = next(database.get_db())
         try:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
@@ -144,7 +144,7 @@ def register_game_handlers(sio_manager):
     @sio_manager.on("check_answers_before_next")
     async def check_answers(sid, data):
         room = data.get("room")
-        step = str(data.get("step"))
+        question = str(data.get("question"))
         db = next(database.get_db())
 
         try:
@@ -159,7 +159,7 @@ def register_game_handlers(sio_manager):
 
             for p in players:
                 hist = p.answers_history or {}
-                if step not in hist:
+                if question not in hist:
                     all_answered = False
                     break
 

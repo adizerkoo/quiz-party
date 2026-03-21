@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Общий модуль логики игры Quiz Party.
  * Отвечает за состояние игры, инициализацию страницы,
  * базовые действия хоста и игроков (без обработки событий socket.io).
@@ -19,28 +19,28 @@ let myEmoji = "👤";
 
 /**
  * Текущий отображаемый шаг (вопрос) на клиенте.
- * Может отличаться от realGameStep, если хост вручную перелистывает историю.
+ * Может отличаться от realGameQuestion, если хост вручную перелистывает историю.
  * @type {number}
  */
-let currentStep = 0;
+let currentQuestion = 0;
 
 /**
  * Реальный шаг игры, который считается "текущим" на сервере.
  * @type {number}
  */
-let realGameStep = 0;
+let realGameQuestion = 0;
 
 /**
  * Максимальный достигнутый шаг (для прогресс-бара).
  * @type {number}
  */
-let maxReachedStep = 0;
+let maxReachedQuestion = 0;
 
 /**
  * Шаг, который игрок сейчас просматривает (может листать историю).
  * @type {number}
  */
-let playerViewStep = 0;
+let playerViewQuestion = 0;
 
 /**
  * Локальный кэш ответов игрока: { "0": "ответ", "1": "ответ" }.
@@ -171,7 +171,7 @@ async function init() {
  * Сбрасывает текущий шаг и отправляет сигнал на сервер.
  */
 function startGame() {
-  currentStep = 0;
+  currentQuestion = 1;
   socket.emit("start_game_signal", { room: roomCode });
 }
 
@@ -227,8 +227,8 @@ let _nextLocked = false;
  * проверить, все ли ответили.
  */
 function nextQuestion() {
-  if (currentStep !== realGameStep) {
-    currentStep = realGameStep;
+  if (currentQuestion !== realGameQuestion) {
+    currentQuestion = realGameQuestion;
     refreshUI();
     return;
   }
@@ -238,7 +238,7 @@ function nextQuestion() {
 
   socket.emit("check_answers_before_next", {
     room: roomCode,
-    step: currentStep,
+    question: currentQuestion,
   });
 }
 
@@ -263,10 +263,10 @@ function showModernConfirm(msg, onConfirm) {
  * - если это последний вопрос — сигнал finish_game_signal
  */
 function proceedToNext() {
-  if (currentStep < currentQuestions.length - 1) {
+  if (currentQuestion < currentQuestions.length) {
     socket.emit("next_question_signal", {
       room: roomCode,
-      expectedStep: currentStep,
+      expectedQuestion: currentQuestion,
     });
   } else {
     socket.emit("finish_game_signal", { room: roomCode });
@@ -284,7 +284,7 @@ function changeScore(targetName, points) {
     room: roomCode,
     playerName: targetName,
     points: points,
-    questionIndex: currentStep,
+    questionIndex: currentQuestion,
   });
 }
 
@@ -300,14 +300,14 @@ function renderProgress() {
   container.innerHTML = currentQuestions
     .map((_, i) => {
       let stateClass = "future";
-      if (i < maxReachedStep) stateClass = "done";
-      if (i === currentStep) stateClass = "active";
+      if (i < maxReachedQuestion - 1) stateClass = "done";
+      if (i === currentQuestion - 1) stateClass = "active";
 
-      const showDot = i === maxReachedStep;
+      const showDot = i === maxReachedQuestion - 1;
 
       return `
         <div class="q-step-wrapper" style="display: inline-flex; flex-direction: column; align-items: center; margin: 0 4px; cursor: pointer;">
-            <div class="q-step ${stateClass}" onclick="jumpToQuestion(${i})">
+            <div class="q-step ${stateClass}" onclick="jumpToQuestion(${i + 1})">
                 ${i + 1}
             </div>
             ${showDot ? '<div class="pulse-dot"></div>' : '<div style="height: 12px; margin-top: 4px;"></div>'}
@@ -322,10 +322,10 @@ function renderProgress() {
  * Работает только у хоста.
  * @param {number} step - индекс вопроса
  */
-function jumpToQuestion(step) {
+function jumpToQuestion(question) {
   if (role !== "host") return;
-  currentStep = step;
-  socket.emit("move_to_step", { room: roomCode, step: step });
+  currentQuestion = question;
+  socket.emit("move_to_step", { room: roomCode, question: question });
   socket.emit("get_update", roomCode);
   refreshUI();
 }
@@ -436,13 +436,13 @@ function renderScoreboard(players) {
  * @param {string} val - текст ответа
  */
 function sendAnswer(val) {
-  myAnswersHistory[currentStep.toString()] = val;
+  myAnswersHistory[currentQuestion.toString()] = val;
 
   socket.emit("send_answer", {
     room: roomCode,
     name: playerName,
     answer: val,
-    questionIndex: currentStep,
+    questionIndex: currentQuestion,
   });
 
   const answerArea = document.getElementById("player-answer-area");
@@ -493,17 +493,17 @@ function refreshUI() {
     socket.emit("get_update", roomCode);
     const btn = document.getElementById("next-btn");
     if (btn) {
-      if (currentStep !== realGameStep) {
+      if (currentQuestion !== realGameQuestion) {
         btn.innerText = "↩ Вернуться к текущему вопросу";
         btn.onclick = () => {
-          currentStep = realGameStep;
+          currentQuestion = realGameQuestion;
           refreshUI();
           socket.emit("get_update", roomCode);
         };
       } else {
         btn.onclick = nextQuestion;
         btn.innerText =
-          currentStep === currentQuestions.length - 1
+          currentQuestion === currentQuestions.length
             ? "🏆 ПОДВЕСТИ ИТОГИ"
             : "СЛЕДУЮЩИЙ ВОПРОС";
       }
@@ -518,11 +518,11 @@ function refreshUI() {
  * текст вопроса, правильный ответ, внешний вид и текст кнопки "Дальше".
  */
 function updateHostUI() {
-  const q = currentQuestions[currentStep];
-  const isLastQuestion = currentStep === currentQuestions.length - 1;
+  const q = currentQuestions[currentQuestion - 1];
+  const isLastQuestion = currentQuestion === currentQuestions.length;
   document.getElementById(
     "host-question-text"
-  ).innerText = `${currentStep + 1}. ${q.text}`;
+  ).innerText = `${currentQuestion}. ${q.text}`;
   document.getElementById("correct-answer").innerText =
     "Правильный ответ: " + q.correct;
   const nextBtn = document.getElementById("next-btn");
@@ -541,19 +541,19 @@ function updateHostUI() {
 
 /**
  * Рендерит текущий вопрос и область ответа на стороне игрока.
- * Поддерживает навигацию по истории вопросов (playerViewStep).
+ * Поддерживает навигацию по истории вопросов (playerViewQuestion).
  * Варианты: кнопки с вариантами или текстовое поле ввода.
  */
 function renderPlayerQuestion(slideDir) {
-  const step = playerViewStep;
-  const q = currentQuestions[step];
+  const step = playerViewQuestion;
+  const q = currentQuestions[step - 1];
   const area = document.getElementById("player-answer-area");
   const title = document.getElementById("player-question-text");
   if (!q) return;
 
-  const canGoBack = step > 0;
-  const canGoForward = step < realGameStep;
-  const showNav = realGameStep > 0;
+  const canGoBack = step > 1;
+  const canGoForward = step < realGameQuestion;
+  const showNav = realGameQuestion > 1;
 
   // При навигации — slide, при загрузке/переходе — reveal
   const animClass = slideDir === 'left' ? 'slide-nav-left'
@@ -566,7 +566,7 @@ function renderPlayerQuestion(slideDir) {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
           <div class="question-counter">
-              ${step + 1} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
+              ${step} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
           </div>
           <button class="btn-nav-arrow ${canGoForward ? '' : 'nav-disabled'}" onclick="playerNavForward()" ${canGoForward ? '' : 'disabled'}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
@@ -574,7 +574,7 @@ function renderPlayerQuestion(slideDir) {
       </div>
   ` : `
       <div class="question-counter">
-          ${step + 1} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
+          ${step} <span style="opacity: 0.3;">/ ${currentQuestions.length}</span>
       </div>
   `;
 
@@ -593,7 +593,7 @@ function renderPlayerQuestion(slideDir) {
     `;
 
   // Просмотр прошлого вопроса — только показ ответа
-  if (step < realGameStep) {
+  if (step < realGameQuestion) {
     const pastAnswer = myAnswersHistory[step.toString()];
     area.innerHTML = `
         <div class="sent-confirmation ${animClass}">
@@ -661,8 +661,8 @@ function renderPlayerQuestion(slideDir) {
  * Навигация игрока на предыдущий вопрос.
  */
 function playerNavBack() {
-  if (playerViewStep > 0) {
-    playerViewStep--;
+  if (playerViewQuestion > 1) {
+    playerViewQuestion--;
     renderPlayerQuestion('right');
   }
 }
@@ -671,8 +671,8 @@ function playerNavBack() {
  * Навигация игрока на следующий вопрос (не дальше текущего).
  */
 function playerNavForward() {
-  if (playerViewStep < realGameStep) {
-    playerViewStep++;
+  if (playerViewQuestion < realGameQuestion) {
+    playerViewQuestion++;
     renderPlayerQuestion('left');
   }
 }

@@ -11,7 +11,7 @@ class Quiz(Base):
     title = Column(String)
     code = Column(String, unique=True, index=True)
     questions_data = Column(JSON)
-    current_step = Column(Integer, default=-1)
+    current_question = Column(Integer, default=0)
 
     # 🆕 Новые поля
     status = Column(String, default="waiting")

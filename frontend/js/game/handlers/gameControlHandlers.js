@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file gameControlHandlers.js
  * @description Обработчики событий управления игровым процессом (старт игры, навигация по вопросам)
  * @module handlers/gameControlHandlers
@@ -28,10 +28,10 @@ function registerGameStartHandler(socket) {
    */
   socket.on("game_started", (players) => {
     // Сброс каунтеров для нового раунда
-    currentStep = 0;
-    maxReachedStep = 0;
-    realGameStep = 0;
-    playerViewStep = 0;
+    currentQuestion = 1;
+    maxReachedQuestion = 1;
+    realGameQuestion = 1;
+    playerViewQuestion = 1;
     myAnswersHistory = {};
     
     const me = players.find((p) => p.name === playerName);
@@ -107,17 +107,17 @@ function registerMoveToNextHandler(socket) {
    * Событие перехода на следующий вопрос
    * @event move_to_next
    * @param {Object} data - Данные о переходе
-   * @param {number} data.step - Новый номер шага
+   * @param {number} data.question - Новый номер шага
    */
   socket.on("move_to_next", (data) => {
     _nextLocked = false;
-    currentStep = data.step;
-    realGameStep = data.step;
-    playerViewStep = data.step;
+    currentQuestion = data.question;
+    realGameQuestion = data.question;
+    playerViewQuestion = data.question;
 
     // Отслеживаем максимально достигнутый шаг
-    if (currentStep > maxReachedStep) {
-      maxReachedStep = currentStep;
+    if (currentQuestion > maxReachedQuestion) {
+      maxReachedQuestion = currentQuestion;
     }
 
     refreshUI();
