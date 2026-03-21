@@ -216,6 +216,12 @@ if (copyRoomBtn) copyRoomBtn.addEventListener("click", copyRoomCode);
 if (displayRoomCode) displayRoomCode.addEventListener("click", copyRoomCode);
 
 /**
+ * Флаг блокировки повторного вызова nextQuestion / proceedToNext
+ * пока идёт проверка или показан диалог подтверждения.
+ */
+let _nextLocked = false;
+
+/**
  * Обработчик клика по кнопке "Следующий вопрос" на стороне хоста.
  * Если хост ушёл в историю — возвращает на текущий шаг, иначе просит сервер
  * проверить, все ли ответили.
@@ -226,6 +232,9 @@ function nextQuestion() {
     refreshUI();
     return;
   }
+
+  if (_nextLocked) return;
+  _nextLocked = true;
 
   socket.emit("check_answers_before_next", {
     room: roomCode,
@@ -255,7 +264,10 @@ function showModernConfirm(msg, onConfirm) {
  */
 function proceedToNext() {
   if (currentStep < currentQuestions.length - 1) {
-    socket.emit("next_question_signal", { room: roomCode });
+    socket.emit("next_question_signal", {
+      room: roomCode,
+      expectedStep: currentStep,
+    });
   } else {
     socket.emit("finish_game_signal", { room: roomCode });
   }

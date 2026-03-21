@@ -1,0 +1,71 @@
+/* ============================================
+   ПОДТВЕРЖДЕНИЕ ОТПРАВКИ ОТВЕТА (PLAYER)
+   ============================================ */
+
+.sent-confirmation {
+    animation: fadeIn 0.5s ease-out;
+}
+
+.status-badge-sent {
+    display: inline-block;
+    padding: 5px 15px;
+    background: #2ecc71;
+    color: white;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);
+}
+
+.your-answer-preview {
+    background: rgba(108, 92, 231, 0.05);
+    border: 2px dashed #6c5ce7;
+    border-radius: 15px;
+    padding: 10px 12px;
+    margin: 12px 0;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.your-answer-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: #6c5ce7;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+}
+
+.your-answer-text {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #2d3436;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+    box-sizing: border-box;
+    line-height: 1.2;
+}
+
+.waiting-loader {
+    font-size: 0.9rem;
+    color: #636e72;
+    font-style: italic;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 480px) {
+    .your-answer-text {
+        font-size: 1rem;
+        line-height: 1.4;
+    }
+
+    .your-answer-preview {
+        padding: 12px;
+    }
+}

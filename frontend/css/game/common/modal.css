@@ -1,0 +1,26 @@
+/* ============================================
+   МОДАЛЬНОЕ ОКНО
+   ============================================ */
+
+.modern-confirm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+    display: none;
+}
+
+.modern-confirm-box {
+    width: 90%;
+    max-width: 450px;
+    padding: 30px 20px;
+    animation: questionReveal 0.5s ease-in-out;
+}

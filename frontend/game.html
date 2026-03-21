@@ -7,7 +7,7 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/game/index.css">
     <link rel="stylesheet" href="css/blocked.css">
 </head>
 
@@ -153,7 +153,7 @@
         <h2 style="color:var(--party-purple)">Стоп-стоп ✋</h2>
         <p>Некоторые игроки ещё думают. Всё равно переключаем вопрос?</p>
         <div style="display:flex;gap:10px;">
-            <button onclick="document.getElementById('confirm-overlay').style.display='none'"
+            <button onclick="_nextLocked=false;document.getElementById('confirm-overlay').style.display='none'"
                     class="btn-party-main"
                     style="background:#b2bec3">
                 НЕТ

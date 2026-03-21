@@ -1,0 +1,170 @@
+/* ============================================
+   ВОПРОС ИГРОКА, НАВИГАЦИЯ, INPUT, ОТВЕТЫ (PLAYER)
+   ============================================ */
+
+#player-wait .party-title {
+    font-size: 1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #ff85a1 0%, #6c5ce7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 4px 15px rgba(108, 92, 231, 0.4);
+    animation: titlePulse 2.5s ease-in-out infinite;
+}
+
+#player-wait .party-subtitle {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #2d3436;
+    opacity: 0.8;
+    max-width: 320px;
+    margin: 0 auto 30px auto;
+}
+
+#player-question-text {
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.3;
+    color: #2d3436;
+    text-align: center;
+}
+
+/* === Навигация игрока по вопросам === */
+
+.player-nav-arrows {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-nav-arrow {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid rgba(108, 92, 231, 0.25);
+    background: rgba(108, 92, 231, 0.08);
+    color: var(--party-purple);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-nav-arrow:active:not(.nav-disabled) {
+    transform: scale(0.88);
+    background: rgba(108, 92, 231, 0.25);
+}
+
+.btn-nav-arrow.nav-disabled {
+    opacity: 0.2;
+    cursor: default;
+    border-color: transparent;
+}
+
+/* Slide-анимации при навигации между вопросами */
+.slide-nav-left  { animation: slideNavLeft  0.25s ease-out; }
+.slide-nav-right { animation: slideNavRight 0.25s ease-out; }
+
+/* Появление при первой загрузке / переходе хоста на новый вопрос */
+.reveal-anim { animation: fadeInUp 0.4s ease-out; }
+
+.question-container {
+    text-align: center;
+    padding: 0 10px;
+    margin-bottom: 30px;
+}
+
+.question-main-text {
+    font-size: 1.7rem;
+    font-weight: 900;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #2d3436 0%, #6c5ce7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+}
+
+.question-line {
+    width: 35px;
+    height: 3px;
+    background: linear-gradient(90deg, #6c5ce7, #00d2ff);
+    margin: 15px auto 0;
+    border-radius: 10px;
+    opacity: 0.6;
+}
+
+.answers-grid {
+    display: grid;
+    gap: 10px;
+}
+
+/* Обёртка для input + button (ввод ответа) */
+.input-group-container {
+    max-width: 380px;
+    margin: 0 auto;
+}
+
+.input-wrapper {
+    background: #f0f7ff;
+    border-radius: 100px;
+    padding: 4px 4px 4px 18px;
+    display: flex;
+    align-items: center;
+    border: 1px solid rgba(108, 92, 231, 0.15);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.03);
+    transition: all 0.3s ease;
+}
+
+.input-wrapper:focus-within {
+    border-color: #6c5ce7;
+    background: #ffffff;
+    box-shadow: 0 8px 25px rgba(108, 92, 231, 0.1);
+}
+
+.input-wrapper.is-copied {
+    border-color: #2ecc71;
+    background: rgba(46, 204, 113, 0.05);
+}
+
+.answer-input,
+.answer-input-field {
+    flex: 1;
+    border: none;
+    padding: 6px 0;
+    font-size: 1rem;
+    font-weight: 700;
+    outline: none;
+    background: transparent;
+    color: #2d3436;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.answer-input::placeholder,
+.answer-input-field::placeholder {
+    color: rgba(45, 52, 54, 0.4);
+}
+
+.answer-input:focus,
+.answer-input-field:focus {
+    outline: none;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 480px) {
+    .question-main-text {
+        font-size: 1.2rem;
+        line-height: 1.15;
+    }
+
+    .question-container {
+        margin-bottom: 10px;
+    }
+}

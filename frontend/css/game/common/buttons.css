@@ -1,0 +1,178 @@
+/* ============================================
+   КНОПКИ
+   ============================================ */
+
+/* Основные кнопки (главное управление и отправка) */
+.btn-party-main,
+.btn-party-direct {
+    width: 100%;
+    padding: 18px;
+    background: var(--party-pink);
+    color: white;
+    border: none;
+    border-radius: 15px;
+    font-weight: 800;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(255, 133, 161, 0.3);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-party-main:hover,
+.btn-party-direct:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 25px rgba(255, 133, 161, 0.4);
+}
+
+/* Кнопки ответов */
+.btn-answer {
+    width: 100%;
+    padding: 16px;
+    background: white;
+    border: 2px solid #edf2f7;
+    border-radius: 15px;
+    margin-bottom: 10px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1)
+}
+
+.btn-answer:hover {
+    border-color: var(--party-purple);
+    background: #ffffff; 
+    transform: translateY(-3px); 
+    box-shadow: 0 6px 15px rgba(108, 92, 231, 0.15);
+    outline: 1px solid rgba(108, 92, 231, 0.1);
+}
+
+.btn-answer:active {
+    transform: translateY(0px) scale(0.98);
+    box-shadow: 0 2px 5px rgba(108, 92, 231, 0.1);
+}
+
+/* Мини-кнопки (плюс/минус) */
+.btn-mini {
+    width: 25px;
+    height: 25px;
+    border-radius: 8px;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(6px);
+}
+
+.btn-mini svg {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.25s ease;
+}
+
+.btn-mini:active {
+    transform: scale(0.95);
+}
+
+.btn-plus {
+    color: #2ed573;
+    border: 1px solid rgba(46, 213, 115, 0.2);
+    background: rgba(46, 213, 116, 0.488);
+}
+
+.btn-plus:hover {
+    border-color: rgba(46, 213, 115, 0.4);
+    background: rgba(46, 213, 116, 0.847);
+    transform: scale(1.12);
+    box-shadow: 0 4px 10px rgba(46, 213, 115, 0.15);
+}
+
+.btn-plus:hover svg {
+    transform: scale(1.1);
+}
+
+.btn-minus {
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(255, 110, 110, 0.548);
+}
+
+.btn-minus:hover {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgb(249, 68, 68);
+    transform: scale(1.12);
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15);
+}
+
+.btn-minus:hover svg {
+    transform: scale(1.1);
+}
+
+/* Эффект при клике на кнопку балла */
+.btn-mini.updating {
+    animation: pulse-dot-anim 0.4s ease-out;
+}
+
+.btn-send-arrow {
+    background: #6c5ce7;
+    color: white;
+    border: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 3px 8px rgba(108, 92, 231, 0.2);
+}
+
+.btn-send-arrow:hover {
+    transform: scale(1.1);
+    background: #5849d4;
+}
+
+.btn-send-arrow:active {
+    transform: scale(0.9);
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 480px) {
+    .btn-party-main,
+    .btn-party-direct {
+        padding: 14px;
+        font-size: 0.9rem;
+    }
+
+    .btn-answer {
+        padding: 10px 12px;
+        font-size: 0.65rem;
+        margin-bottom: 8px;
+    }
+
+    .btn-send-arrow {
+        width: 30px;
+        height: 30px;
+    }
+
+    .btn-mini {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+    }
+
+    .btn-mini svg {
+        width: 10px;
+        height: 10px;
+    }
+}

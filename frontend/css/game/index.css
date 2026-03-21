@@ -1,0 +1,30 @@
+/* ============================================
+   QUIZ PARTY - Game Styles (Entry Point)
+   Порядок импортов критичен: сначала переменные,
+   потом анимации, потом компоненты.
+   ============================================ */
+
+/* === Common === */
+@import url('./common/variables.css');
+@import url('./common/animations.css');
+@import url('./common/base.css');
+@import url('./common/buttons.css');
+@import url('./common/lobby.css');
+@import url('./common/modal.css');
+@import url('./common/utilities.css');
+
+/* === Host === */
+@import url('./host/question.css');
+@import url('./host/progress.css');
+@import url('./host/scoreboard.css');
+@import url('./host/answer-cards.css');
+
+/* === Player === */
+@import url('./player/header.css');
+@import url('./player/question.css');
+@import url('./player/confirmation.css');
+
+/* === Results === */
+@import url('./results/winner.css');
+@import url('./results/rating.css');
+@import url('./results/review.css');

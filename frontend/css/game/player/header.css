@@ -1,0 +1,56 @@
+/* ============================================
+   ШАПКА ИГРОКА (PLAYER HEADER)
+   ============================================ */
+
+.player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.player-info-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.3s ease;
+}
+
+.player-info-badge:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.player-name-text {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #2d3436;
+    letter-spacing: 0.5px;
+}
+
+.question-counter {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #6c5ce7;
+    background: transparent;
+    border-bottom: 2px solid rgba(108, 92, 231, 0.3);
+    padding-bottom: 6px;
+    transition: border-color 0.3s ease;
+}
+
+.question-counter:hover {
+    border-bottom-color: #6c5ce7;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 480px) {
+    .player-header {
+        margin-bottom: 10px;
+        margin-top: 10px;
+    }
+}

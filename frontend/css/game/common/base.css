@@ -1,0 +1,61 @@
+/* ============================================
+   ОСНОВНЫЕ КОНТЕЙНЕРЫ И КАРТОЧКИ
+   ============================================ */
+
+.party-card {
+    background: var(--party-glass);
+    backdrop-filter: blur(10px);
+    border-radius: 30px;
+    padding: 40px 30px;
+    box-shadow: 0 15px 35px rgba(108, 92, 231, 0.15);
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    animation: fadeIn 0.5s ease-out;
+    max-width: 650px;
+    width: 100%;
+    box-sizing: border-box;
+    margin: auto;
+}
+
+#host-screen {
+    display: none;
+}
+
+#player-screen {
+    max-width: 500px !important;
+    width: 100%;
+    padding: 20px 25px !important;
+    overflow: hidden;
+    height: 100%;
+    touch-action: none;
+}
+
+#finish-screen {
+    display: none;
+}
+
+#player-game-area {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 255, 0.9) 100%);
+    backdrop-filter: blur(10px);
+    border-radius: 25px;
+    padding: 25px;
+    border: 1.5px solid rgba(108, 92, 231, 0.15);
+    box-shadow: 0 12px 40px rgba(108, 92, 231, 0.1);
+    margin: 20px 0;
+    display: none;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 480px) {
+    .party-card {
+        padding: 25px 5px;
+        border-radius: 20px;
+    }
+
+    #player-game-area {
+        padding: 18px;
+        border-radius: 18px;
+        margin: 15px -20px;
+    }
+}

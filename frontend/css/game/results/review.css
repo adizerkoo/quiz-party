@@ -1,0 +1,204 @@
+/* ============================================
+   АККОРДЕОН РАЗБОРА ВОПРОСОВ (FINISH SCREEN)
+   ============================================ */
+
+.accordion-content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease-in-out;
+}
+
+.accordion-content.active {
+    max-height: 10000px;
+    opacity: 1;
+}
+
+/* Карточка ответа внутри аккордеона */
+.review-card {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 18px;
+    padding: 15px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    opacity: 0;
+    transform: translateY(15px);
+    animation: reviewFadeUp 0.4s ease-out forwards;
+}
+
+.accordion-content.active .review-card {
+    animation: slideUpFade 0.4s ease forwards;
+}
+
+/* Шапка аккордеона */
+.review-acc-header {
+    background: rgba(67, 255, 242, 0.03); 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid #f1dbff;
+    border-radius: 15px;
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.3s ease;
+}
+
+.review-acc-header:active {
+    background: rgba(67, 255, 242, 0.08);
+}
+
+.review-acc-title {
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: #6c5ce7;
+}
+
+.review-acc-arrow {
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.7rem;
+    color: #2d3436;
+}
+
+.review-acc-header.is-active .review-acc-arrow {
+    transform: rotate(180deg);
+}
+
+.review-q-number {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #2d3436;
+    opacity: 0.6;
+    margin-bottom: 4px;
+}
+
+.review-q-text {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #6c5ce7;
+    margin-bottom: 12px;
+    line-height: 1.4;
+    display: block;
+}
+
+/* Контейнер-сетка */
+.review-answers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+/* Общий стиль ячейки */
+.answer-box {
+    padding: 8px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.answer-label {
+    font-size: 0.55rem;
+    opacity: 0.6;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+.answer-value {
+    font-weight: 800;
+    font-size: 0.85rem;
+}
+
+/* Блок "ВЕРНО" (левый всегда зеленый) */
+.answer-box.is-correct {
+    background: rgba(67, 242, 128, 0.09);
+}
+.answer-box.is-correct .answer-value {
+    color: #00b894;
+}
+
+/* Блок "ТВОЙ ОТВЕТ" (правый) — Состояние: ВЕРНО */
+.answer-box.is-user.is-correct-status {
+    background: rgba(67, 242, 128, 0.09);
+    border: 1px solid rgba(0, 184, 148, 0.2);
+}
+.answer-box.is-user.is-correct-status .answer-value {
+    color: #00b894;
+}
+
+/* Блок "ТВОЙ ОТВЕТ" (правый) — Состояние: ОШИБКА */
+.answer-box.is-user.is-wrong-status {
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 118, 117, 0.2);
+}
+.answer-box.is-user.is-wrong-status .answer-value {
+    color: #d63031;
+}
+
+/* Заголовок "Другие игроки" */
+.others-label {
+    font-size: 0.55rem;
+    opacity: 0.4;
+    text-transform: uppercase;
+    font-weight: 800;
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* Контейнер для горизонтального скролла */
+.others-scroll-area {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.others-scroll-area::-webkit-scrollbar {
+    display: none;
+}
+
+/* Карточка другого игрока */
+.other-player-card {
+    display: inline-flex;
+    flex-direction: column;
+    background: rgba(241, 117, 255, 0.08);
+    padding: 8px 12px;
+    border-radius: 12px;
+    min-width: 130px;
+    max-width: 220px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+}
+
+.other-player-name {
+    font-size: 0.6rem;
+    opacity: 0.6;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.other-player-ans {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #2d3436;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.other-player-ans.is-correct {
+    color: #00b894;
+}

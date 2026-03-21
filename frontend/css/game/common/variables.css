@@ -1,0 +1,45 @@
+/* ============================================
+   ПЕРЕМЕННЫЕ, ШРИФТЫ, RESET
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap');
+
+:root {
+    --party-purple: #6c5ce7;
+    --party-pink: #ff85a1;
+    --party-glass: rgba(255, 255, 255, 0.9);
+    --party-grad: linear-gradient(135deg, #fdfcfe 0%, #e0c3fc 100%);
+    --success-green: #2ecc71;
+    --error-red: #ff7675;
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+    touch-action: pan-x pan-y;
+}
+
+body {
+    margin: 0;
+    padding: 8px;
+    font-family: 'Montserrat', sans-serif;
+    background: var(--party-grad);
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    position: relative;
+    overflow-x: hidden;
+    min-width: 360px;
+    touch-action: pan-x pan-y;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 480px) {
+    body {
+        padding: 1px;
+    }
+}

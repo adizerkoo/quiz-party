@@ -1,0 +1,76 @@
+/* ============================================
+   ПОБЕДИТЕЛЬ (FINISH SCREEN)
+   ============================================ */
+
+/* Контейнер для медали 🥇 */
+.winner-medal-container {
+    font-size: 2rem;
+    margin-right: -10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); 
+    animation: medalWiggle 2s infinite ease-in-out;
+    transform-origin: center bottom;
+    z-index: 1;
+}
+
+.confetti-wrapper {
+    position: relative;
+    padding: 10px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 249, 230, 0.4) 100%);
+    margin-bottom: 20px;
+}
+
+.winner-card-epic {
+    background: rgba(247, 255, 29, 0.263);
+    border: 3px solid #FFD700 !important;
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+    position: relative;
+    z-index: 2;
+    animation: winnerGlow 2s infinite ease-in-out;
+    margin-bottom: 20px !important;
+}
+
+.crown-appear {
+    font-size: 2.5rem;
+    display: inline-block;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.15));
+    animation: crownDrop 1s ease-out;
+}
+
+.shiny-text-name {
+    background: linear-gradient(90deg, #b8860b, #daa520, #b8860b);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shineName 3s linear infinite;
+    font-weight: 800;
+    font-size: 1.9rem;
+}
+
+.winner-emoji-container {
+    margin-right: 15px;
+    font-size: 2.7rem;
+}
+
+.winner-label {
+    font-size: 0.7rem;
+    font-weight: 850;
+    color: #f1c40f;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    opacity: 0.9;
+}
+
+.winner-score-badge {
+    background: #FFD700; 
+    color: #000; 
+    padding: 5px 15px; 
+    border-radius: 15px; 
+    font-weight: 800; 
+    font-size: 1.2rem; 
+    box-shadow: 0 4px 10px rgba(255, 215, 0, 0.3);
+}

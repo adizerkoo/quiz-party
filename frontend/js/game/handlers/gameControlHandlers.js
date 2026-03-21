@@ -110,6 +110,7 @@ function registerMoveToNextHandler(socket) {
    * @param {number} data.step - Новый номер шага
    */
   socket.on("move_to_next", (data) => {
+    _nextLocked = false;
     currentStep = data.step;
     realGameStep = data.step;
     playerViewStep = data.step;
