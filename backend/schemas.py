@@ -11,7 +11,6 @@ class QuestionSchema(BaseModel):
 
 class QuizCreate(BaseModel):
     title: str
-    code: str
     questions: List[QuestionSchema]
 
 

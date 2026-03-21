@@ -63,16 +63,16 @@ async function saveAndGo() {
     }
 
     // --- Создаём комнату и отправляем на сервер ---
-    const roomCode = 'PARTY-' + Math.random().toString(36).substr(2, 4).toUpperCase();
-
     try {
         const response = await fetch('/api/quizzes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, code: roomCode, questions: quizQuestions }),
+            body: JSON.stringify({ title, questions: quizQuestions }),
         });
 
         if (response.ok) {
+            const data = await response.json();
+            const roomCode = data.code;
             localStorage.removeItem('quizQuestions');
             localStorage.removeItem('quizTitle');
             localStorage.removeItem('quizDraft');

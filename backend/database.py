@@ -23,7 +23,13 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 if DATABASE_URL.startswith("postgresql://"):
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=300,
+    )
 else:
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
