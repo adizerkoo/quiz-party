@@ -25,8 +25,56 @@ function goBackToEditor() {
 
 // Старт игры — только для хоста
 function startGame() {
+  const playersList = document.getElementById("lobby-players-list");
+  const hasPlayers = playersList && playersList.children.length > 0;
+
+  if (!hasPlayers) {
+    _showNoPlayersWarning();
+    return;
+  }
+
   currentQuestion = 1;
   socket.emit("start_game_signal", { room: roomCode });
+}
+
+
+/**
+ * Показывает красивое предупреждение, что нет игроков
+ */
+function _showNoPlayersWarning() {
+  // Не показывать повторно, если уже на экране
+  if (document.getElementById("no-players-warning")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "no-players-warning";
+  overlay.className = "no-players-overlay";
+
+  overlay.innerHTML = `
+    <div class="no-players-card">
+      <div class="no-players-emoji-row">
+        <span class="no-players-emoji bounce-1">🦗</span>
+        <span class="no-players-emoji bounce-2">🦗</span>
+        <span class="no-players-emoji bounce-3">🦗</span>
+      </div>
+      <h2 class="no-players-title">Тут пока пусто!</h2>
+      <p class="no-players-text">Отправь код комнаты друзьям — вместе веселее&nbsp;🎉</p>
+      <button class="btn-party-main no-players-btn" onclick="_dismissNoPlayersWarning()">ПОНЯТНО 👌</button>
+    </div>
+  `;
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) _dismissNoPlayersWarning();
+  });
+
+  document.body.appendChild(overlay);
+}
+
+
+function _dismissNoPlayersWarning() {
+  const overlay = document.getElementById("no-players-warning");
+  if (!overlay) return;
+  overlay.classList.add("no-players-fade-out");
+  overlay.addEventListener("animationend", () => overlay.remove());
 }
 
 
