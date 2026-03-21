@@ -31,7 +31,7 @@ function renderProgress() {
 }
 
 
-// Турнирная таблица очков (обновляет только изменённые элементы)
+// Турнирная таблица очков (FLIP-анимация смены позиций)
 function renderScoreboard(players) {
   const board = document.getElementById("scoreboard");
   if (!board) return;
@@ -72,7 +72,17 @@ function renderScoreboard(players) {
     return;
   }
 
-  // Обновляем только изменённые элементы
+  // --- FLIP: First — захватываем старые позиции и очки ---
+  const oldRects = {};
+  const oldScores = {};
+  for (const card of board.querySelectorAll(".scoreboard-card")) {
+    const name = card.getAttribute("data-player");
+    oldRects[name] = card.getBoundingClientRect();
+    const scoreEl = card.querySelector(".scoreboard-score");
+    if (scoreEl) oldScores[name] = scoreEl.textContent;
+  }
+
+  // --- DOM-обновление (Last) ---
   sorted.forEach((p, i) => {
     const rankEmoji = i < 3 ? medals[i] : (i + 1);
     const isLeader = i === 0;
@@ -81,10 +91,10 @@ function renderScoreboard(players) {
     let card = board.querySelector(`[data-player="${p.name}"]`);
 
     if (!card) {
-      // Новый игрок — добавляем
+      // Новый игрок — добавляем с анимацией появления
       const playerEmoji = p.emoji || '👤';
       const newCard = document.createElement("div");
-      newCard.className = `scoreboard-card ${rankClass} ${isLeader ? 'is-leader' : ''}`;
+      newCard.className = `scoreboard-card ${rankClass} ${isLeader ? 'is-leader' : ''} score-pop-in`;
       newCard.setAttribute("data-player", p.name);
       newCard.innerHTML = `
         <div class="scoreboard-rank">${rankEmoji}</div>
@@ -95,6 +105,7 @@ function renderScoreboard(players) {
         </div>
         ${isLeader ? '<div class="scoreboard-crown">⭐</div>' : ''}
       `;
+      newCard.addEventListener("animationend", () => newCard.classList.remove("score-pop-in"), { once: true });
       board.appendChild(newCard);
     } else {
       // Обновляем существующего игрока
@@ -121,6 +132,55 @@ function renderScoreboard(players) {
       }
     }
   });
+
+  // --- FLIP: Invert + Play — анимируем перемещение карточек ---
+  const cardsToAnimate = [];
+
+  for (const card of board.querySelectorAll(".scoreboard-card")) {
+    const name = card.getAttribute("data-player");
+    const oldRect = oldRects[name];
+    if (!oldRect) continue; // новый игрок — без FLIP
+
+    const newRect = card.getBoundingClientRect();
+    const deltaX = oldRect.left - newRect.left;
+    const deltaY = oldRect.top - newRect.top;
+    const newScoreText = card.querySelector(".scoreboard-score").textContent;
+    const scoreChanged = oldScores[name] && oldScores[name] !== newScoreText;
+
+    // Карточка не двигалась — только подсветка очков
+    if (deltaX === 0 && deltaY === 0) {
+      if (scoreChanged) {
+        card.classList.add("score-changed");
+        card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
+      }
+      continue;
+    }
+
+    // Invert: телепортируем карточку в старую позицию (без анимации)
+    card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    card.style.transition = "none";
+    cardsToAnimate.push({ card, scoreChanged });
+  }
+
+  // Play: включаем анимацию перемещения
+  if (cardsToAnimate.length > 0) {
+    board.offsetHeight; // принудительный reflow
+
+    for (const { card, scoreChanged } of cardsToAnimate) {
+      card.style.transition = "transform 0.5s cubic-bezier(0.22, 0.68, 0.35, 1.12)";
+      card.style.transform = "";
+
+      if (scoreChanged) {
+        card.classList.add("score-changed");
+        card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
+      }
+
+      card.addEventListener("transitionend", () => {
+        card.style.transition = "";
+        card.style.transform = "";
+      }, { once: true });
+    }
+  }
 }
 
 
