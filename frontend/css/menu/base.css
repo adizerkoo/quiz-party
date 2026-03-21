@@ -1,0 +1,26 @@
+/* =========================================
+   БАЗА И КОНТЕЙНЕР
+   Основной контейнер страницы и карточка меню.
+   Центрирование по вертикали и горизонтали.
+========================================= */
+
+
+/* --- Карточка меню (увеличенные внутренние отступы) --- */
+.menu-card {
+    padding: 50px 30px !important;
+}
+
+/* --- Главный контейнер страницы --- */
+.main-container {
+    width: 100%;
+    max-width: 600px;
+    margin: auto;
+    padding: 0 15px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    justify-content: center;
+    transform: translateY(-80px); /* чуть выше оптического центра */
+}

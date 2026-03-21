@@ -1,0 +1,151 @@
+/* =========================================
+   НАВИГАЦИЯ МЕНЮ
+   Сетка кнопок меню (Организатор / Игрок),
+   карточки с иконками, стеклянный блик,
+   анимация bounce иконок при наведении.
+========================================= */
+
+
+/* --- Сетка меню (вертикальная) --- */
+.menu-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* --- Карточка пункта меню --- */
+.menu-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 22px;
+    border-radius: 20px;
+    cursor: pointer;
+    background: #ffffff;
+    border: 2px solid transparent;
+    text-align: left;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    overflow: hidden; /* для эффекта блика */
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    z-index: 1;
+}
+
+/* Стеклянный блик (пробегает при наведении) */
+.menu-item::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: skewX(-25deg);
+    transition: left 0.5s ease;
+    z-index: -1;
+}
+
+/* Подъём карточки и запуск блика */
+.menu-item:hover {
+    transform: translateY(-5px);
+}
+
+.menu-item:hover::after {
+    left: 150%;
+    transition: all 0.7s ease-in-out;
+}
+
+
+/* =========================================
+   АНИМАЦИЯ ИКОНОК
+========================================= */
+
+@keyframes iconPartyBounce {
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+    25%      { transform: translateY(-4px) rotate(-8deg) scale(1.1); }
+    50%      { transform: translateY(0) rotate(0deg) scale(1.05); }
+    75%      { transform: translateY(-2px) rotate(8deg) scale(1.1); }
+}
+
+.menu-item:hover .menu-icon {
+    animation: iconPartyBounce 0.6s ease-in-out;
+}
+
+
+/* =========================================
+   КНОПКА «ОРГАНИЗАТОР» (розовая)
+========================================= */
+
+.menu-item.create {
+    border-color: #ff85a1;
+}
+
+.menu-item.create:hover {
+    border-color: #ff85a1;
+    box-shadow: 0 15px 30px rgba(255, 133, 161, 0.25);
+}
+
+.menu-item.create .menu-icon {
+    background: linear-gradient(135deg, #ff85a1, #ff4757);
+    box-shadow: 0 5px 15px rgba(255, 133, 161, 0.3);
+}
+
+
+/* =========================================
+   КНОПКА «ИГРОК» (фиолетовая)
+========================================= */
+
+.menu-item.join {
+    border-color: #6c5ce7;
+}
+
+.menu-item.join:hover {
+    border-color: #6c5ce7;
+    box-shadow: 0 15px 30px rgba(108, 92, 231, 0.25);
+}
+
+.menu-item.join .menu-icon {
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+    box-shadow: 0 5px 15px rgba(108, 92, 231, 0.3);
+}
+
+
+/* =========================================
+   ИКОНКА И ТЕКСТ ПУНКТА МЕНЮ
+========================================= */
+
+.menu-icon {
+    width: 65px;
+    height: 65px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+    margin-right: 20px;
+    transition: all 0.3s ease;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.menu-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-label {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: var(--party-text);
+}
+
+.menu-desc {
+    font-size: 0.9rem;
+    opacity: 0.6;
+}
+
+/* --- Подвал страницы --- */
+.footer-info {
+    margin-top: 40px;
+    font-size: 0.8rem;
+    opacity: 0.4;
+}

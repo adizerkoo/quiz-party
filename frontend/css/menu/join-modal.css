@@ -1,0 +1,354 @@
+/* =========================================
+   МОДАЛКА «ВОЙТИ В ИГРУ»
+   Всё, что видит пользователь при нажатии
+   «Присоединиться»: оверлей, стеклянная
+   карточка, поля ввода, кнопки, ошибки.
+========================================= */
+
+
+/* =========================================
+   1. ОВЕРЛЕЙ И КОНТЕЙНЕР
+   Светлая подложка с блюром, анимация
+   выезда карточки снизу.
+========================================= */
+
+/* --- Оверлей (светлый с блюром) --- */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(15px);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* --- Контент модалки --- */
+.modal-content {
+    width: 90%;
+    max-width: 400px;
+    padding: 30px;
+}
+
+.modal-content input {
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    border: 2px solid #eee;
+    font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
+}
+
+/* --- Стеклянная карточка --- */
+.light-glass-card {
+    margin-top: -200px;
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 40px;
+    padding: 40px;
+    width: 90%;
+    max-width: 320px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Бейдж «NEW» --- */
+.badge-new {
+    display: inline-block;
+    background: #6c5ce7;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 5px 12px;
+    border-radius: 50px;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+}
+
+/* --- Шапка модалки --- */
+.modal-header h3 {
+    margin-top: 10px;
+}
+
+.modal-header p {
+    font-size: 0.9rem;
+    color: #636e72;
+    margin: 10px 0 30px;
+}
+
+
+/* =========================================
+   2. ПОЛЯ ВВОДА
+   Плавающие подписи (floating labels),
+   иконки внутри инпутов, стили фокуса.
+========================================= */
+
+/* --- Контейнер полей --- */
+.portal-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    margin-bottom: 35px;
+}
+
+/* --- Обёртка одного поля --- */
+.modern-field {
+    position: relative;
+    width: 100%;
+}
+
+/* --- Инпут (тёмный текст, серый фон) --- */
+.modern-field input {
+    width: 100% !important;
+    background: rgba(240, 242, 245, 0.8) !important;
+    border: 2px solid transparent !important;
+    border-radius: 16px !important;
+    padding: 18px 20px 10px 45px !important;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    color: #2d3436 !important;
+    font-size: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+/* Фокус: белый фон + фиолетовая рамка */
+.modern-field input:focus {
+    background: #ffffff !important;
+    border-color: #6c5ce7 !important;
+    box-shadow: 0 8px 20px rgba(108, 92, 231, 0.1) !important;
+}
+
+/* Выделение текста — розовый акцент */
+.modern-field input::selection {
+    background: rgba(255, 133, 161, 0.2);
+    color: #ff85a1;
+}
+
+
+/* =========================================
+   3. ПЛАВАЮЩИЕ ПОДПИСИ (FLOATING LABELS)
+   Подпись поднимается вверх при фокусе
+   или когда поле заполнено.
+========================================= */
+
+.modern-field label {
+    position: absolute;
+    left: 45px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a4b0be;
+    font-size: 0.9rem;
+    font-weight: 500;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+/* Поднятая подпись (при фокусе / заполнении) */
+.modern-field input:focus ~ label,
+.modern-field input:not(:placeholder-shown) ~ label {
+    top: 12px;
+    left: 45px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #6c5ce7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Иконка при фокусе становится ярче */
+.modern-field input:focus ~ .field-icon {
+    opacity: 1;
+    color: #6c5ce7;
+}
+
+/* --- Иконка внутри инпута --- */
+.modern-field .field-icon {
+    position: absolute;
+    left: 10px;
+    top: 38%;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+    opacity: 0.4;
+    z-index: 3;
+    transition: 0.3s;
+}
+
+
+/* =========================================
+   4. УСТАРЕВШИЕ СТИЛИ ПОЛЕЙ (совместимость)
+   input-group-modern, input-wrapper — старые
+   обёртки до перехода на modern-field.
+========================================= */
+
+.input-group-modern {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.input-group-modern label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #b2bec3;
+    margin-left: 15px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper .icon {
+    position: absolute;
+    left: 20px;
+    font-size: 1.1rem;
+}
+
+/* Стили инпутов внутри стеклянной карточки */
+.light-glass-card input {
+    width: 100%;
+    background: #f1f2f6 !important;
+    border: 2px solid transparent !important;
+    border-radius: 20px !important;
+    padding: 18px 20px 18px 55px !important;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    color: #2d3436 !important;
+    transition: 0.3s;
+}
+
+.light-glass-card input:focus {
+    background: #fff !important;
+    border-color: #6c5ce7 !important;
+    box-shadow: 0 10px 20px rgba(108, 92, 231, 0.1);
+    outline: none;
+}
+
+
+/* =========================================
+   5. СОСТОЯНИЯ ОШИБОК
+   Красная рамка, подсветка иконки,
+   текст ошибки и анимация тряски.
+========================================= */
+
+/* Красная рамка и фон при ошибке */
+.modern-field.error-active input {
+    border-color: #ff4757 !important;
+    background: #fffafa !important;
+}
+
+.modern-field.error-active .field-icon {
+    opacity: 1;
+    filter: grayscale(0) brightness(0.8);
+}
+
+.modern-field.error-active .field-border {
+    background: #ff4757;
+    box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+}
+
+/* Текст ошибки под полем */
+.error-msg {
+    color: #ff85a1;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-top: 8px;
+    text-align: left;
+    display: none;
+}
+
+/* Подсказка-ошибка (включается через JS) */
+.input-hint {
+    font-size: 0.75rem;
+    color: #ff4757;
+    font-weight: 700;
+    margin: -35px 0 15px 10px;
+    display: none;
+    text-align: left;
+    animation: fadeInError 0.6s ease;
+}
+
+@keyframes fadeInError {
+    from { opacity: 0; transform: translateY(-5px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Анимация тряски при ошибке */
+.error-shake {
+    animation: shake-modern 0.4s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes shake-modern {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+
+
+/* =========================================
+   6. КНОПКИ МОДАЛКИ
+   «Присоединиться», ссылка «Отмена»,
+   кнопка закрытия.
+========================================= */
+
+/* --- Кнопка «Присоединиться» --- */
+.btn-modern-join {
+    background: #6c5ce7;
+    color: white;
+    border: none;
+    width: 100%;
+    padding: 20px;
+    border-radius: 20px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.3);
+    transition: 0.3s;
+    margin-top: 10px;
+}
+
+.btn-modern-join:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(108, 92, 231, 0.4);
+    background: #5b49d6;
+}
+
+/* --- Ссылка «Отмена» --- */
+.btn-cancel-link {
+    background: none;
+    border: none;
+    color: #b2bec3;
+    margin-top: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-cancel-link:hover {
+    color: #636e72;
+}
+
+/* --- Кнопка закрытия (×) --- */
+.btn-close {
+    background: none;
+    border: none;
+    color: var(--party-purple);
+    margin-top: 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
