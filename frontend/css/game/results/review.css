@@ -16,41 +16,56 @@
 
 /* Карточка ответа внутри аккордеона */
 .review-card {
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    border-radius: 18px;
-    padding: 15px;
-    margin-bottom: 12px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.75) 0%, rgba(224, 195, 252, 0.18) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(108, 92, 231, 0.12);
+    border-radius: 20px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    box-shadow:
+        0 2px 8px rgba(108, 92, 231, 0.06),
+        0 8px 24px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
     opacity: 0;
     transform: translateY(15px);
     animation: reviewFadeUp 0.4s ease-out forwards;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
-.accordion-content.active .review-card {
-    animation: slideUpFade 0.4s ease forwards;
-}
 
 /* Шапка аккордеона */
 .review-acc-header {
-    background: rgba(67, 255, 242, 0.03); 
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid #f1dbff;
-    border-radius: 15px;
-    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(108, 92, 231, 0.06) 0%, rgba(162, 135, 242, 0.03) 100%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(108, 92, 231, 0.14);
+    border-radius: 16px;
+    padding: 15px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: background 0.3s ease;
+    box-shadow:
+        0 2px 8px rgba(108, 92, 231, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: background 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
 }
 
 .review-acc-header:active {
-    background: rgba(67, 255, 242, 0.08);
+    background: linear-gradient(135deg, rgba(108, 92, 231, 0.1) 0%, rgba(162, 135, 242, 0.06) 100%);
+    transform: scale(0.985);
+    box-shadow:
+        0 1px 4px rgba(108, 92, 231, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.review-acc-header.is-active {
+    border-color: rgba(108, 92, 231, 0.22);
+    box-shadow:
+        0 3px 12px rgba(108, 92, 231, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .review-acc-title {
@@ -98,11 +113,12 @@
 
 /* Общий стиль ячейки */
 .answer-box {
-    padding: 8px;
-    border-radius: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+    transition: transform 0.2s ease;
 }
 
 .answer-label {
@@ -119,28 +135,48 @@
 
 /* Блок "ВЕРНО" (левый всегда зеленый) */
 .answer-box.is-correct {
-    background: rgba(67, 242, 128, 0.09);
+    background: linear-gradient(135deg, rgba(46, 213, 150, 0.1) 0%, rgba(0, 184, 148, 0.06) 100%);
+    border: 1px solid rgba(46, 213, 150, 0.18);
+    box-shadow: 0 2px 8px rgba(0, 184, 148, 0.06);
+}
+.answer-box.is-correct .answer-label {
+    color: #00b894;
+    opacity: 0.7;
 }
 .answer-box.is-correct .answer-value {
-    color: #00b894;
+    color: #00a884;
 }
 
 /* Блок "ТВОЙ ОТВЕТ" (правый) — Состояние: ВЕРНО */
 .answer-box.is-user.is-correct-status {
-    background: rgba(67, 242, 128, 0.09);
-    border: 1px solid rgba(0, 184, 148, 0.2);
+    background: linear-gradient(135deg, rgba(46, 213, 150, 0.12) 0%, rgba(0, 184, 148, 0.06) 100%);
+    border: 1px solid rgba(0, 184, 148, 0.25);
+    box-shadow:
+        0 2px 8px rgba(0, 184, 148, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.answer-box.is-user.is-correct-status .answer-label {
+    color: #00b894;
+    opacity: 0.7;
 }
 .answer-box.is-user.is-correct-status .answer-value {
-    color: #00b894;
+    color: #00a884;
 }
 
 /* Блок "ТВОЙ ОТВЕТ" (правый) — Состояние: ОШИБКА */
 .answer-box.is-user.is-wrong-status {
-    background: rgba(255, 255, 255, 0.4);
-    border: 1px solid rgba(255, 118, 117, 0.2);
+    background: linear-gradient(135deg, rgba(255, 118, 117, 0.08) 0%, rgba(214, 48, 49, 0.04) 100%);
+    border: 1px solid rgba(214, 48, 49, 0.15);
+    box-shadow:
+        0 2px 8px rgba(214, 48, 49, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.answer-box.is-user.is-wrong-status .answer-label {
+    color: #e17055;
+    opacity: 0.7;
 }
 .answer-box.is-user.is-wrong-status .answer-value {
-    color: #d63031;
+    color: #c0392b;
 }
 
 /* Заголовок "Другие игроки" */
@@ -171,13 +207,17 @@
 .other-player-card {
     display: inline-flex;
     flex-direction: column;
-    background: rgba(241, 117, 255, 0.08);
-    padding: 8px 12px;
-    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(108, 92, 231, 0.07) 0%, rgba(162, 135, 242, 0.05) 100%);
+    padding: 10px 14px;
+    border-radius: 14px;
     min-width: 130px;
     max-width: 220px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(108, 92, 231, 0.12);
+    box-shadow:
+        0 2px 8px rgba(108, 92, 231, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
     flex-shrink: 0;
+    transition: transform 0.2s ease;
 }
 
 .other-player-name {

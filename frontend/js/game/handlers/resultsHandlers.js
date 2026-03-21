@@ -36,14 +36,299 @@ function registerResultsHandler(socket) {
     // Переключение экранов
     document.getElementById("host-screen").style.display = "none";
     document.getElementById("player-screen").style.display = "none";
-    document.getElementById("finish-screen").style.display = "block";
 
-    // Запуск анимации конфетти
-    _playConfettiAnimation();
+    // Определяем победителей для эпической анимации
+    const players = data.results || [];
+    const maxScore = players.length > 0 ? players[0].score : 0;
+    const winners = players.filter(p => p.score === maxScore && maxScore > 0);
 
-    // Рендер результатов
-    _renderResultsContent(data);
+    if (winners.length > 0) {
+      _playEpicWinnerIntro(winners, () => {
+        _renderResultsContent(data);
+        document.getElementById("finish-screen").style.display = "block";
+        _playConfettiAnimation();
+      });
+    } else {
+      _renderResultsContent(data);
+      document.getElementById("finish-screen").style.display = "block";
+      _playConfettiAnimation();
+    }
   });
+}
+
+/**
+ * Проигрывает эпическую анимацию появления победителя (или нескольких)
+ * @private
+ * @param {Array<Object>} winners - Массив победителей {name, emoji, score}
+ * @param {Function} onComplete - Колбэк после завершения анимации
+ */
+function _playEpicWinnerIntro(winners, onComplete) {
+  const overlay = document.createElement('div');
+  overlay.className = 'epic-intro-overlay';
+  overlay.innerHTML = _buildEpicIntroHTML(winners);
+  document.body.appendChild(overlay);
+
+  const isMobile = window.innerWidth <= 520;
+
+  // Добавляем звёзды на фон
+  _spawnEpicStars(overlay, isMobile ? 20 : 40);
+
+  // Метеориты (через 0.5s)
+  setTimeout(() => _spawnMeteors(overlay, isMobile ? 3 : 6), 500);
+
+  // Искры при ударе эмодзи (через 1.1s)
+  setTimeout(() => _spawnEpicSparks(overlay, isMobile), 1100);
+
+  // Вторая волна искр (через 1.6s)
+  setTimeout(() => _spawnEpicSparks(overlay, isMobile), 1600);
+
+  // Фейерверки (через 2s)
+  setTimeout(() => {
+    _spawnFirework(overlay, 20, 25, isMobile);
+    _spawnFirework(overlay, 75, 20, isMobile);
+  }, 2000);
+
+  // Ещё фейерверки (через 2.8s) — на мобиле только 1
+  setTimeout(() => {
+    if (isMobile) {
+      _spawnFirework(overlay, 50, 15, true);
+    } else {
+      _spawnFirework(overlay, 15, 60, false);
+      _spawnFirework(overlay, 85, 55, false);
+      _spawnFirework(overlay, 50, 15, false);
+    }
+  }, 2800);
+
+  // Финальный залп фейерверков (через 3.4s)
+  setTimeout(() => {
+    _spawnFirework(overlay, 30, 30, isMobile);
+    if (!isMobile) {
+      _spawnFirework(overlay, 70, 40, false);
+    }
+  }, 3400);
+
+  // Конфетти во время интро (лёгкое на мобиле)
+  setTimeout(() => _playEpicConfetti(isMobile), 1200);
+
+  // Большой golden burst при появлении имени
+  setTimeout(() => {
+    confetti({
+      particleCount: isMobile ? 40 : 80,
+      spread: 100,
+      origin: { x: 0.5, y: 0.45 },
+      colors: ['#FFD700', '#FFA500', '#FFE066', '#fff'],
+      zIndex: 10000,
+      startVelocity: isMobile ? 25 : 40,
+      gravity: 0.8
+    });
+  }, 1800);
+
+  // Завершение — фейд-аут и переход к результатам
+  setTimeout(() => {
+    overlay.classList.add('epic-fade-out');
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+      onComplete();
+    }, { once: true });
+  }, 4500);
+}
+
+/**
+ * Склонение слова "очко" по правилам русского языка
+ * @private
+ * @param {number} n - Число
+ * @returns {string} "очко", "очка" или "очков"
+ */
+function _pluralOchko(n) {
+  const abs = Math.abs(n) % 100;
+  const last = abs % 10;
+  if (abs >= 11 && abs <= 19) return 'очков';
+  if (last === 1) return 'очко';
+  if (last >= 2 && last <= 4) return 'очка';
+  return 'очков';
+}
+
+/**
+ * Строит HTML эпического интро
+ * @private
+ */
+function _buildEpicIntroHTML(winners) {
+  const multi = winners.length > 1;
+  const emojisHTML = multi
+    ? `<div class="epic-multi-emojis">${winners.map((w, i) =>
+        `<span class="epic-multi-emoji" style="animation-delay: ${1.0 + i * 0.15}s">${w.emoji}</span>`
+      ).join('')}</div>`
+    : `<div class="epic-winner-emoji">${winners[0].emoji}</div>`;
+
+  const namesHTML = multi
+    ? `<div class="epic-winner-name-text epic-multi-name">${winners.map(w => w.name).join(' & ')}</div>`
+    : `<div class="epic-winner-name-text">${winners[0].name}</div>`;
+
+  const titleText = multi ? '🏆 ПОБЕДИТЕЛИ 🏆' : '🏆 ПОБЕДИТЕЛЬ 🏆';
+
+  return `
+    <div class="epic-flash"></div>
+    <div class="epic-electric-border"></div>
+    <div class="epic-nebula"></div>
+    <div class="epic-energy-ring"></div>
+    <svg style=\"position:absolute;width:0;height:0;\">
+      <defs>
+        <linearGradient id=\"boltGrad\" x1=\"0%\" y1=\"0%\" x2=\"0%\" y2=\"100%\">
+          <stop offset=\"0%\" stop-color=\"#b8dcff\"/>
+          <stop offset=\"40%\" stop-color=\"#a78bfa\"/>
+          <stop offset=\"100%\" stop-color=\"#43fff2\"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <svg class="epic-bolt bolt-left" viewBox="0 0 120 300">
+      <path d="M60,0 L45,80 L75,90 L30,180 L65,170 L20,300" stroke="url(#boltGrad)"/>
+    </svg>
+    <svg class="epic-bolt bolt-right" viewBox="0 0 120 300">
+      <path d="M60,0 L45,80 L75,90 L30,180 L65,170 L20,300" stroke="url(#boltGrad)"/>
+    </svg>
+    <svg class="epic-bolt bolt-center-left" viewBox="0 0 80 200">
+      <path d="M40,0 L30,60 L55,65 L20,130 L45,125 L10,200" stroke="url(#boltGrad)"/>
+    </svg>
+    <svg class="epic-bolt bolt-center-right" viewBox="0 0 80 200">
+      <path d="M40,0 L30,60 L55,65 L20,130 L45,125 L10,200" stroke="url(#boltGrad)"/>
+    </svg>
+
+    <div class="epic-shockwave ring-1"></div>
+    <div class="epic-shockwave ring-2"></div>
+    <div class="epic-shockwave ring-3"></div>
+
+    <div class="epic-particles-container"></div>
+
+    ${emojisHTML}
+    ${namesHTML}
+    <div class="epic-winner-title-text">${titleText}</div>
+    <div class="epic-winner-score-text">${winners[0].score} ${_pluralOchko(winners[0].score)}</div>
+  `;
+}
+
+/**
+ * Создает летящие метеоры
+ * @private
+ */
+function _spawnMeteors(container, count) {
+  for (let i = 0; i < count; i++) {
+    const meteor = document.createElement('div');
+    meteor.className = 'epic-meteor';
+    meteor.style.left = (10 + Math.random() * 80) + '%';
+    meteor.style.top = '-5%';
+    meteor.style.animationDelay = (i * 0.3 + Math.random() * 0.4) + 's';
+    meteor.style.animationDuration = (0.6 + Math.random() * 0.5) + 's';
+    container.appendChild(meteor);
+  }
+}
+
+/**
+ * Создает звёзды на фоне
+ * @private
+ */
+function _spawnEpicStars(container, count) {
+  for (let i = 0; i < count; i++) {
+    const star = document.createElement('div');
+    star.className = 'epic-star';
+    star.style.left = Math.random() * 100 + '%';
+    star.style.top = Math.random() * 100 + '%';
+    star.style.animationDelay = (Math.random() * 2) + 's';
+    star.style.width = (1 + Math.random() * 3) + 'px';
+    star.style.height = star.style.width;
+    container.appendChild(star);
+  }
+}
+
+/**
+ * Создает искры при ударе эмодзи
+ * @private
+ */
+function _spawnEpicSparks(container, isMobile) {
+  const particlesDiv = container.querySelector('.epic-particles-container');
+  if (!particlesDiv) return;
+
+  const colors = ['#FFD700', '#FFA500', '#ff85a1', '#43fff2', '#6c5ce7', '#fff'];
+  const count = isMobile ? 18 : 35;
+
+  for (let i = 0; i < count; i++) {
+    const spark = document.createElement('div');
+    spark.className = 'epic-spark';
+    const angle = (i / count) * 360;
+    const distance = 80 + Math.random() * 160;
+    const rad = angle * Math.PI / 180;
+    const sx = Math.cos(rad) * distance;
+    const sy = Math.sin(rad) * distance;
+
+    spark.style.setProperty('--sx', sx + 'px');
+    spark.style.setProperty('--sy', sy + 'px');
+    spark.style.background = colors[Math.floor(Math.random() * colors.length)];
+    spark.style.width = (3 + Math.random() * 5) + 'px';
+    spark.style.height = spark.style.width;
+    spark.style.boxShadow = `0 0 6px ${spark.style.background}`;
+    spark.style.animation = `epicSparkBurst ${0.6 + Math.random() * 0.5}s ease-out forwards`;
+    spark.style.animationDelay = (Math.random() * 0.15) + 's';
+    particlesDiv.appendChild(spark);
+  }
+}
+
+/**
+ * Создает один фейерверк
+ * @private
+ */
+function _spawnFirework(container, xPercent, yPercent, isMobile) {
+  const colors = ['#FFD700', '#ff85a1', '#43fff2', '#6c5ce7', '#2ecc71', '#fff', '#FFA500'];
+  const particleCount = isMobile ? 10 : 20;
+
+  for (let i = 0; i < particleCount; i++) {
+    const p = document.createElement('div');
+    p.className = 'epic-firework-particle';
+    const angle = (i / particleCount) * 360;
+    const distance = 40 + Math.random() * 80;
+    const rad = angle * Math.PI / 180;
+
+    p.style.left = xPercent + '%';
+    p.style.top = yPercent + '%';
+    p.style.setProperty('--fx', (Math.cos(rad) * distance) + 'px');
+    p.style.setProperty('--fy', (Math.sin(rad) * distance) + 'px');
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.boxShadow = `0 0 4px ${p.style.background}`;
+    p.style.animation = `fireworkShoot ${0.5 + Math.random() * 0.4}s ease-out forwards`;
+    p.style.animationDelay = (Math.random() * 0.1) + 's';
+    container.appendChild(p);
+  }
+}
+
+/**
+ * Запускает конфетти во время эпического интро
+ * @private
+ */
+function _playEpicConfetti(isMobile) {
+  const duration = isMobile ? 1500 : 2500;
+  const end = Date.now() + duration;
+  const count = isMobile ? 2 : 4;
+
+  (function frame() {
+    confetti({
+      particleCount: count,
+      angle: 60,
+      spread: 70,
+      origin: { x: 0, y: 0.6 },
+      colors: ['#FFD700', '#f175ff', '#43fff2', '#fff'],
+      zIndex: 10000
+    });
+    confetti({
+      particleCount: count,
+      angle: 120,
+      spread: 70,
+      origin: { x: 1, y: 0.6 },
+      colors: ['#FFD700', '#f175ff', '#43fff2', '#fff'],
+      zIndex: 10000
+    });
+
+    if (Date.now() < end) {
+      requestAnimationFrame(frame);
+    }
+  }());
 }
 
 /**
@@ -121,7 +406,7 @@ function _buildResultsHTML(winners, others, myData, questions, allPlayers) {
   return `
     <div class="confetti-wrapper">
       <div style="margin-bottom: 20px; text-align: center;">
-        <span class="crown-appear">👑</span>
+        <div class="results-party-title">${quizTitle || 'Quiz Party'}</div>
         <h2 style="color: var(--party-purple); font-size: 1.8rem; margin: 5px 0; font-weight: 800;">
           Итоги викторины
         </h2>

@@ -1,0 +1,593 @@
+/* ============================================
+   ЭПИЧЕСКАЯ АНИМАЦИЯ ПОБЕДИТЕЛЯ (INTRO)
+   ============================================ */
+
+/* --- Оверлей --- */
+.epic-intro-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a15 100%);
+    overflow: hidden;
+    opacity: 0;
+    animation: epicOverlayIn 0.4s ease-out forwards;
+}
+
+.epic-intro-overlay.epic-fade-out {
+    animation: epicOverlayOut 1s ease-in forwards;
+}
+
+/* --- Космическая туманность --- */
+.epic-nebula {
+    position: absolute;
+    inset: -50%;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(108, 92, 231, 0.25) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 50%, rgba(255, 133, 161, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 30%, rgba(255, 215, 0, 0.15) 0%, transparent 40%),
+        radial-gradient(ellipse at 60% 80%, rgba(67, 255, 242, 0.12) 0%, transparent 45%);
+    animation: nebulaSwirl 4s ease-in-out infinite alternate;
+    opacity: 0;
+}
+
+/* --- Энергетическое кольцо --- */
+.epic-energy-ring {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    z-index: 8;
+    pointer-events: none;
+    opacity: 0;
+    border: 2px solid transparent;
+    background:
+        conic-gradient(from 0deg, #FFD700, #ff85a1, #6c5ce7, #43fff2, #FFD700)
+        border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 2px;
+    animation:
+        energyRingAppear 0.5s 1.0s ease-out forwards,
+        energyRingSpin 2s 1.0s linear infinite,
+        energyRingExpand 1.5s 1.0s ease-out forwards;
+    filter: blur(1px) drop-shadow(0 0 15px rgba(255, 215, 0, 0.5));
+}
+
+/* --- Метеоры --- */
+.epic-meteor {
+    position: absolute;
+    width: 3px;
+    height: 40px;
+    z-index: 3;
+    pointer-events: none;
+    border-radius: 50%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), transparent);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+    transform: rotate(35deg);
+    opacity: 0;
+    animation: meteorFall 0.7s ease-in forwards;
+}
+
+/* --- Вспышки молний --- */
+.epic-flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    z-index: 10;
+    pointer-events: none;
+    animation:
+        epicFlash1 0.15s 0.3s ease-out forwards,
+        epicFlash2 0.12s 0.6s ease-out forwards,
+        epicFlash3 0.1s  1.0s ease-out forwards,
+        epicFlash1 0.1s  1.05s ease-out forwards;
+}
+
+/* --- SVG-молнии --- */
+.epic-bolt {
+    position: absolute;
+    z-index: 5;
+    opacity: 0;
+    filter: drop-shadow(0 0 25px rgba(167, 139, 250, 0.9))
+            drop-shadow(0 0 60px rgba(108, 92, 231, 0.5))
+            drop-shadow(0 0 100px rgba(67, 255, 242, 0.3));
+}
+
+.epic-bolt path {
+    fill: none;
+    stroke: #b8dcff;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 300;
+    stroke-dashoffset: 300;
+}
+
+.epic-bolt.bolt-left {
+    top: 0;
+    left: 10%;
+    width: 120px;
+    height: 300px;
+    animation: boltAppear 0.3s 0.3s ease-out forwards;
+}
+.epic-bolt.bolt-left path {
+    animation: boltDraw 0.4s 0.3s ease-out forwards;
+}
+
+.epic-bolt.bolt-right {
+    top: 0;
+    right: 10%;
+    width: 120px;
+    height: 300px;
+    transform: scaleX(-1);
+    animation: boltAppear 0.3s 0.5s ease-out forwards;
+}
+.epic-bolt.bolt-right path {
+    animation: boltDraw 0.4s 0.5s ease-out forwards;
+}
+
+.epic-bolt.bolt-center-left {
+    top: 5%;
+    left: 25%;
+    width: 80px;
+    height: 200px;
+    animation: boltAppear 0.25s 0.8s ease-out forwards;
+}
+.epic-bolt.bolt-center-left path {
+    animation: boltDraw 0.35s 0.8s ease-out forwards;
+}
+
+.epic-bolt.bolt-center-right {
+    top: 5%;
+    right: 25%;
+    width: 80px;
+    height: 200px;
+    transform: scaleX(-1);
+    animation: boltAppear 0.25s 0.9s ease-out forwards;
+}
+.epic-bolt.bolt-center-right path {
+    animation: boltDraw 0.35s 0.9s ease-out forwards;
+}
+
+/* --- Ударные волны --- */
+.epic-shockwave {
+    position: absolute;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 215, 0, 0.7);
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 4;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.epic-shockwave.ring-1 {
+    animation: shockwaveExpand 1s 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.epic-shockwave.ring-2 {
+    border-color: rgba(255, 133, 161, 0.5);
+    animation: shockwaveExpand 1.2s 1.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.epic-shockwave.ring-3 {
+    border-color: rgba(108, 92, 231, 0.5);
+    animation: shockwaveExpand 1.4s 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* --- Эмодзи победителя --- */
+.epic-winner-emoji {
+    font-size: 8rem;
+    opacity: 0;
+    z-index: 20;
+    filter: drop-shadow(0 0 30px rgba(255, 215, 0, 0.9))
+            drop-shadow(0 0 60px rgba(255, 215, 0, 0.5))
+            drop-shadow(0 0 100px rgba(255, 165, 0, 0.3));
+    animation: epicEmojiSlam 0.7s 1.0s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    position: relative;
+    will-change: transform, opacity;
+}
+
+/* Золотое свечение за эмодзи */
+.epic-winner-emoji::before {
+    content: '';
+    position: absolute;
+    inset: -60px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, rgba(255, 165, 0, 0.2) 30%, transparent 70%);
+    animation: emojiGlowPulse 1.5s 1.7s ease-in-out infinite;
+    z-index: -1;
+}
+
+/* --- Имя победителя --- */
+.epic-winner-name-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 2rem;
+    color: transparent;
+    background: linear-gradient(90deg, #FFD700, #FFA500, #FFE066, #fff, #FFD700, #FFA500);
+    background-size: 400% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    opacity: 0;
+    z-index: 20;
+    margin-top: 15px;
+    animation:
+        epicNameAppear 0.6s 1.8s ease-out forwards,
+        epicNameShine 2.5s 2.4s linear infinite;
+    text-shadow: none;
+    letter-spacing: 2px;
+    position: relative;
+}
+
+/* --- Титул "ПОБЕДИТЕЛЬ" --- */
+.epic-winner-title-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #FFD700;
+    opacity: 0;
+    z-index: 20;
+    margin-top: 8px;
+    text-shadow:
+        0 0 10px rgba(255, 215, 0, 0.6),
+        0 0 30px rgba(255, 215, 0, 0.3);
+    animation: epicTitleAppear 0.5s 2.2s ease-out forwards;
+}
+
+/* — Счёт — */
+.epic-winner-score-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 1.3rem;
+    color: #fff;
+    opacity: 0;
+    z-index: 20;
+    margin-top: 12px;
+    padding: 8px 28px;
+    border-radius: 30px;
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 133, 161, 0.15), rgba(108, 92, 231, 0.15));
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    box-shadow:
+        0 0 20px rgba(255, 215, 0, 0.2),
+        0 0 40px rgba(255, 215, 0, 0.1),
+        inset 0 0 15px rgba(255, 215, 0, 0.1);
+    animation: epicScoreAppear 0.4s 2.5s ease-out forwards;
+}
+
+/* --- Частицы/искры --- */
+.epic-particles-container {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.epic-spark {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    opacity: 0;
+}
+
+/* --- Звёзды фона --- */
+.epic-star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 0;
+    animation: starTwinkle 1.5s ease-in-out infinite alternate;
+}
+
+/* --- Фейерверки --- */
+.epic-firework {
+    position: absolute;
+    z-index: 6;
+    pointer-events: none;
+}
+
+.epic-firework-particle {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+/* ============================================
+   KEYFRAMES
+   ============================================ */
+
+@keyframes epicOverlayIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes epicOverlayOut {
+    0%   { opacity: 1; filter: brightness(1); }
+    40%  { opacity: 1; filter: brightness(2); }
+    100% { opacity: 0; filter: brightness(1); }
+}
+
+@keyframes epicFlash1 {
+    0%  { opacity: 0; }
+    20% { opacity: 0.9; }
+    100%{ opacity: 0; }
+}
+
+@keyframes epicFlash2 {
+    0%  { opacity: 0; }
+    30% { opacity: 0.7; }
+    100%{ opacity: 0; }
+}
+
+@keyframes epicFlash3 {
+    0%  { opacity: 0; }
+    25% { opacity: 0.5; }
+    100%{ opacity: 0; }
+}
+
+@keyframes boltAppear {
+    0%   { opacity: 0; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+
+@keyframes boltDraw {
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes shockwaveExpand {
+    0%   { width: 10px; height: 10px; opacity: 0.8; }
+    100% { width: 110vw; height: 110vw; opacity: 0; }
+}
+
+@keyframes epicEmojiSlam {
+    0%   {
+        opacity: 0;
+        transform: translateY(-120vh) rotate(-20deg) scale(0.05);
+    }
+    55% {
+        opacity: 1;
+        transform: translateY(15px) rotate(5deg) scale(1.12);
+    }
+    70% {
+        transform: translateY(-5px) rotate(-2deg) scale(0.94);
+    }
+    85% {
+        transform: translateY(3px) rotate(1deg) scale(1.03);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+}
+
+@keyframes emojiGlowPulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50%      { opacity: 0.7; transform: scale(1.15); }
+}
+
+@keyframes epicNameAppear {
+    0%   { opacity: 0; transform: translateY(20px) scale(0.8); letter-spacing: 10px; }
+    100% { opacity: 1; transform: translateY(0) scale(1); letter-spacing: 2px; }
+}
+
+@keyframes epicNameShine {
+    to { background-position: 400% center; }
+}
+
+@keyframes epicTitleAppear {
+    0%   { opacity: 0; transform: scale(0.5); letter-spacing: 15px; }
+    60%  { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0.9; transform: scale(1); letter-spacing: 6px; }
+}
+
+@keyframes epicScoreAppear {
+    0%   { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes starTwinkle {
+    0%   { opacity: 0.1; transform: scale(0.5); }
+    100% { opacity: 0.8; transform: scale(1.2); }
+}
+
+@keyframes epicSparkBurst {
+    0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0); }
+}
+
+@keyframes fireworkShoot {
+    0%   { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translate(var(--fx), var(--fy)) scale(0.3); }
+}
+
+@keyframes nebulaSwirl {
+    0%   { opacity: 0; transform: rotate(0deg) scale(1); }
+    30%  { opacity: 0.8; }
+    100% { opacity: 1; transform: rotate(15deg) scale(1.1); }
+}
+
+@keyframes energyRingAppear {
+    from { opacity: 0; }
+    to   { opacity: 0.8; }
+}
+
+@keyframes energyRingSpin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes energyRingExpand {
+    0%   { width: 100px; height: 100px; }
+    100% { width: 350px; height: 350px; opacity: 0; }
+}
+
+@keyframes meteorFall {
+    0%   { opacity: 0; transform: rotate(35deg) translateY(0); }
+    20%  { opacity: 1; }
+    100% { opacity: 0; transform: rotate(35deg) translateY(85vh); }
+}
+
+/* Электрическая рамка вокруг экрана */
+.epic-electric-border {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    animation: electricBorderIn 0.3s 0.3s ease-out forwards;
+}
+
+.epic-electric-border::before,
+.epic-electric-border::after {
+    content: '';
+    position: absolute;
+    border-radius: 0;
+}
+
+.epic-electric-border::before {
+    inset: 0;
+    border: 2px solid rgba(120, 180, 255, 0.3);
+    animation: electricPulse 0.8s 0.5s ease-in-out 3;
+}
+
+.epic-electric-border::after {
+    inset: 5px;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    animation: electricPulse 0.8s 0.7s ease-in-out 3;
+}
+
+@keyframes electricBorderIn {
+    to { opacity: 1; }
+}
+
+@keyframes electricPulse {
+    0%, 100% { opacity: 0.2; }
+    50%      { opacity: 0.8; }
+}
+
+/* --- Несколько победителей --- */
+.epic-multi-emojis {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    z-index: 20;
+    position: relative;
+}
+
+.epic-multi-emoji {
+    font-size: 5rem;
+    opacity: 0;
+    filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.7))
+            drop-shadow(0 0 50px rgba(255, 215, 0, 0.3));
+    animation: epicEmojiMultiSlam 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    will-change: transform, opacity;
+}
+
+.epic-multi-name {
+    font-size: 1.5rem !important;
+}
+
+/* Размер эмодзи на мобильных */
+@media (max-width: 480px) {
+    .epic-winner-emoji {
+        font-size: 6rem;
+        animation: epicEmojiSlamMobile 0.7s 1.0s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes epicEmojiSlamMobile {
+        0%   {
+            opacity: 0;
+            transform: translateY(-120vh) rotate(-20deg) scale(0.05);
+        }
+        55%  {
+            opacity: 1;
+            transform: translateY(15px) rotate(5deg) scale(1.15);
+        }
+        70%  {
+            transform: translateY(-5px) rotate(-2deg) scale(0.92);
+        }
+        85%  {
+            transform: translateY(3px) rotate(1deg) scale(1.03);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) rotate(0deg) scale(1);
+        }
+    }
+
+    .epic-winner-name-text {
+        font-size: 1.5rem;
+    }
+
+    .epic-multi-emoji {
+        font-size: 3.8rem;
+        animation: epicEmojiMultiSlamMobile 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .epic-multi-name {
+        font-size: 1.2rem !important;
+    }
+
+    .epic-bolt.bolt-center-left,
+    .epic-bolt.bolt-center-right {
+        display: none;
+    }
+}
+
+/* --- Keyframes для нескольких эмодзи --- */
+@keyframes epicEmojiMultiSlam {
+    0%   {
+        opacity: 0;
+        transform: translateY(-100vh) rotate(-15deg) scale(0.05);
+    }
+    55%  {
+        opacity: 1;
+        transform: translateY(10px) rotate(3deg) scale(1.1);
+    }
+    70%  {
+        transform: translateY(-3px) rotate(-1deg) scale(0.95);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+}
+
+@keyframes epicEmojiMultiSlamMobile {
+    0%   {
+        opacity: 0;
+        transform: translateY(-100vh) rotate(-15deg) scale(0.05);
+    }
+    55%  {
+        opacity: 1;
+        transform: translateY(10px) rotate(3deg) scale(1.1);
+    }
+    70%  {
+        transform: translateY(-3px) rotate(-1deg) scale(0.95);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+}
