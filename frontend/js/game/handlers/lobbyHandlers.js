@@ -35,13 +35,19 @@ function registerLobbyHandlers(socket) {
    */
   socket.on("update_players", (players) => {
     const lobbyContainers = ["lobby-players-list", "player-lobby-list"];
+    const actualPlayers = players.filter((p) => !p.is_host);
+
+    // Показ/скрытие пустого состояния лобби
+    const emptyState = document.getElementById("lobby-empty-state");
+    if (emptyState) {
+      emptyState.style.display = actualPlayers.length === 0 ? "flex" : "none";
+    }
 
     lobbyContainers.forEach((id) => {
       const container = document.getElementById(id);
       if (!container) return;
 
-      container.innerHTML = players
-        .filter((p) => !p.is_host) // Исключаем хост из списка
+      container.innerHTML = actualPlayers
         .map((p) => {
           const isMe = p.name === playerName;
 

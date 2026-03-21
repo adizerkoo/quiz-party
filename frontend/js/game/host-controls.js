@@ -8,6 +8,21 @@
 let _nextLocked = false;
 
 
+// Возврат в редактор викторины (с сохранением данных)
+function goBackToEditor() {
+  localStorage.setItem('quizQuestions', JSON.stringify(currentQuestions));
+  localStorage.setItem('quizDraft', JSON.stringify({
+    title: quizTitle,
+    questionText: '',
+    type: 'text',
+    correctText: '',
+    options: ['', '', '', ''],
+    selectedIndex: 0
+  }));
+  window.location.href = "create.html";
+}
+
+
 // Старт игры — только для хоста
 function startGame() {
   currentQuestion = 1;

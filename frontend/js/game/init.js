@@ -56,6 +56,7 @@ function refreshUI() {
     if (btn) {
       if (currentQuestion !== realGameQuestion) {
         btn.innerText = "↩ Вернуться к текущему вопросу";
+        btn.style.background = "var(--party-pink)";
         btn.onclick = () => {
           currentQuestion = realGameQuestion;
           refreshUI();
