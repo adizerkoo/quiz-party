@@ -53,9 +53,9 @@ function filterLibrary(category) {
         item.innerHTML = `
             <div class="library-item-content">
                 <span class="library-tag">${typeMarkup}</span>
-                <b>${q.text}</b>
+                <b>${escapeHtml(q.text)}</b>
                 <div class="library-answer-preview">
-                    <i class="fa-solid fa-check-double"></i> Ответ: ${q.correct}
+                    <i class="fa-solid fa-check-double"></i> Ответ: ${escapeHtml(q.correct)}
                 </div>
             </div>
         `;

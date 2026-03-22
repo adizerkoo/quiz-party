@@ -17,7 +17,6 @@ def register_sync_handlers(sio_manager):
         room = data.get('room')
         if not validate_quiz_code(room):
             return
-        name = data.get('name')
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if not quiz:
@@ -25,13 +24,13 @@ def register_sync_handlers(sio_manager):
                 return
             player = db.query(models.Player).filter(
                 models.Player.quiz_id == quiz.id,
-                models.Player.name == name
+                models.Player.sid == sid
             ).first()
 
             is_finished = (quiz.status == "finished")
             logger.info(
                 "Sync sent  name=%s  room=%s  status=%s  question=%s",
-                name, room, quiz.status, quiz.current_question,
+                player.name if player else "unknown", room, quiz.status, quiz.current_question,
             )
             await sio_manager.emit('sync_state', {
                 "currentQuestion": quiz.current_question,

@@ -33,11 +33,10 @@ def register_game_handlers(sio_manager):
         room = data.get('room')
         if not validate_quiz_code(room):
             return
-        name = data.get('name')
         raw_answer = data.get('answer', '')
         answer = sanitize_text(str(raw_answer)[:50]) if raw_answer else ""
         if not validate_answer(answer):
-            logger.warning("Invalid answer rejected  name=%s  room=%s", name, room)
+            logger.warning("Invalid answer rejected  sid=%s  room=%s", sid, room)
             return
         q_idx = str(data.get('questionIndex'))
         with database.get_db_session() as db:
@@ -46,16 +45,21 @@ def register_game_handlers(sio_manager):
                 return
             player = db.query(models.Player).filter(
                 models.Player.quiz_id == quiz.id,
-                models.Player.name == name
+                models.Player.sid == sid
             ).with_for_update().first()
             if player:
+                # Reject duplicate answer for this question
+                if q_idx in (player.answers_history or {}):
+                    db.commit()
+                    logger.debug("Duplicate answer rejected  name=%s  q=%s  room=%s", player.name, q_idx, room)
+                    return
                 new_history = dict(player.answers_history or {})
                 new_history[q_idx] = answer
                 player.answers_history = new_history
                 idx = int(q_idx)
                 if idx < 1 or idx > len(quiz.questions_data):
                     db.commit()
-                    logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", name, q_idx, room)
+                    logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", player.name, q_idx, room)
                     return
                 question = quiz.questions_data[idx - 1]
                 correct = question["correct"].lower().strip()
@@ -67,7 +71,7 @@ def register_game_handlers(sio_manager):
                 db.commit()
                 logger.info(
                     "Answer received  name=%s  room=%s  q=%s  correct=%s  score=%d",
-                    name, room, q_idx, is_correct, player.score,
+                    player.name, room, q_idx, is_correct, player.score,
                 )
                 players_data = get_players_in_quiz(db, player.quiz_id)
                 await sio_manager.emit('update_answers', players_data, room=room)

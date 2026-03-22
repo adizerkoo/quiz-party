@@ -134,6 +134,7 @@ function registerAnswerCheckHandler(socket) {
    * @param {boolean} data.allAnswered - Все ли игроки ответили
    */
   socket.on("answers_check_result", (data) => {
+    _nextLocked = false;
     if (!data.allAnswered) {
       showModernConfirm("Не все ответили! Всё равно идём дальше?", () => {
         proceedToNext();

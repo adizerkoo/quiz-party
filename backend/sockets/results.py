@@ -3,6 +3,7 @@ import logging
 
 from .. import models, database
 from ..helpers import get_quiz_by_code
+from ..cache import invalidate_quiz
 from ..security import validate_quiz_code
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ def register_results_handlers(sio_manager):
                     quiz.winner_id = players[0].id
 
                 db.commit()
+                invalidate_quiz(room)
 
                 winner_name = players[0].name if players else "N/A"
                 logger.info(

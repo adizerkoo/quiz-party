@@ -56,6 +56,16 @@ def register_lobby_handlers(sio_manager):
                         logger.info("Blocked late join  name=%s  room=%s  status=%s", name, room, quiz.status)
                         return
 
+                    if not is_host:
+                        active_count = db.query(models.Player).filter(
+                            models.Player.quiz_id == quiz.id,
+                            models.Player.is_host == False
+                        ).count()
+                        if active_count >= 50:
+                            await sio_manager.emit('room_full', {}, room=sid)
+                            logger.info("Room full  room=%s  count=%d", room, active_count)
+                            return
+
                     existing_names = {p.name for p in db.query(models.Player.name).filter(models.Player.quiz_id == quiz.id).all()}
                     original_name = name
                     counter = 1
@@ -85,6 +95,16 @@ def register_lobby_handlers(sio_manager):
                         logger.info("Blocked late join  name=%s  room=%s  status=%s", name, room, quiz.status)
                         return
 
+                    if not is_host:
+                        active_count = db.query(models.Player).filter(
+                            models.Player.quiz_id == quiz.id,
+                            models.Player.is_host == False
+                        ).count()
+                        if active_count >= 50:
+                            await sio_manager.emit('room_full', {}, room=sid)
+                            logger.info("Room full  room=%s  count=%d", room, active_count)
+                            return
+
                     used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
                     available_emojis = [e for e in PLAYER_EMOJIS if e not in used_emojis]
                     assigned_emoji = random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
@@ -100,5 +120,7 @@ def register_lobby_handlers(sio_manager):
                     db.add(player)
 
                 db.commit()
+                if player:
+                    rate_limiter.register_identity(sid, f"player:{player.id}")
                 logger.info("Player joined  name=%s  room=%s  host=%s  sid=%s", name, room, is_host, sid)
                 await sio_manager.emit('update_players', get_players_in_quiz(db, quiz.id), room=room)

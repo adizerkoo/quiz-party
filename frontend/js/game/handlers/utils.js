@@ -77,6 +77,8 @@ function spawnConfetti(event) {
  *   proceedToNext();
  * });
  */
+let _currentConfirmHandler = null;
+
 function showModernConfirm(message, onConfirm) {
   const overlay = document.getElementById("confirm-overlay");
   const confirmBtn = document.getElementById("confirm-proceed-btn");
@@ -90,25 +92,21 @@ function showModernConfirm(message, onConfirm) {
     return;
   }
 
+  // Удаляем предыдущий обработчик, чтобы не накапливались
+  if (_currentConfirmHandler) {
+    confirmBtn.removeEventListener("click", _currentConfirmHandler);
+  }
+
   // Показываем модальное окно
   overlay.style.display = "flex";
 
   // Обработчик для кнопки "ДА, ДАЛЬШЕ"
-  const handleConfirm = () => {
+  _currentConfirmHandler = () => {
     overlay.style.display = "none";
-    confirmBtn.removeEventListener("click", handleConfirm);
+    confirmBtn.removeEventListener("click", _currentConfirmHandler);
+    _currentConfirmHandler = null;
     onConfirm();
   };
 
-  // Обработчик для кнопки "НЕТ" (скрытие modal)
-  const handleCancel = () => {
-    overlay.style.display = "none";
-    confirmBtn.removeEventListener("click", handleConfirm);
-  };
-
-  // Добавляем обработчик на кнопку подтверждения
-  confirmBtn.addEventListener("click", handleConfirm);
-
-  // Закрытие модали при клике на НЕТ (если есть обработчик еще не добавлен)
-  // Обработчик уже в HTML: onclick="document.getElementById('confirm-overlay').style.display='none'"
+  confirmBtn.addEventListener("click", _currentConfirmHandler);
 }

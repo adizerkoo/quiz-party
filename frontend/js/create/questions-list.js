@@ -29,18 +29,18 @@ function renderQuestions() {
             answersHtml = `<div class="preview-options-grid">`;
             q.options.forEach(opt => {
                 const isCorrect = opt === q.correct;
-                answersHtml += `<div class="preview-opt-item ${isCorrect ? 'is-correct' : ''}">${opt} ${isCorrect ? '<i class="fa fa-check"></i>' : ''}</div>`;
+                answersHtml += `<div class="preview-opt-item ${isCorrect ? 'is-correct' : ''}">${escapeHtml(opt)} ${isCorrect ? '<i class="fa fa-check"></i>' : ''}</div>`;
             });
             answersHtml += `</div>`;
         } else {
-            answersHtml = `<div class="preview-correct-text">Ответ: ${q.correct}</div>`;
+            answersHtml = `<div class="preview-correct-text">Ответ: ${escapeHtml(q.correct)}</div>`;
         }
 
         div.innerHTML = `
         <div class="question-card">
             <div class="question-top">
                 <div class="question-number">${index + 1}</div>
-                <div class="question-text">${q.text}</div>
+                <div class="question-text">${escapeHtml(q.text)}</div>
                 <div class="question-actions">
                     <button class="action-btn btn-edit" onclick="editQuestion(${index})">
                         <i class="fa fa-pen"></i>
