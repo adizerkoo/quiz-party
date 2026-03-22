@@ -21,6 +21,15 @@ def get_quiz_by_code(db: Session, room_code: str):
     return quiz
 
 
+def verify_host(db: Session, quiz_id: int, sid: str) -> bool:
+    """Check if the given socket sid belongs to the host of the quiz."""
+    return db.query(models.Player).filter(
+        models.Player.quiz_id == quiz_id,
+        models.Player.sid == sid,
+        models.Player.is_host == True
+    ).first() is not None
+
+
 def get_players_in_quiz(db: Session, quiz_id: int):
     players = db.query(models.Player).filter(models.Player.quiz_id == quiz_id).all()
     logger.debug("get_players_in_quiz  quiz_id=%s  count=%d", quiz_id, len(players))

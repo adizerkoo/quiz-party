@@ -2,7 +2,7 @@ import datetime
 import logging
 
 from .. import models, database
-from ..helpers import get_quiz_by_code
+from ..helpers import get_quiz_by_code, verify_host
 from ..cache import invalidate_quiz
 from ..security import validate_quiz_code
 
@@ -19,6 +19,9 @@ def register_results_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if quiz:
+                if not verify_host(db, quiz.id, sid):
+                    logger.warning("Non-host attempted finish_game  sid=%s  room=%s", sid, room)
+                    return
                 quiz.status = "finished"
                 quiz.finished_at = datetime.datetime.utcnow()
 

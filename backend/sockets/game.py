@@ -1,7 +1,7 @@
 import datetime
 import logging
 from .. import models, database
-from ..helpers import get_players_in_quiz, get_quiz_by_code
+from ..helpers import get_players_in_quiz, get_quiz_by_code, verify_host
 from ..security import rate_limiter, validate_quiz_code, validate_answer, sanitize_text
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,9 @@ def register_game_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if quiz:
+                if not verify_host(db, quiz.id, sid):
+                    logger.warning("Non-host attempted start_game  sid=%s  room=%s", sid, room)
+                    return
                 quiz.current_question = 1
                 quiz.status = "playing"
                 quiz.started_at = datetime.datetime.utcnow()
@@ -38,7 +41,13 @@ def register_game_handlers(sio_manager):
         if not validate_answer(answer):
             logger.warning("Invalid answer rejected  sid=%s  room=%s", sid, room)
             return
-        q_idx = str(data.get('questionIndex'))
+        raw_q_idx = data.get('questionIndex')
+        try:
+            idx = int(raw_q_idx)
+        except (TypeError, ValueError):
+            logger.warning("Invalid questionIndex  sid=%s  room=%s  value=%r", sid, room, raw_q_idx)
+            return
+        q_idx = str(idx)
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if not quiz:
@@ -56,7 +65,6 @@ def register_game_handlers(sio_manager):
                 new_history = dict(player.answers_history or {})
                 new_history[q_idx] = answer
                 player.answers_history = new_history
-                idx = int(q_idx)
                 if idx < 1 or idx > len(quiz.questions_data):
                     db.commit()
                     logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", player.name, q_idx, room)
@@ -86,6 +94,9 @@ def register_game_handlers(sio_manager):
             quiz = get_quiz_by_code(db, room)
 
             if quiz:
+                if not verify_host(db, quiz.id, sid):
+                    logger.warning("Non-host attempted next_question  sid=%s  room=%s", sid, room)
+                    return
                 if expected_question is not None and quiz.current_question != expected_question:
                     logger.debug("next_question stale  expected=%s  actual=%s  room=%s", expected_question, quiz.current_question, room)
                     await sio_manager.emit(
@@ -119,9 +130,20 @@ def register_game_handlers(sio_manager):
         room = data.get('room')
         if not validate_quiz_code(room):
             return
+        raw_step = data.get('question')
+        try:
+            step = int(raw_step)
+        except (TypeError, ValueError):
+            return
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if not quiz:
+                return
+            if not verify_host(db, quiz.id, sid):
+                logger.warning("Non-host attempted move_to_step  sid=%s  room=%s", sid, room)
+                return
+            if step < 1 or step > len(quiz.questions_data):
+                logger.warning("move_to_step out of range  step=%d  total=%d  room=%s", step, len(quiz.questions_data), room)
                 return
             players = get_players_in_quiz(db, quiz.id)
             await sio_manager.emit(
@@ -141,8 +163,14 @@ def register_game_handlers(sio_manager):
         points = data.get('points')
         q_idx = str(data.get('questionIndex'))
         with database.get_db_session() as db:
-            player = db.query(models.Player).join(models.Quiz).filter(
-                models.Quiz.code == room,
+            quiz = get_quiz_by_code(db, room)
+            if not quiz:
+                return
+            if not verify_host(db, quiz.id, sid):
+                logger.warning("Non-host attempted override_score  sid=%s  room=%s", sid, room)
+                return
+            player = db.query(models.Player).filter(
+                models.Player.quiz_id == quiz.id,
                 models.Player.name == player_name
             ).with_for_update().first()
 
@@ -176,6 +204,8 @@ def register_game_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if not quiz:
+                return
+            if not verify_host(db, quiz.id, sid):
                 return
 
             players = db.query(models.Player).filter(
