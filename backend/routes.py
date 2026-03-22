@@ -52,6 +52,7 @@ def register_routes(app):
                 title=quiz_data.title,
                 code=code,
                 questions_data=[q.dict() for q in quiz_data.questions],
+                total_questions=len(quiz_data.questions),
                 status="waiting"
             )
             db.add(new_quiz)

@@ -55,6 +55,8 @@ def _migrate():
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS device_model VARCHAR",
         "ALTER TABLE quizzes RENAME COLUMN current_step TO current_question",
         "UPDATE quizzes SET current_question = 0 WHERE current_question = -1",
+        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS total_questions INTEGER DEFAULT 0",
+        "UPDATE quizzes SET total_questions = jsonb_array_length(questions_data) WHERE total_questions = 0 AND questions_data IS NOT NULL",
     ]
     with engine.connect() as conn:
         for sql in new_columns:

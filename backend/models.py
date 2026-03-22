@@ -11,6 +11,7 @@ class Quiz(Base):
     title = Column(String)
     code = Column(String, unique=True, index=True)
     questions_data = Column(JSON)
+    total_questions = Column(Integer, default=0)
     current_question = Column(Integer, default=0)
 
     # 🆕 Новые поля

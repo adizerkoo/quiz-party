@@ -10,11 +10,20 @@ Log levels used across the project:
     INFO    — Normal lifecycle events: startup, join/leave, quiz created/started/finished
     WARNING — Recoverable problems: rate-limit hits, validation failures, reconnects
     ERROR   — Unexpected failures: DB errors, unhandled exceptions
+
+Environment variables:
+    LOG_LEVEL      — root log level (default: INFO)
+    LOG_FORMAT     — line format for console  (default: see below)
+    LOG_FILE       — path to log file          (default: logs/quiz-party.log)
+    LOG_FILE_MAX   — max bytes per file before rotation (default: 5 MB)
+    LOG_FILE_COUNT — number of rotated backups to keep  (default: 5)
 """
 
 import os
 import sys
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 #  Constants
@@ -25,6 +34,12 @@ LOG_FORMAT = os.getenv(
     "%(asctime)s | %(levelname)-7s | %(name)-28s | %(message)s",
 )
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# File handler settings
+_DEFAULT_LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_FILE = os.getenv("LOG_FILE", str(_DEFAULT_LOG_DIR / "quiz-party.log"))
+LOG_FILE_MAX = int(os.getenv("LOG_FILE_MAX", str(5 * 1024 * 1024)))   # 5 MB
+LOG_FILE_COUNT = int(os.getenv("LOG_FILE_COUNT", "5"))
 
 
 def setup_logging() -> None:
@@ -37,11 +52,31 @@ def setup_logging() -> None:
 
     root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 
-    # Console handler — stdout (plays nice with docker / heroku logs)
+    formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+
+    # ── Console handler — stdout (plays nice with docker / heroku logs) ──
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
-    console.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
+    console.setFormatter(formatter)
     root.addHandler(console)
+
+    # ── File handler — RotatingFileHandler ───────────────────────────────
+    try:
+        log_path = Path(LOG_FILE)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = RotatingFileHandler(
+            filename=str(log_path),
+            maxBytes=LOG_FILE_MAX,
+            backupCount=LOG_FILE_COUNT,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(logging.DEBUG)   # file always captures everything
+        file_handler.setFormatter(formatter)
+        root.addHandler(file_handler)
+    except Exception as exc:  # noqa: BLE001
+        # If file logging fails (read-only FS, permissions) — continue with console only
+        root.warning("Could not set up file logging: %s", exc)
 
     # Silence noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -52,7 +87,9 @@ def setup_logging() -> None:
     logging.getLogger("socketio").setLevel(logging.WARNING)
 
     root.info(
-        "Logging initialised  level=%s  format=%r",
+        "Logging initialised  level=%s  file=%s  max=%dKB  backups=%d",
         LOG_LEVEL,
-        LOG_FORMAT,
+        LOG_FILE,
+        LOG_FILE_MAX // 1024,
+        LOG_FILE_COUNT,
     )
