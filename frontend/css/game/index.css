@@ -12,6 +12,7 @@
 @import url('./common/lobby.css');
 @import url('./common/modal.css');
 @import url('./common/utilities.css');
+@import url('./common/game-start-intro.css');
 
 /* === Host === */
 @import url('./host/question.css');

@@ -37,14 +37,17 @@ function registerGameStartHandler(socket) {
     const me = players.find((p) => p.name === playerName);
     if (me) myEmoji = me.emoji;
 
-    if (role === "host") {
-      _handleHostGameStart(players);
-    } else {
-      _handlePlayerGameStart();
-    }
+    // Эпическая анимация старта (только при живом событии, не при sync)
+    playGameStartIntro(players, () => {
+      if (role === "host") {
+        _handleHostGameStart(players);
+      } else {
+        _handlePlayerGameStart();
+      }
 
-    socket.emit("get_update", roomCode);
-    renderProgress();
+      socket.emit("get_update", roomCode);
+      renderProgress();
+    });
   });
 }
 

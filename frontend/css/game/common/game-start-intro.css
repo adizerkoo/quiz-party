@@ -1,0 +1,359 @@
+/* ============================================
+   АНИМАЦИЯ СТАРТА ИГРЫ
+   Эпическое появление игроков при начале игры.
+   Эмодзи игроков падают сверху по очереди.
+   ============================================ */
+
+/* --- Оверлей --- */
+.game-start-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a15 100%);
+    overflow: hidden;
+    opacity: 0;
+    animation: gsOverlayIn 0.4s ease-out forwards;
+}
+
+.game-start-overlay.gs-fade-out {
+    animation: gsOverlayOut 0.8s ease-in forwards;
+}
+
+/* --- Космическая туманность (фон) --- */
+.gs-nebula {
+    position: absolute;
+    inset: -50%;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse at 25% 45%, rgba(108, 92, 231, 0.3) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 55%, rgba(255, 133, 161, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 20%, rgba(67, 255, 242, 0.12) 0%, transparent 40%);
+    animation: gsNebulaSwirl 3s ease-in-out infinite alternate;
+    opacity: 0;
+}
+
+/* --- Заголовок «Игра начинается» --- */
+.gs-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: transparent;
+    background: linear-gradient(90deg, #FFD700, #FFA500, #ff85a1, #6c5ce7, #43fff2, #FFD700);
+    background-size: 300% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    z-index: 20;
+    opacity: 0;
+    text-align: center;
+    padding: 0 20px;
+    animation:
+        gsTitleAppear 0.7s 0.3s ease-out forwards,
+        gsTitleShine 3s 1s linear infinite;
+}
+
+/* --- Контейнер для игроков --- */
+.gs-players-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 10px;
+    z-index: 20;
+    margin-top: 30px;
+    padding: 0 15px;
+    max-width: 600px;
+    position: relative;
+}
+
+/* --- Карточка игрока --- */
+.gs-player-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0;
+    transform: translateY(-120vh);
+    will-change: transform, opacity;
+}
+
+.gs-player-card.gs-slam {
+    animation: gsEmojiSlam var(--gs-slam-duration, 0.65s) var(--gs-slam-delay, 0s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* --- Эмодзи игрока --- */
+.gs-player-emoji {
+    font-size: 3.5rem;
+    filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.6))
+            drop-shadow(0 0 30px rgba(108, 92, 231, 0.3));
+    position: relative;
+}
+
+/* Свечение за эмодзи */
+.gs-player-emoji::before {
+    content: '';
+    position: absolute;
+    inset: -25px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(108, 92, 231, 0.3) 0%, transparent 70%);
+    z-index: -1;
+    opacity: 0;
+    animation: gsGlowPulse 1.5s ease-in-out infinite;
+    animation-delay: inherit;
+}
+
+/* --- Имя игрока --- */
+.gs-player-name {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.95);
+    text-align: center;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 0 10px rgba(108, 92, 231, 0.5);
+}
+
+/* --- Вспышки --- */
+.gs-flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    z-index: 10;
+    pointer-events: none;
+    animation:
+        gsFlash 0.12s 0.2s ease-out forwards,
+        gsFlash 0.1s 0.5s ease-out forwards;
+}
+
+/* --- Искры падения --- */
+.gs-particles-container {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.gs-spark {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+/* --- Звёзды фона --- */
+.gs-star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 0;
+    animation: gsStarTwinkle 1.5s ease-in-out infinite alternate;
+}
+
+/* --- Метеоры --- */
+.gs-meteor {
+    position: absolute;
+    width: 2px;
+    height: 30px;
+    z-index: 3;
+    pointer-events: none;
+    border-radius: 50%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), transparent);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+    transform: rotate(35deg);
+    opacity: 0;
+    animation: gsMeteorFall 0.7s ease-in forwards;
+}
+
+/* --- Электрическая рамка --- */
+.gs-electric-border {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    animation: gsElectricIn 0.3s 0.2s ease-out forwards;
+}
+
+.gs-electric-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid rgba(108, 92, 231, 0.3);
+    animation: gsElectricPulse 0.8s 0.4s ease-in-out 3;
+}
+
+.gs-electric-border::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border: 1px solid rgba(255, 133, 161, 0.2);
+    animation: gsElectricPulse 0.8s 0.6s ease-in-out 3;
+}
+
+/* --- Ударная волна при каждом падении --- */
+.gs-impact-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(108, 92, 231, 0.6);
+    width: 8px;
+    height: 8px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 14;
+    box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
+    animation: gsImpactExpand 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* --- Текст «ПОЕХАЛИ!» внизу --- */
+.gs-go-text {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 2.2rem;
+    color: #FFD700;
+    z-index: 20;
+    opacity: 0;
+    margin-top: 30px;
+    text-shadow:
+        0 0 15px rgba(255, 215, 0, 0.7),
+        0 0 40px rgba(255, 215, 0, 0.3);
+    animation: gsGoAppear 0.5s var(--gs-go-delay, 3s) ease-out forwards;
+    letter-spacing: 4px;
+}
+
+
+/* ============================================
+   KEYFRAMES
+   ============================================ */
+
+@keyframes gsOverlayIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes gsOverlayOut {
+    0%   { opacity: 1; filter: brightness(1); }
+    50%  { opacity: 1; filter: brightness(1.5); }
+    100% { opacity: 0; filter: brightness(1); }
+}
+
+@keyframes gsNebulaSwirl {
+    0%   { opacity: 0; transform: rotate(0deg) scale(1); }
+    30%  { opacity: 0.7; }
+    100% { opacity: 1; transform: rotate(10deg) scale(1.05); }
+}
+
+@keyframes gsTitleAppear {
+    0%   { opacity: 0; transform: scale(0.5) translateY(20px); letter-spacing: 12px; }
+    60%  { opacity: 1; transform: scale(1.05) translateY(-5px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); letter-spacing: 3px; }
+}
+
+@keyframes gsTitleShine {
+    to { background-position: 300% center; }
+}
+
+@keyframes gsEmojiSlam {
+    0% {
+        opacity: 0;
+        transform: translateY(-120vh) rotate(-15deg) scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: translateY(10px) rotate(3deg) scale(1.15);
+    }
+    70% {
+        transform: translateY(-6px) rotate(-2deg) scale(0.95);
+    }
+    85% {
+        transform: translateY(3px) rotate(1deg) scale(1.04);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+}
+
+@keyframes gsGlowPulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(1.1); }
+}
+
+@keyframes gsFlash {
+    0%  { opacity: 0; }
+    25% { opacity: 0.6; }
+    100%{ opacity: 0; }
+}
+
+@keyframes gsStarTwinkle {
+    0%   { opacity: 0.1; transform: scale(0.5); }
+    100% { opacity: 0.7; transform: scale(1.2); }
+}
+
+@keyframes gsMeteorFall {
+    0%   { opacity: 0; transform: rotate(35deg) translateY(0); }
+    20%  { opacity: 0.8; }
+    100% { opacity: 0; transform: rotate(35deg) translateY(80vh); }
+}
+
+@keyframes gsElectricIn {
+    to { opacity: 1; }
+}
+
+@keyframes gsElectricPulse {
+    0%, 100% { opacity: 0.2; }
+    50%      { opacity: 0.7; }
+}
+
+@keyframes gsImpactExpand {
+    0%   { width: 8px; height: 8px; opacity: 0.7; }
+    100% { width: 80px; height: 80px; opacity: 0; }
+}
+
+@keyframes gsGoAppear {
+    0%   { opacity: 0; transform: scale(0.3); }
+    60%  { opacity: 1; transform: scale(1.15); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes gsSparkBurst {
+    0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0); }
+}
+
+/* --- Responsive --- */
+@media (max-width: 520px) {
+    .gs-title {
+        font-size: 1.2rem;
+        letter-spacing: 2px;
+    }
+    .gs-player-emoji {
+        font-size: 2.8rem;
+    }
+    .gs-player-name {
+        font-size: 0.7rem;
+        max-width: 70px;
+    }
+    .gs-players-container {
+        gap: 8px;
+        margin-top: 20px;
+    }
+    .gs-go-text {
+        font-size: 1.8rem;
+        margin-top: 20px;
+    }
+}
