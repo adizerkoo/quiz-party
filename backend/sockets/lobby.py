@@ -17,14 +17,18 @@ def register_lobby_handlers(sio_manager):
             if player:
                 player.sid = None
                 db.commit()
-                logger.info(f"Player '{player.name}' disconnected (sid cleared)")
+                logger.info("Player disconnected  name=%s  quiz_id=%s  sid=%s", player.name, player.quiz_id, sid)
+            else:
+                logger.debug("Unknown sid disconnected  sid=%s", sid)
 
     @sio_manager.on('join_room')
     async def handle_join(sid, data):
         if not rate_limiter.is_allowed(sid):
+            logger.warning("Rate limit hit on join_room  sid=%s", sid)
             return
         room = data.get('room')
         if not validate_quiz_code(room):
+            logger.warning("Invalid quiz code on join  room=%r  sid=%s", room, sid)
             return
         raw_name = sanitize_text(str(data.get('name', 'Игрок'))[:15]).strip()
         name = raw_name if validate_player_name(raw_name) else 'Игрок'
@@ -48,10 +52,12 @@ def register_lobby_handlers(sio_manager):
                 if player and player.sid is None:
                     # Реконнект: игрок с таким именем отключился ранее
                     player.sid = sid
+                    logger.info("Player reconnected  name=%s  room=%s  sid=%s", name, room, sid)
                 elif player:
                     # Имя занято активным игроком — создаём нового с суффиксом
                     if quiz.status != "waiting" and not is_host:
                         await sio_manager.emit('game_already_started', {}, room=sid)
+                        logger.info("Blocked late join  name=%s  room=%s  status=%s", name, room, quiz.status)
                         return
 
                     existing_names = {p.name for p in db.query(models.Player.name).filter(models.Player.quiz_id == quiz.id).all()}
@@ -60,6 +66,7 @@ def register_lobby_handlers(sio_manager):
                     while name in existing_names:
                         name = f"{original_name} ({counter})"
                         counter += 1
+                    logger.info("Name conflict resolved  original=%s  assigned=%s  room=%s", original_name, name, room)
                     await sio_manager.emit('name_assigned', {'name': name}, room=sid)
 
                     used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
@@ -79,6 +86,7 @@ def register_lobby_handlers(sio_manager):
                     # Новый игрок с уникальным именем
                     if quiz.status != "waiting" and not is_host:
                         await sio_manager.emit('game_already_started', {}, room=sid)
+                        logger.info("Blocked late join  name=%s  room=%s  status=%s", name, room, quiz.status)
                         return
 
                     used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
@@ -96,4 +104,5 @@ def register_lobby_handlers(sio_manager):
                     db.add(player)
 
                 db.commit()
+                logger.info("Player joined  name=%s  room=%s  host=%s  sid=%s", name, room, is_host, sid)
                 await sio_manager.emit('update_players', get_players_in_quiz(db, quiz.id), room=room)

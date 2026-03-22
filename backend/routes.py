@@ -1,4 +1,5 @@
 import string
+import logging
 import secrets
 from pathlib import Path
 from fastapi import Depends, HTTPException
@@ -8,7 +9,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from . import models, schemas, database
-from .config import logger, FRONTEND_PATH, DATA_PATH
+from .config import FRONTEND_PATH, DATA_PATH
+
+logger = logging.getLogger(__name__)
 
 
 def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
@@ -34,6 +37,7 @@ def register_routes(app):
             db.execute(text("SELECT 1"))
             return {"status": "ok"}
         except Exception:
+            logger.error("Health check failed — database unavailable", exc_info=True)
             raise HTTPException(status_code=503, detail="Database unavailable")
 
     app.mount("/data", StaticFiles(directory=str(DATA_PATH)), name="data")
@@ -42,7 +46,7 @@ def register_routes(app):
     @app.post("/api/quizzes", response_model=schemas.QuizResponse)
     def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):
         code = _generate_unique_code(db)
-        logger.info(f"📝 Creating quiz: {quiz_data.title} (code: {code})")
+        logger.info("Creating quiz  title=%r  code=%s  questions=%d", quiz_data.title, code, len(quiz_data.questions))
         try:
             new_quiz = models.Quiz(
                 title=quiz_data.title,
@@ -53,10 +57,10 @@ def register_routes(app):
             db.add(new_quiz)
             db.commit()
             db.refresh(new_quiz)
-            logger.info(f"✅ Quiz created successfully: ID={new_quiz.id}")
+            logger.info("Quiz created  id=%s  code=%s", new_quiz.id, code)
             return new_quiz
         except Exception as e:
-            logger.error(f"❌ Error creating quiz: {e}")
+            logger.error("Failed to create quiz  code=%s  error=%s", code, e, exc_info=True)
             db.rollback()
             raise
 
@@ -64,5 +68,7 @@ def register_routes(app):
     def get_quiz(code: str, db: Session = Depends(database.get_db)):
         quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
         if not quiz:
+            logger.warning("Quiz not found  code=%s", code)
             raise HTTPException(status_code=404, detail="The quiz was not found")
+        logger.debug("Quiz fetched  code=%s  status=%s", code, quiz.status)
         return quiz

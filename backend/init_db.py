@@ -4,6 +4,7 @@
 Запустите этот скрипт один раз для создания всех таблиц
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -17,20 +18,21 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
+from .logging_config import setup_logging
+setup_logging()
+
+logger = logging.getLogger(__name__)
+
 # Импортировать модели и БД
 from .database import engine
 from .models import Base
 
-print("🔄 Инициализация БД...")
-print(f"📍 DATABASE_URL: {os.getenv('DATABASE_URL')}")
+logger.info("Initialising database…")
+logger.info("DATABASE_URL: %s", os.getenv("DATABASE_URL"))
 
 try:
-    # Создать все таблицы
     Base.metadata.create_all(bind=engine)
-    print("✅ БД успешно инициализирована!")
-    print("✅ Таблицы созданы: quizzes, players")
+    logger.info("Database initialised — tables created: quizzes, players")
 except Exception as e:
-    print(f"❌ Ошибка: {e}")
-    import traceback
-    traceback.print_exc()
+    logger.error("Database initialisation failed: %s", e, exc_info=True)
     exit(1)

@@ -1,6 +1,10 @@
+import logging
+
 from .. import models, database
 from ..helpers import get_players_in_quiz
 from ..security import rate_limiter, validate_quiz_code
+
+logger = logging.getLogger(__name__)
 
 
 def register_sync_handlers(sio_manager):
@@ -8,6 +12,7 @@ def register_sync_handlers(sio_manager):
     @sio_manager.on('request_sync')
     async def handle_sync(sid, data):
         if not rate_limiter.is_allowed(sid):
+            logger.warning("Rate limit hit on request_sync  sid=%s", sid)
             return
         room = data.get('room')
         if not validate_quiz_code(room):
@@ -16,6 +21,7 @@ def register_sync_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if not quiz:
+                logger.warning("Sync requested for missing quiz  room=%s  sid=%s", room, sid)
                 return
             player = db.query(models.Player).filter(
                 models.Player.quiz_id == quiz.id,
@@ -23,6 +29,10 @@ def register_sync_handlers(sio_manager):
             ).first()
 
             is_finished = (quiz.status == "finished")
+            logger.info(
+                "Sync sent  name=%s  room=%s  status=%s  question=%s",
+                name, room, quiz.status, quiz.current_question,
+            )
             await sio_manager.emit('sync_state', {
                 "currentQuestion": quiz.current_question,
                 "maxReachedQuestion": quiz.current_question,
@@ -64,6 +74,7 @@ def register_sync_handlers(sio_manager):
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
                 players = get_players_in_quiz(db, quiz.id)
+                logger.debug("get_update  room=%s  players=%d", room, len(players))
                 await sio_manager.emit(
                     "update_answers",
                     players,

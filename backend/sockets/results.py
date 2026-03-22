@@ -1,6 +1,10 @@
 import datetime
+import logging
+
 from .. import models, database
 from ..security import validate_quiz_code
+
+logger = logging.getLogger(__name__)
 
 
 def register_results_handlers(sio_manager):
@@ -26,6 +30,12 @@ def register_results_handlers(sio_manager):
                     quiz.winner_id = players[0].id
 
                 db.commit()
+
+                winner_name = players[0].name if players else "N/A"
+                logger.info(
+                    "Game finished  room=%s  quiz_id=%s  players=%d  winner=%s",
+                    room, quiz.id, len(players), winner_name,
+                )
 
                 results = [{
                     "name": p.name,

@@ -1,9 +1,13 @@
+import logging
 from sqlalchemy.orm import Session
 from . import models
+
+logger = logging.getLogger(__name__)
 
 
 def get_players_in_quiz(db: Session, quiz_id: int):
     players = db.query(models.Player).filter(models.Player.quiz_id == quiz_id).all()
+    logger.debug("get_players_in_quiz  quiz_id=%s  count=%d", quiz_id, len(players))
     return [
         {
             "name": p.name,

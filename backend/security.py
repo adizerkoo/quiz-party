@@ -34,7 +34,7 @@ class RateLimiter:
         
         # Check limit
         if len(self.requests[identifier]) >= self.max_requests:
-            logger.warning(f"Rate limit exceeded for {identifier}")
+            logger.warning("Rate limit exceeded  identifier=%s  requests=%d/%d", identifier, len(self.requests[identifier]), self.max_requests)
             return False
         
         # Add current request

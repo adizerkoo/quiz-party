@@ -26,7 +26,7 @@ if DATABASE_URL.startswith("postgres://"):
 if not DATABASE_URL.startswith("postgresql://"):
     raise RuntimeError(f"Only PostgreSQL is supported. Got: {DATABASE_URL}")
 
-logger.info("Database engine initialized (PostgreSQL)")
+logger.info("Database engine created  pool_size=5 max_overflow=10")
 
 engine = create_engine(
     DATABASE_URL,
@@ -39,8 +39,10 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
+    logger.info("Running init_db — creating tables and migrations")
     Base.metadata.create_all(bind=engine)
     _migrate()
+    logger.info("init_db complete")
 
 def _migrate():
     """Добавляет новые колонки в существующие таблицы (безопасно при повторном запуске)."""
@@ -59,10 +61,10 @@ def _migrate():
             try:
                 conn.execute(text(sql))
                 conn.commit()
-                logger.info(f"Migration applied: {sql}")
+                logger.info("Migration applied: %s", sql)
             except Exception as e:
                 conn.rollback()
-                logger.debug(f"Migration skipped: {sql} — {e}")
+                logger.debug("Migration skipped: %s — %s", sql, e)
 
 @contextmanager
 def get_db_session():

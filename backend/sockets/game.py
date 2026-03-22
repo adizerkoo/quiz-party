@@ -22,11 +22,13 @@ def register_game_handlers(sio_manager):
                 quiz.started_at = datetime.datetime.utcnow()
                 db.commit()
                 players = get_players_in_quiz(db, quiz.id)
+                logger.info("Game started  room=%s  quiz_id=%s  players=%d", room, quiz.id, len(players))
                 await sio_manager.emit('game_started', players, room=room)
 
     @sio_manager.on('send_answer')
     async def handle_answer(sid, data):
         if not rate_limiter.is_allowed(sid):
+            logger.warning("Rate limit hit on send_answer  sid=%s", sid)
             return
         room = data.get('room')
         if not validate_quiz_code(room):
@@ -35,6 +37,7 @@ def register_game_handlers(sio_manager):
         raw_answer = data.get('answer', '')
         answer = sanitize_text(str(raw_answer)[:50]) if raw_answer else ""
         if not validate_answer(answer):
+            logger.warning("Invalid answer rejected  name=%s  room=%s", name, room)
             return
         q_idx = str(data.get('questionIndex'))
         with database.get_db_session() as db:
@@ -52,6 +55,7 @@ def register_game_handlers(sio_manager):
                 idx = int(q_idx)
                 if idx < 1 or idx > len(quiz.questions_data):
                     db.commit()
+                    logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", name, q_idx, room)
                     return
                 question = quiz.questions_data[idx - 1]
                 correct = question["correct"].lower().strip()
@@ -61,6 +65,10 @@ def register_game_handlers(sio_manager):
                 player.scores_history = score_history
                 player.score = sum(score_history.values())
                 db.commit()
+                logger.info(
+                    "Answer received  name=%s  room=%s  q=%s  correct=%s  score=%d",
+                    name, room, q_idx, is_correct, player.score,
+                )
                 players_data = get_players_in_quiz(db, player.quiz_id)
                 await sio_manager.emit('update_answers', players_data, room=room)
 
@@ -75,6 +83,7 @@ def register_game_handlers(sio_manager):
 
             if quiz:
                 if expected_question is not None and quiz.current_question != expected_question:
+                    logger.debug("next_question stale  expected=%s  actual=%s  room=%s", expected_question, quiz.current_question, room)
                     await sio_manager.emit(
                         'move_to_next',
                         {"question": quiz.current_question},
@@ -87,6 +96,7 @@ def register_game_handlers(sio_manager):
                     return
                 quiz.current_question = next_q
                 db.commit()
+                logger.info("Next question  room=%s  question=%d/%d", room, next_q, len(quiz.questions_data))
 
                 players = get_players_in_quiz(db, quiz.id)
                 await sio_manager.emit(
@@ -141,6 +151,10 @@ def register_game_handlers(sio_manager):
                 player.scores_history = history
                 player.score = sum(history.values())
                 db.commit()
+                logger.info(
+                    "Score overridden  player=%s  room=%s  q=%s  points=%s  total=%d",
+                    player_name, room, q_idx, points, player.score,
+                )
                 await sio_manager.emit(
                     'update_answers',
                     get_players_in_quiz(db, player.quiz_id),
@@ -178,3 +192,4 @@ def register_game_handlers(sio_manager):
                 {"allAnswered": all_answered},
                 room=sid
             )
+            logger.debug("Check answers  room=%s  q=%s  all_answered=%s", room, question, all_answered)
