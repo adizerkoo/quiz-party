@@ -57,6 +57,7 @@ def _migrate():
         "UPDATE quizzes SET current_question = 0 WHERE current_question = -1",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS total_questions INTEGER DEFAULT 0",
         "UPDATE quizzes SET total_questions = jsonb_array_length(questions_data) WHERE total_questions = 0 AND questions_data IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS ix_players_quiz_id_name ON players (quiz_id, name)",
     ]
     with engine.connect() as conn:
         for sql in new_columns:

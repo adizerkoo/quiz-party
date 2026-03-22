@@ -2,6 +2,7 @@ import datetime
 import logging
 
 from .. import models, database
+from ..helpers import get_quiz_by_code
 from ..security import validate_quiz_code
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ def register_results_handlers(sio_manager):
         if not validate_quiz_code(room):
             return
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if quiz:
                 quiz.status = "finished"
                 quiz.finished_at = datetime.datetime.utcnow()

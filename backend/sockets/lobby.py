@@ -2,7 +2,7 @@ import random
 import logging
 from .. import models, database
 from ..config import PLAYER_EMOJIS
-from ..helpers import get_players_in_quiz
+from ..helpers import get_players_in_quiz, get_quiz_by_code
 from ..security import rate_limiter, validate_quiz_code, validate_player_name, sanitize_text
 
 logger = logging.getLogger(__name__)
@@ -36,13 +36,9 @@ def register_lobby_handlers(sio_manager):
         is_host = (role == 'host')
 
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if quiz:
                 await sio_manager.enter_room(sid, room)
-                quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
-
-                if not quiz:
-                    return
 
                 player = db.query(models.Player).filter(
                     models.Player.quiz_id == quiz.id,

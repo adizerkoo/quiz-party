@@ -1,7 +1,7 @@
 import datetime
 import logging
 from .. import models, database
-from ..helpers import get_players_in_quiz
+from ..helpers import get_players_in_quiz, get_quiz_by_code
 from ..security import rate_limiter, validate_quiz_code, validate_answer, sanitize_text
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ def register_game_handlers(sio_manager):
         if not validate_quiz_code(room):
             return
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if quiz:
                 quiz.current_question = 1
                 quiz.status = "playing"
@@ -41,7 +41,7 @@ def register_game_handlers(sio_manager):
             return
         q_idx = str(data.get('questionIndex'))
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if not quiz:
                 return
             player = db.query(models.Player).filter(
@@ -79,7 +79,7 @@ def register_game_handlers(sio_manager):
             return
         expected_question = data.get('expectedQuestion')
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
 
             if quiz:
                 if expected_question is not None and quiz.current_question != expected_question:
@@ -116,7 +116,7 @@ def register_game_handlers(sio_manager):
         if not validate_quiz_code(room):
             return
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if not quiz:
                 return
             players = get_players_in_quiz(db, quiz.id)
@@ -170,7 +170,7 @@ def register_game_handlers(sio_manager):
             return
         question = str(data.get("question"))
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if not quiz:
                 return
 

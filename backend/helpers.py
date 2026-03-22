@@ -1,8 +1,24 @@
 import logging
 from sqlalchemy.orm import Session
 from . import models
+from .cache import get_cached_quiz, cache_quiz, invalidate_quiz
 
 logger = logging.getLogger(__name__)
+
+
+def get_quiz_by_code(db: Session, room_code: str):
+    """Get quiz by room code, using in-memory cache for faster lookups."""
+    cached = get_cached_quiz(room_code)
+    if cached:
+        quiz = db.get(models.Quiz, cached["id"])
+        if quiz:
+            return quiz
+        invalidate_quiz(room_code)
+
+    quiz = db.query(models.Quiz).filter(models.Quiz.code == room_code).first()
+    if quiz:
+        cache_quiz(room_code, quiz.id, quiz.questions_data, quiz.total_questions)
+    return quiz
 
 
 def get_players_in_quiz(db: Session, quiz_id: int):

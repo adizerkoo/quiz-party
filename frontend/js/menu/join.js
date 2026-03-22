@@ -37,7 +37,7 @@ async function startJoining() {
     }
 
     try {
-        const response = await fetch(`/api/quizzes/${encodeURIComponent(code)}`);
+        const response = await fetch(`/api/v1/quizzes/${encodeURIComponent(code)}`);
         if (response.ok) {
             sessionStorage.setItem('quiz_player_name', name);
             window.location.href = `game.html?room=${encodeURIComponent(code)}&role=player`;

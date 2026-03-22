@@ -64,7 +64,7 @@ async function saveAndGo() {
 
     // --- Создаём комнату и отправляем на сервер ---
     try {
-        const response = await fetch('/api/quizzes', {
+        const response = await fetch('/api/v1/quizzes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, questions: quizQuestions }),

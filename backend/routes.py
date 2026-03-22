@@ -2,13 +2,14 @@ import string
 import logging
 import secrets
 from pathlib import Path
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from . import models, schemas, database
+from .cache import cache_quiz
 from .config import FRONTEND_PATH, DATA_PATH
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def register_routes(app):
     app.mount("/data", StaticFiles(directory=str(DATA_PATH)), name="data")
     app.mount("/static", StaticFiles(directory=str(FRONTEND_PATH)), name="static")
 
-    @app.post("/api/quizzes", response_model=schemas.QuizResponse)
+    @app.post("/api/v1/quizzes", response_model=schemas.QuizResponse)
     def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):
         code = _generate_unique_code(db)
         logger.info("Creating quiz  title=%r  code=%s  questions=%d", quiz_data.title, code, len(quiz_data.questions))
@@ -58,6 +59,7 @@ def register_routes(app):
             db.add(new_quiz)
             db.commit()
             db.refresh(new_quiz)
+            cache_quiz(code, new_quiz.id, new_quiz.questions_data, new_quiz.total_questions)
             logger.info("Quiz created  id=%s  code=%s", new_quiz.id, code)
             return new_quiz
         except Exception as e:
@@ -65,11 +67,31 @@ def register_routes(app):
             db.rollback()
             raise
 
-    @app.get("/api/quizzes/{code}")
-    def get_quiz(code: str, db: Session = Depends(database.get_db)):
+    @app.get("/api/v1/quizzes/{code}")
+    def get_quiz(code: str, role: str = Query(default=None), db: Session = Depends(database.get_db)):
         quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
         if not quiz:
             logger.warning("Quiz not found  code=%s", code)
             raise HTTPException(status_code=404, detail="The quiz was not found")
         logger.debug("Quiz fetched  code=%s  status=%s", code, quiz.status)
-        return quiz
+
+        if role == "host":
+            questions = quiz.questions_data
+        else:
+            questions = [
+                {k: v for k, v in q.items() if k != "correct"}
+                for q in (quiz.questions_data or [])
+            ]
+
+        return {
+            "id": quiz.id,
+            "code": quiz.code,
+            "title": quiz.title,
+            "questions_data": questions,
+            "total_questions": quiz.total_questions,
+            "current_question": quiz.current_question,
+            "status": quiz.status,
+            "started_at": quiz.started_at,
+            "finished_at": quiz.finished_at,
+            "winner_id": quiz.winner_id,
+        }

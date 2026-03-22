@@ -1,7 +1,7 @@
 import logging
 
 from .. import models, database
-from ..helpers import get_players_in_quiz
+from ..helpers import get_players_in_quiz, get_quiz_by_code
 from ..security import rate_limiter, validate_quiz_code
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def register_sync_handlers(sio_manager):
             return
         name = data.get('name')
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if not quiz:
                 logger.warning("Sync requested for missing quiz  room=%s  sid=%s", room, sid)
                 return
@@ -71,7 +71,7 @@ def register_sync_handlers(sio_manager):
         if not validate_quiz_code(room):
             return
         with database.get_db_session() as db:
-            quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
+            quiz = get_quiz_by_code(db, room)
             if quiz:
                 players = get_players_in_quiz(db, quiz.id)
                 logger.debug("get_update  room=%s  players=%d", room, len(players))

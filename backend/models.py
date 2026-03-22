@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Enum, Integer, String, ForeignKey, JSON, Boolean, DateTime
+from sqlalchemy import Column, Enum, Index, Integer, String, ForeignKey, JSON, Boolean, DateTime
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
@@ -26,6 +26,9 @@ class Quiz(Base):
 
 class Player(Base):
     __tablename__ = "players"
+    __table_args__ = (
+        Index("ix_players_quiz_id_name", "quiz_id", "name"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     sid = Column(String)

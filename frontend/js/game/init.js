@@ -84,7 +84,7 @@ async function init() {
   }
 
   try {
-    const response = await fetch(`/api/quizzes/${roomCode}`);
+    const response = await fetch(`/api/v1/quizzes/${roomCode}${role === 'host' ? '?role=host' : ''}`);
 
     if (response.ok) {
       const data = await response.json();
