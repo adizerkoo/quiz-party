@@ -31,7 +31,7 @@ function renderProgress() {
 }
 
 
-// Турнирная таблица очков (FLIP-анимация смены позиций)
+// Турнирная таблица очков (обновление без перестановки)
 function renderScoreboard(players) {
   const board = document.getElementById("scoreboard");
   if (!board) return;
@@ -72,29 +72,32 @@ function renderScoreboard(players) {
     return;
   }
 
-  // --- FLIP: First — захватываем старые позиции и очки ---
-  const oldRects = {};
-  const oldScores = {};
+  // Обновление — только обновляем очки на месте, без перестановки
+  const playerScoreMap = {};
+  sorted.forEach(p => { playerScoreMap[p.name] = p.score || 0; });
+
   for (const card of board.querySelectorAll(".scoreboard-card")) {
     const name = card.getAttribute("data-player");
-    oldRects[name] = card.getBoundingClientRect();
-    const scoreEl = card.querySelector(".scoreboard-score");
-    if (scoreEl) oldScores[name] = scoreEl.textContent;
+    if (name in playerScoreMap) {
+      const scoreEl = card.querySelector(".scoreboard-score");
+      const newText = `${playerScoreMap[name]}🏆`;
+      if (scoreEl && scoreEl.textContent !== newText) {
+        scoreEl.textContent = newText;
+        card.classList.add("score-changed");
+        card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
+      }
+    }
   }
 
-  // --- DOM-обновление (Last) ---
+  // Добавляем новых игроков, которых ещё нет в DOM
+  const existingNames = new Set(
+    [...board.querySelectorAll(".scoreboard-card")].map(c => c.getAttribute("data-player"))
+  );
   sorted.forEach((p, i) => {
-    const rankEmoji = i < 3 ? medals[i] : (i + 1);
-    const isLeader = i === 0;
-    const rankClass = i === 0 ? 'rank-1st' : i === 1 ? 'rank-2nd' : i === 2 ? 'rank-3rd' : 'rank-other';
-
-    let card = null;
-    for (const c of board.querySelectorAll('.scoreboard-card')) {
-      if (c.dataset.player === p.name) { card = c; break; }
-    }
-
-    if (!card) {
-      // Новый игрок — добавляем с анимацией появления
+    if (!existingNames.has(p.name)) {
+      const rankEmoji = i < 3 ? medals[i] : (i + 1);
+      const isLeader = i === 0;
+      const rankClass = i === 0 ? 'rank-1st' : i === 1 ? 'rank-2nd' : i === 2 ? 'rank-3rd' : 'rank-other';
       const playerEmoji = p.emoji || '👤';
       const newCard = document.createElement("div");
       newCard.className = `scoreboard-card ${rankClass} ${isLeader ? 'is-leader' : ''} score-pop-in`;
@@ -110,80 +113,8 @@ function renderScoreboard(players) {
       `;
       newCard.addEventListener("animationend", () => newCard.classList.remove("score-pop-in"), { once: true });
       board.appendChild(newCard);
-    } else {
-      // Обновляем существующего игрока
-      card.className = `scoreboard-card ${rankClass} ${isLeader ? 'is-leader' : ''}`;
-      card.removeAttribute("style");
-
-      card.querySelector(".scoreboard-rank").textContent = rankEmoji;
-      card.querySelector(".scoreboard-score").textContent = `${p.score || 0}🏆`;
-
-      // Перемещаем карточку в правильную позицию
-      if (board.children[i] !== card) {
-        board.insertBefore(card, board.children[i]);
-      }
-
-      // Коронка лидера
-      const crown = card.querySelector(".scoreboard-crown");
-      if (isLeader && !crown) {
-        const newCrown = document.createElement("div");
-        newCrown.className = "scoreboard-crown";
-        newCrown.textContent = "⭐";
-        card.appendChild(newCrown);
-      } else if (!isLeader && crown) {
-        crown.remove();
-      }
     }
   });
-
-  // --- FLIP: Invert + Play — анимируем перемещение карточек ---
-  const cardsToAnimate = [];
-
-  for (const card of board.querySelectorAll(".scoreboard-card")) {
-    const name = card.getAttribute("data-player");
-    const oldRect = oldRects[name];
-    if (!oldRect) continue; // новый игрок — без FLIP
-
-    const newRect = card.getBoundingClientRect();
-    const deltaX = oldRect.left - newRect.left;
-    const deltaY = oldRect.top - newRect.top;
-    const newScoreText = card.querySelector(".scoreboard-score").textContent;
-    const scoreChanged = oldScores[name] && oldScores[name] !== newScoreText;
-
-    // Карточка не двигалась — только подсветка очков
-    if (deltaX === 0 && deltaY === 0) {
-      if (scoreChanged) {
-        card.classList.add("score-changed");
-        card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
-      }
-      continue;
-    }
-
-    // Invert: телепортируем карточку в старую позицию (без анимации)
-    card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-    card.style.transition = "none";
-    cardsToAnimate.push({ card, scoreChanged });
-  }
-
-  // Play: включаем анимацию перемещения
-  if (cardsToAnimate.length > 0) {
-    board.offsetHeight; // принудительный reflow
-
-    for (const { card, scoreChanged } of cardsToAnimate) {
-      card.style.transition = "transform 0.5s cubic-bezier(0.22, 0.68, 0.35, 1.12)";
-      card.style.transform = "";
-
-      if (scoreChanged) {
-        card.classList.add("score-changed");
-        card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
-      }
-
-      card.addEventListener("transitionend", () => {
-        card.style.transition = "";
-        card.style.transform = "";
-      }, { once: true });
-    }
-  }
 }
 
 

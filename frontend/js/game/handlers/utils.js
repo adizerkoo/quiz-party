@@ -119,19 +119,43 @@ function showModernConfirm(message, onConfirm) {
  * @param {string} message - Текст уведомления
  * @param {number} duration - Длительность в мс (по умолчанию 4000)
  */
+function _getToastContainer() {
+  let container = document.getElementById('quiz-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'quiz-toast-container';
+    container.className = 'quiz-toast-container';
+    document.body.appendChild(container);
+  }
+  return container;
+}
+
+const _MAX_TOASTS = 3;
+
+function _removeToast(toast) {
+  toast.classList.remove("quiz-toast-visible");
+  toast.classList.add("quiz-toast-hide");
+  toast.addEventListener("animationend", () => toast.remove(), { once: true });
+}
+
 function showToast(message, duration = 4000) {
+  const container = _getToastContainer();
   const toast = document.createElement("div");
   toast.className = "quiz-toast";
   toast.innerHTML = message;
-  document.body.appendChild(toast);
+  container.appendChild(toast);
+
+  // Удаляем самый старый, если превышен лимит
+  const visible = container.querySelectorAll('.quiz-toast:not(.quiz-toast-hide)');
+  if (visible.length > _MAX_TOASTS) {
+    _removeToast(visible[0]);
+  }
 
   requestAnimationFrame(() => {
     toast.classList.add("quiz-toast-visible");
   });
 
   setTimeout(() => {
-    toast.classList.remove("quiz-toast-visible");
-    toast.classList.add("quiz-toast-hide");
-    toast.addEventListener("animationend", () => toast.remove());
+    if (toast.parentNode) _removeToast(toast);
   }, duration);
 }

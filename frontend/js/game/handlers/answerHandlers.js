@@ -152,10 +152,10 @@ function _renderAnswerCard(player, question) {
         </div>`;
     } else {
       statusClass = "wrong";
-      const label = isCorrect ? "Отклонено" : "";
+      const label = isCorrect ? "Отклонено" : "Не верно";
       btnHTML = `
         <div class="card-controls">
-          ${label ? `<span class="status-label">${label}</span>` : ""}
+          <span class="status-label">${label}</span>
           <button class="btn-mini btn-plus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, 1)" title="Засчитать балл">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
           </button>
