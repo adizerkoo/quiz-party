@@ -1,3 +1,11 @@
+"""
+Точка входа приложения.
+
+Создаёт экземпляр FastAPI, подключает middleware (CORS, логирование),
+Socket.IO, HTTP-маршруты и инициализирует БД.
+Запуск: uvicorn backend.main:app
+"""
+
 import logging
 import time
 
@@ -18,6 +26,7 @@ app = FastAPI()
 # ── Request logging middleware ────────────────────────────────────────
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    """Логирует каждый HTTP-запрос: метод, путь, статус, время ответа."""
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - start) * 1000

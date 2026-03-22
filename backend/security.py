@@ -1,8 +1,9 @@
 """
-Security utilities for Quiz Party API
-- Rate limiting
-- Input validation
-- Quiz protection
+Утилиты безопасности Quiz Party.
+
+- Rate limiter — ограничение частоты запросов
+- Валидация входных данных (код комнаты, имя игрока, ответ)
+- Санитизация текста от HTML-тегов
 """
 
 import logging
@@ -15,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
-    """Simple in-memory rate limiter with persistent identity support."""
+    """Ограничитель частоты запросов в памяти.
+
+    Поддерживает привязку sid → постоянный ключ игрока,
+    чтобы лимиты сохранялись при переподключении.
+    """
     
     def __init__(self, max_requests: int = 100, time_window: int = 60):
         self.max_requests = max_requests
@@ -25,11 +30,11 @@ class RateLimiter:
         self._call_count = 0
     
     def register_identity(self, sid: str, persistent_key: str) -> None:
-        """Map a socket sid to a persistent identity so rate limits survive reconnects."""
+        """Привязывает socket sid к постоянному ключу игрока для сохранения лимитов при реконнекте."""
         self._sid_to_key[sid] = persistent_key
     
     def is_allowed(self, identifier: str) -> bool:
-        """Check if request is allowed for identifier (IP, user, etc)"""
+        """Проверяет, разрешён ли запрос для данного идентификатора (sid или persistent key)."""
         key = self._sid_to_key.get(identifier, identifier)
         now = time.time()
         
@@ -56,7 +61,7 @@ class RateLimiter:
         return True
     
     def _cleanup(self, now: float) -> None:
-        """Remove stale entries to prevent memory leak."""
+        """Удаляет устаревшие записи для предотвращения утечки памяти."""
         stale = [k for k, v in self.requests.items()
                  if not v or now - v[-1] > self.time_window * 2]
         for k in stale:
@@ -73,28 +78,28 @@ rate_limiter = RateLimiter(max_requests=100, time_window=60)
 
 
 def validate_quiz_code(code: str) -> bool:
-    """Validate quiz code format (e.g. PARTY-ABCDE)"""
+    """Проверяет формат кода викторины (PARTY-XXXXX, до 20 символов, буквы/цифры/дефис)."""
     if not code or len(code) > 20:
         return False
     return all(c.isalnum() or c == '-' for c in code)
 
 
 def validate_player_name(name: str) -> bool:
-    """Validate player name"""
+    """Проверяет имя игрока (1–15 символов)."""
     if not name or len(name) < 1 or len(name) > 15:
         return False
     return True
 
 
 def validate_answer(answer: str) -> bool:
-    """Validate answer format"""
+    """Проверяет ответ игрока (непустой, до 500 символов)."""
     if not answer or len(str(answer)) > 500:
         return False
     return True
 
 
 def sanitize_text(text: str) -> str:
-    """Strip HTML tags from user input to prevent XSS"""
+    """Удаляет HTML-теги из пользовательского ввода для защиты от XSS."""
     if not text:
         return text
     return re.sub(r'<[^>]*?>', '', str(text))

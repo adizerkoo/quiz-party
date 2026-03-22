@@ -1,1 +1,1 @@
-# Backend package
+"""Пакет backend — серверная часть приложения Quiz Party."""

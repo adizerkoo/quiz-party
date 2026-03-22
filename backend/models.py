@@ -1,3 +1,9 @@
+"""
+ORM-модели SQLAlchemy для Quiz Party.
+
+Определяет таблицы quizzes и players, их связи и индексы.
+"""
+
 from sqlalchemy import Column, Enum, Index, Integer, String, ForeignKey, JSON, Boolean, DateTime
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
@@ -6,6 +12,7 @@ from datetime import datetime
 Base = declarative_base()
 
 class Quiz(Base):
+    """Модель викторины. Хранит вопросы, статус игры и результаты."""
     __tablename__ = "quizzes"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String)
@@ -25,6 +32,7 @@ class Quiz(Base):
     players = relationship("Player", back_populates="quiz", cascade="all, delete-orphan")
 
 class Player(Base):
+    """Модель игрока. Привязан к викторине, хранит ответы, счёт и данные устройства."""
     __tablename__ = "players"
     __table_args__ = (
         Index("ix_players_quiz_id_name", "quiz_id", "name"),

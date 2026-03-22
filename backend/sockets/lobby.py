@@ -1,3 +1,10 @@
+"""
+Socket.IO обработчики лобби.
+
+Подключение/отключение игроков, реконнект, разрешение конфликтов
+имён, ограничение на 50 игроков в комнате.
+"""
+
 import random
 import logging
 from .. import models, database
@@ -9,9 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def register_lobby_handlers(sio_manager):
+    """Регистрирует события лобби на Socket.IO менеджере."""
 
     @sio_manager.on('disconnect')
     async def handle_disconnect(sid):
+        """Обрабатывает отключение: обнуляет sid игрока для возможности реконнекта."""
         with database.get_db_session() as db:
             player = db.query(models.Player).filter(models.Player.sid == sid).first()
             if player:
@@ -23,6 +32,7 @@ def register_lobby_handlers(sio_manager):
 
     @sio_manager.on('join_room')
     async def handle_join(sid, data):
+        """Подключает игрока к комнате: реконнект, создание нового или переименование при конфликте."""
         if not rate_limiter.is_allowed(sid):
             logger.warning("Rate limit hit on join_room  sid=%s", sid)
             return

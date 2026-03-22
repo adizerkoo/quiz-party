@@ -1,3 +1,10 @@
+"""
+Вспомогательные функции для работы с БД.
+
+Объединяет часто используемые запросы: поиск викторины, проверка хоста,
+получение списка игроков.
+"""
+
 import logging
 from sqlalchemy.orm import Session
 from . import models
@@ -7,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_quiz_by_code(db: Session, room_code: str):
-    """Get quiz by room code, using in-memory cache for faster lookups."""
+    """Находит викторину по коду комнаты. Использует in-memory кэш для ускорения."""
     cached = get_cached_quiz(room_code)
     if cached:
         quiz = db.get(models.Quiz, cached["id"])
@@ -22,7 +29,7 @@ def get_quiz_by_code(db: Session, room_code: str):
 
 
 def verify_host(db: Session, quiz_id: int, sid: str) -> bool:
-    """Check if the given socket sid belongs to the host of the quiz."""
+    """Проверяет, принадлежит ли данный socket sid хосту (ведущему) викторины."""
     return db.query(models.Player).filter(
         models.Player.quiz_id == quiz_id,
         models.Player.sid == sid,
@@ -31,6 +38,7 @@ def verify_host(db: Session, quiz_id: int, sid: str) -> bool:
 
 
 def get_players_in_quiz(db: Session, quiz_id: int):
+    """Возвращает список игроков викторины в формате словарей для фронтенда."""
     players = db.query(models.Player).filter(models.Player.quiz_id == quiz_id).all()
     logger.debug("get_players_in_quiz  quiz_id=%s  count=%d", quiz_id, len(players))
     return [

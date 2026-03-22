@@ -1,3 +1,10 @@
+"""
+Socket.IO обработчики игрового процесса.
+
+Старт игры, приём ответов, переход к следующему вопросу,
+корректировка баллов, проверка ответов перед переходом.
+"""
+
 import datetime
 import logging
 from .. import models, database
@@ -8,9 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def register_game_handlers(sio_manager):
+    """Регистрирует игровые события на Socket.IO менеджере."""
 
     @sio_manager.on('start_game_signal')
     async def handle_start(sid, data):
+        """Запускает игру: устанавливает статус 'playing' и оповещает всех. Только для хоста."""
         room = data.get('room')
         if not validate_quiz_code(room):
             return
@@ -30,6 +39,7 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on('send_answer')
     async def handle_answer(sid, data):
+        """Принимает ответ игрока, проверяет правильность и обновляет счёт."""
         if not rate_limiter.is_allowed(sid):
             logger.warning("Rate limit hit on send_answer  sid=%s", sid)
             return
@@ -86,6 +96,7 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on('next_question_signal')
     async def handle_next_question(sid, data):
+        """Переходит к следующему вопросу с защитой от повторного нажатия. Только для хоста."""
         room = data.get('room')
         if not validate_quiz_code(room):
             return
@@ -127,6 +138,7 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on('move_to_step')
     async def handle_move_step(sid, data):
+        """Переход к конкретному вопросу из прогресс-бара. Только для хоста."""
         room = data.get('room')
         if not validate_quiz_code(room):
             return
@@ -154,6 +166,7 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on('override_score')
     async def handle_override(sid, data):
+        """Корректирует балл игрока за конкретный вопрос (хост может засчитать/отклонить). Только для хоста."""
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get('room')
@@ -195,6 +208,7 @@ def register_game_handlers(sio_manager):
 
     @sio_manager.on("check_answers_before_next")
     async def check_answers(sid, data):
+        """Проверяет, все ли игроки ответили на текущий вопрос. Только для хоста."""
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get("room")

@@ -1,22 +1,25 @@
 """
-Centralised logging configuration for Quiz Party.
+Централизованная настройка логирования Quiz Party.
 
-Usage in any module:
+Использование в любом модуле::
+
     import logging
     logger = logging.getLogger(__name__)
 
-Log levels used across the project:
-    DEBUG   — SQL queries, raw socket payloads, internal state (very verbose)
-    INFO    — Normal lifecycle events: startup, join/leave, quiz created/started/finished
-    WARNING — Recoverable problems: rate-limit hits, validation failures, reconnects
-    ERROR   — Unexpected failures: DB errors, unhandled exceptions
+Уровни логирования::
 
-Environment variables:
-    LOG_LEVEL      — root log level (default: INFO)
-    LOG_FORMAT     — line format for console  (default: see below)
-    LOG_FILE       — path to log file          (default: logs/quiz-party.log)
-    LOG_FILE_MAX   — max bytes per file before rotation (default: 5 MB)
-    LOG_FILE_COUNT — number of rotated backups to keep  (default: 5)
+    DEBUG   — SQL-запросы, сырые пакеты сокетов, внутреннее состояние
+    INFO    — События жизненного цикла: старт, вход/выход, создание/завершение игры
+    WARNING — Восстановимые проблемы: rate-limit, ошибки валидации, реконнекты
+    ERROR   — Непредвиденные сбои: ошибки БД, необработанные исключения
+
+Переменные окружения::
+
+    LOG_LEVEL      — уровень логирования (умолчание: INFO)
+    LOG_FORMAT     — формат строк в консоли
+    LOG_FILE       — путь к файлу лога (умолчание: logs/quiz-party.log)
+    LOG_FILE_MAX   — максимальный размер файла до ротации (умолчание: 5 MB)
+    LOG_FILE_COUNT — количество ротируемых копий (умолчание: 5)
 """
 
 import os
@@ -43,7 +46,11 @@ LOG_FILE_COUNT = int(os.getenv("LOG_FILE_COUNT", "5"))
 
 
 def setup_logging() -> None:
-    """Call once at application startup (before any other import that logs)."""
+    """Инициализирует логирование: консоль + ротируемый файл.
+
+    Вызывается один раз при старте приложения, до любых импортов,
+    которые могут использовать logger.
+    """
     root = logging.getLogger()
 
     # Avoid adding duplicate handlers on reload / re-import

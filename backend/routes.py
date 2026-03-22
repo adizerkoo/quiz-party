@@ -1,3 +1,9 @@
+"""
+HTTP-маршруты FastAPI.
+
+Отдача статики, health-check, создание и получение викторин.
+"""
+
 import string
 import logging
 import secrets
@@ -16,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
-    """Generate a unique quiz code like PARTY-ABCD with collision retry."""
+    """Генерирует уникальный код комнаты (PARTY-XXXXX) с повтором при коллизии."""
     for _ in range(max_attempts):
         suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5))
         code = f"PARTY-{suffix}"
@@ -27,13 +33,16 @@ def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
 
 
 def register_routes(app):
+    """Регистрирует все HTTP-маршруты на экземпляре FastAPI."""
     @app.get("/")
     async def read_index():
+        """Отдаёт главную страницу (index.html)."""
         index_file = Path(FRONTEND_PATH) / "index.html"
         return FileResponse(index_file)
 
     @app.get("/api/health")
     async def health(db: Session = Depends(database.get_db)):
+        """Проверка работоспособности сервера и подключения к БД."""
         try:
             db.execute(text("SELECT 1"))
             return {"status": "ok"}
@@ -46,6 +55,7 @@ def register_routes(app):
 
     @app.post("/api/v1/quizzes", response_model=schemas.QuizResponse)
     def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):
+        """Создаёт новую викторину с уникальным кодом комнаты и сохраняет в БД."""
         code = _generate_unique_code(db)
         logger.info("Creating quiz  title=%r  code=%s  questions=%d", quiz_data.title, code, len(quiz_data.questions))
         try:
@@ -69,6 +79,7 @@ def register_routes(app):
 
     @app.get("/api/v1/quizzes/{code}")
     def get_quiz(code: str, role: str = Query(default=None), db: Session = Depends(database.get_db)):
+        """Возвращает данные викторины по коду. Для хоста включает правильные ответы."""
         quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
         if not quiz:
             logger.warning("Quiz not found  code=%s", code)

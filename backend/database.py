@@ -1,3 +1,10 @@
+"""
+Инициализация подключения к PostgreSQL и управление сессиями.
+
+Создаёт SQLAlchemy engine с пулом соединений, предоставляет
+контекстные менеджеры для сокет-обработчиков и HTTP-маршрутов.
+"""
+
 import os
 import logging
 from contextlib import contextmanager
@@ -39,13 +46,17 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
+    """Создаёт таблицы в БД (если отсутствуют) и применяет миграции."""
     logger.info("Running init_db — creating tables and migrations")
     Base.metadata.create_all(bind=engine)
     _migrate()
     logger.info("init_db complete")
 
 def _migrate():
-    """Добавляет новые колонки в существующие таблицы (безопасно при повторном запуске)."""
+    """Применяет инкрементальные миграции: добавляет колонки, индексы, обновляет данные.
+
+    Безопасна при повторном запуске — каждая миграция обёрнута в try/except.
+    """
     from sqlalchemy import text
     new_columns = [
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS device VARCHAR",
@@ -71,7 +82,7 @@ def _migrate():
 
 @contextmanager
 def get_db_session():
-    """Context manager for socket handlers — guarantees session cleanup."""
+    """Контекстный менеджер для сокет-обработчиков — гарантирует закрытие сессии."""
     db = SessionLocal()
     try:
         yield db
@@ -80,7 +91,7 @@ def get_db_session():
 
 
 def get_db():
-    """Generator for FastAPI Depends() — used in HTTP routes."""
+    """Генератор для FastAPI Depends() — используется в HTTP-маршрутах."""
     db = SessionLocal()
     try:
         yield db

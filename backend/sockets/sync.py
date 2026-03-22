@@ -1,3 +1,10 @@
+"""
+Socket.IO обработчики синхронизации состояния.
+
+При реконнекте отправляет клиенту актуальное состояние игры:
+текущий вопрос, статус, счёт, историю ответов.
+"""
+
 import logging
 
 from .. import models, database
@@ -8,9 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def register_sync_handlers(sio_manager):
+    """Регистрирует события синхронизации на Socket.IO менеджере."""
 
     @sio_manager.on('request_sync')
     async def handle_sync(sid, data):
+        """Отправляет клиенту полное состояние игры при переподключении."""
         if not rate_limiter.is_allowed(sid):
             logger.warning("Rate limit hit on request_sync  sid=%s", sid)
             return
@@ -65,6 +74,7 @@ def register_sync_handlers(sio_manager):
 
     @sio_manager.on("get_update")
     async def get_update(sid, room):
+        """Отдаёт актуальный список игроков и их ответов по запросу."""
         if not rate_limiter.is_allowed(sid):
             return
         if not validate_quiz_code(room):

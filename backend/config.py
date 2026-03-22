@@ -1,3 +1,10 @@
+"""
+Конфигурация приложения Quiz Party.
+
+Загружает переменные окружения из .env, настраивает логирование,
+определяет CORS-origins, пути к статике и игровые константы.
+"""
+
 import os
 import logging
 import socket as py_socket

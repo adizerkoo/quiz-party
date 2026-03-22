@@ -1,3 +1,10 @@
+"""
+Socket.IO обработчики завершения игры.
+
+Фиксирует результаты, определяет победителя, отправляет итоги
+и отключает всех игроков для освобождения ресурсов.
+"""
+
 import datetime
 import logging
 
@@ -10,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 def register_results_handlers(sio_manager):
+    """Регистрирует события завершения игры на Socket.IO менеджере."""
 
     @sio_manager.on('finish_game_signal')
     async def handle_finish(sid, data):
+        """Завершает игру: сохраняет результаты, отправляет итоги, отключает игроков. Только для хоста."""
         room = data.get('room')
         if not validate_quiz_code(room):
             return
