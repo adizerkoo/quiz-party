@@ -34,10 +34,15 @@ def register_results_handlers(sio_manager):
                 db.commit()
                 invalidate_quiz(room)
 
-                winner_name = players[0].name if players else "N/A"
+                if players:
+                    max_score = players[0].score
+                    winners = [p.name for p in players if p.score == max_score]
+                    winners_str = ", ".join(winners)
+                else:
+                    winners_str = "N/A"
                 logger.info(
-                    "Game finished  room=%s  quiz_id=%s  players=%d  winner=%s",
-                    room, quiz.id, len(players), winner_name,
+                    "Game finished  room=%s  quiz_id=%s  players=%d  winners=%s",
+                    room, quiz.id, len(players), winners_str,
                 )
 
                 results = [{
@@ -51,3 +56,13 @@ def register_results_handlers(sio_manager):
                     "results": results,
                     "questions": quiz.questions_data
                 }, room=room)
+
+                # Results page is static — disconnect everyone to free resources
+                all_players = db.query(models.Player).filter(
+                    models.Player.quiz_id == quiz.id
+                ).all()
+                for p in all_players:
+                    if p.sid:
+                        await sio_manager.disconnect(p.sid)
+                        p.sid = None
+                db.commit()

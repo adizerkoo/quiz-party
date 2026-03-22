@@ -70,8 +70,8 @@ def register_game_handlers(sio_manager):
                 player.score = sum(score_history.values())
                 db.commit()
                 logger.info(
-                    "Answer received  name=%s  room=%s  q=%s  correct=%s  score=%d",
-                    player.name, room, q_idx, is_correct, player.score,
+                    "Answer received  name=%s  room=%s  q=%s  answer=%r  correct=%s  score=%d",
+                    player.name, room, q_idx, answer, is_correct, player.score,
                 )
                 players_data = get_players_in_quiz(db, player.quiz_id)
                 await sio_manager.emit('update_answers', players_data, room=room)
