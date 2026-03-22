@@ -5,6 +5,21 @@
  */
 
 /**
+ * Escapes HTML special characters to prevent XSS
+ * @param {string} str - Raw string to escape
+ * @returns {string} Escaped string safe for innerHTML
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Переключает видимость элемента разбора вопросов в аккордеоне
  * @param {HTMLElement} element - Элемент шапки аккордеона
  * @returns {void}

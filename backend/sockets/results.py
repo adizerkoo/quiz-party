@@ -1,5 +1,6 @@
 import datetime
 from .. import models, database
+from ..security import validate_quiz_code
 
 
 def register_results_handlers(sio_manager):
@@ -7,8 +8,9 @@ def register_results_handlers(sio_manager):
     @sio_manager.on('finish_game_signal')
     async def handle_finish(sid, data):
         room = data.get('room')
-        db = next(database.get_db())
-        try:
+        if not validate_quiz_code(room):
+            return
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
                 quiz.status = "finished"
@@ -36,5 +38,3 @@ def register_results_handlers(sio_manager):
                     "results": results,
                     "questions": quiz.questions_data
                 }, room=room)
-        finally:
-            db.close()

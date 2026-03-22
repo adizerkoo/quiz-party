@@ -60,7 +60,7 @@ function registerLobbyHandlers(socket) {
               </div>
               
               <div class="player-name-label">
-                ${p.name}
+                ${escapeHtml(p.name)}
               </div>
             </div>
           `;

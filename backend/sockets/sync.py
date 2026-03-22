@@ -1,6 +1,6 @@
 from .. import models, database
 from ..helpers import get_players_in_quiz
-from ..security import rate_limiter
+from ..security import rate_limiter, validate_quiz_code
 
 
 def register_sync_handlers(sio_manager):
@@ -10,9 +10,10 @@ def register_sync_handlers(sio_manager):
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get('room')
+        if not validate_quiz_code(room):
+            return
         name = data.get('name')
-        db = next(database.get_db())
-        try:
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if not quiz:
                 return
@@ -52,15 +53,14 @@ def register_sync_handlers(sio_manager):
                     await sio_manager.emit('update_answers', players_data, room=sid)
             elif quiz.status == "waiting":
                 pass
-        finally:
-            db.close()
 
     @sio_manager.on("get_update")
     async def get_update(sid, room):
         if not rate_limiter.is_allowed(sid):
             return
-        db = next(database.get_db())
-        try:
+        if not validate_quiz_code(room):
+            return
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
                 players = get_players_in_quiz(db, quiz.id)
@@ -69,5 +69,3 @@ def register_sync_handlers(sio_manager):
                     players,
                     room=sid
                 )
-        finally:
-            db.close()

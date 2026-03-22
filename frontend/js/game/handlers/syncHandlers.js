@@ -136,7 +136,7 @@ function _renderPlayerAnswerPreview(playerAnswer) {
         
         <div class="your-answer-preview">
           <div class="your-answer-label">Твой ответ:</div>
-          <div class="your-answer-text">${playerAnswer}</div>
+          <div class="your-answer-text">${escapeHtml(playerAnswer)}</div>
         </div>
 
         <div class="waiting-loader">

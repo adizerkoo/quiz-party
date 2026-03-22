@@ -44,12 +44,12 @@ function renderPlayerQuestion(slideDir) {
         <div class="player-header">
             <div class="player-info-badge">
                 <span style="font-size: 1.2rem;">${myEmoji}</span>
-                <span class="player-name-text">${playerName}</span>
+                <span class="player-name-text">${escapeHtml(playerName)}</span>
             </div>
             ${navHTML}
         </div>
         <div class="question-container ${animClass}">
-            <div class="question-main-text">${q.text}</div>
+            <div class="question-main-text">${escapeHtml(q.text)}</div>
             <div class="question-line"></div>
         </div>
     `;
@@ -61,7 +61,7 @@ function renderPlayerQuestion(slideDir) {
         <div class="sent-confirmation ${animClass}">
             <div class="your-answer-preview">
                 <div class="your-answer-label">Твой ответ:</div>
-                <div class="your-answer-text">${pastAnswer || '—'}</div>
+                <div class="your-answer-text">${pastAnswer ? escapeHtml(pastAnswer) : '—'}</div>
             </div>
             <button class="btn-back-to-current" onclick="goToCurrentQuestion()">
                 Вернуться к текущему вопросу →
@@ -79,7 +79,7 @@ function renderPlayerQuestion(slideDir) {
             <div class="status-badge-sent">Отправлено 🚀</div>
             <div class="your-answer-preview">
                 <div class="your-answer-label">Твой ответ:</div>
-                <div class="your-answer-text">${myAnswer}</div>
+                <div class="your-answer-text">${escapeHtml(myAnswer)}</div>
             </div>
             <div class="waiting-loader">
                 <div class="pulse-dot" style="display:inline-block; margin-right:8px;"></div>
@@ -97,8 +97,8 @@ function renderPlayerQuestion(slideDir) {
                 ${q.options
                   .map(
                     (o) => `
-                    <button class="btn-answer" onclick="sendAnswer('${o}')">
-                        ${o}
+                    <button class="btn-answer" onclick="sendAnswer(${escapeHtml(JSON.stringify(o))})">
+                        ${escapeHtml(o)}
                     </button>
                 `
                   )
@@ -166,7 +166,7 @@ function sendAnswer(val) {
                 <div class="status-badge-sent">Отправлено 🚀</div>
                 <div class="your-answer-preview">
                     <div class="your-answer-label">Твой ответ:</div>
-                    <div class="your-answer-text">${val}</div>
+                    <div class="your-answer-text">${escapeHtml(val)}</div>
                 </div>
                 <div class="waiting-loader">
                     <div class="pulse-dot" style="display:inline-block; margin-right:8px;"></div>

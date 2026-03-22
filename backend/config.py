@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 logger.info(f"Loading .env from: {env_path}")
 
 # Log database configuration
-db_url = os.getenv("DATABASE_URL", "sqlite:///./birthday_quiz.db")
+db_url = os.getenv("DATABASE_URL", "not configured")
 logger.info(f"DATABASE_URL: {db_url}")
 if "postgresql" in db_url:
     logger.info("✅ Using PostgreSQL")
 else:
-    logger.info("⚠️  Using SQLite")
+    logger.warning("⚠️  DATABASE_URL not configured or not PostgreSQL")
 
 PLAYER_EMOJIS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵']
 

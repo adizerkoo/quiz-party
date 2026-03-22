@@ -6,6 +6,7 @@ Security utilities for Quiz Party API
 """
 
 import logging
+import re
 from functools import wraps
 import time
 from collections import defaultdict
@@ -46,10 +47,10 @@ rate_limiter = RateLimiter(max_requests=100, time_window=60)
 
 
 def validate_quiz_code(code: str) -> bool:
-    """Validate quiz code format"""
-    if not code or len(code) < 3 or len(code) > 10:
+    """Validate quiz code format (e.g. PARTY-ABCDE)"""
+    if not code or len(code) > 20:
         return False
-    return code.isalnum() or '-' in code
+    return all(c.isalnum() or c == '-' for c in code)
 
 
 def validate_player_name(name: str) -> bool:
@@ -64,3 +65,10 @@ def validate_answer(answer: str) -> bool:
     if not answer or len(str(answer)) > 500:
         return False
     return True
+
+
+def sanitize_text(text: str) -> str:
+    """Strip HTML tags from user input to prevent XSS"""
+    if not text:
+        return text
+    return re.sub(r'<[^>]*?>', '', str(text))

@@ -57,11 +57,11 @@ function renderScoreboard(players) {
         const playerEmoji = p.emoji || '👤';
 
         return `
-          <div class="scoreboard-card ${rankClass} ${isLeader ? 'is-leader' : ''}" data-player="${p.name}" style="animation: scoreboardSlideIn 0.5s ease-out ${i * 0.1}s both;">
+          <div class="scoreboard-card ${rankClass} ${isLeader ? 'is-leader' : ''}" data-player="${escapeHtml(p.name)}" style="animation: scoreboardSlideIn 0.5s ease-out ${i * 0.1}s both;">
             <div class="scoreboard-rank">${rankEmoji}</div>
             <div class="scoreboard-emoji">${playerEmoji}</div>
             <div class="scoreboard-info">
-              <div class="scoreboard-name">${p.name}</div>
+              <div class="scoreboard-name">${escapeHtml(p.name)}</div>
               <div class="scoreboard-score">${p.score || 0}🏆</div>
             </div>
             ${isLeader ? '<div class="scoreboard-crown">⭐</div>' : ''}
@@ -88,7 +88,10 @@ function renderScoreboard(players) {
     const isLeader = i === 0;
     const rankClass = i === 0 ? 'rank-1st' : i === 1 ? 'rank-2nd' : i === 2 ? 'rank-3rd' : 'rank-other';
 
-    let card = board.querySelector(`[data-player="${p.name}"]`);
+    let card = null;
+    for (const c of board.querySelectorAll('.scoreboard-card')) {
+      if (c.dataset.player === p.name) { card = c; break; }
+    }
 
     if (!card) {
       // Новый игрок — добавляем с анимацией появления
@@ -100,7 +103,7 @@ function renderScoreboard(players) {
         <div class="scoreboard-rank">${rankEmoji}</div>
         <div class="scoreboard-emoji">${playerEmoji}</div>
         <div class="scoreboard-info">
-          <div class="scoreboard-name">${p.name}</div>
+          <div class="scoreboard-name">${escapeHtml(p.name)}</div>
           <div class="scoreboard-score">${p.score || 0}🏆</div>
         </div>
         ${isLeader ? '<div class="scoreboard-crown">⭐</div>' : ''}

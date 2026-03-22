@@ -70,7 +70,7 @@ function _handleHostGameStart(players) {
           <div class="answer-info">
             <div class="answer-name" style="display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 2rem;">${p.emoji || "👤"}</span> 
-              <span style="font-size: 1.2rem; font-weight: bold;">${p.name}</span>
+              <span style="font-size: 1.2rem; font-weight: bold;">${escapeHtml(p.name)}</span>
             </div>
             <div class="answer-text">⏳ ожидает ответа</div>
           </div>

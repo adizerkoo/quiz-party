@@ -71,7 +71,7 @@ function _renderAnswerCard(player, question) {
   let btnHTML = "";
 
   if (isAnswered) {
-    displayAnswer = answerText;
+    displayAnswer = escapeHtml(answerText);
     const isCorrect =
       answerText.toLowerCase().trim() ===
       question.correct.toLowerCase().trim();
@@ -83,7 +83,7 @@ function _renderAnswerCard(player, question) {
       btnHTML = `
         <div class="card-controls">
           <span class="status-label">Верно</span>
-          <button class="btn-mini btn-minus" onclick="changeScore('${player.name}', -1)" title="Забрать балл">
+          <button class="btn-mini btn-minus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, -1)" title="Забрать балл">
             <svg viewBox="0 0 24 24"><path d="M18 12H6" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
           </button>
         </div>`;
@@ -91,7 +91,7 @@ function _renderAnswerCard(player, question) {
       statusClass = "wrong";
       btnHTML = `
         <div class="card-controls">
-          <button class="btn-mini btn-plus" onclick="changeScore('${player.name}', 1)" title="Засчитать балл">
+          <button class="btn-mini btn-plus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, 1)" title="Засчитать балл">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
           </button>
         </div>`;
@@ -103,7 +103,7 @@ function _renderAnswerCard(player, question) {
       <div class="card-header">
         <div class="player-info">
           <span class="p-emoji">${player.emoji || "👤"}</span> 
-          <span class="p-name">${player.name}</span>
+          <span class="p-name">${escapeHtml(player.name)}</span>
         </div>
         <div class="card-controls">
           ${btnHTML}

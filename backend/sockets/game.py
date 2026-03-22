@@ -2,7 +2,7 @@ import datetime
 import logging
 from .. import models, database
 from ..helpers import get_players_in_quiz
-from ..security import rate_limiter
+from ..security import rate_limiter, validate_quiz_code, validate_answer, sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +12,9 @@ def register_game_handlers(sio_manager):
     @sio_manager.on('start_game_signal')
     async def handle_start(sid, data):
         room = data.get('room')
-        db = next(database.get_db())
-        try:
+        if not validate_quiz_code(room):
+            return
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
                 quiz.current_question = 1
@@ -22,27 +23,28 @@ def register_game_handlers(sio_manager):
                 db.commit()
                 players = get_players_in_quiz(db, quiz.id)
                 await sio_manager.emit('game_started', players, room=room)
-        finally:
-            db.close()
 
     @sio_manager.on('send_answer')
     async def handle_answer(sid, data):
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get('room')
+        if not validate_quiz_code(room):
+            return
         name = data.get('name')
         raw_answer = data.get('answer', '')
-        answer = str(raw_answer)[:50] if raw_answer else ""
+        answer = sanitize_text(str(raw_answer)[:50]) if raw_answer else ""
+        if not validate_answer(answer):
+            return
         q_idx = str(data.get('questionIndex'))
-        db = next(database.get_db())
-        try:
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if not quiz:
                 return
             player = db.query(models.Player).filter(
                 models.Player.quiz_id == quiz.id,
                 models.Player.name == name
-            ).first()
+            ).with_for_update().first()
             if player:
                 new_history = dict(player.answers_history or {})
                 new_history[q_idx] = answer
@@ -61,15 +63,14 @@ def register_game_handlers(sio_manager):
                 db.commit()
                 players_data = get_players_in_quiz(db, player.quiz_id)
                 await sio_manager.emit('update_answers', players_data, room=room)
-        finally:
-            db.close()
 
     @sio_manager.on('next_question_signal')
     async def handle_next_question(sid, data):
         room = data.get('room')
+        if not validate_quiz_code(room):
+            return
         expected_question = data.get('expectedQuestion')
-        db = next(database.get_db())
-        try:
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
 
             if quiz:
@@ -98,15 +99,13 @@ def register_game_handlers(sio_manager):
                     players,
                     room=room
                 )
-        finally:
-            db.close()
 
     @sio_manager.on('move_to_step')
     async def handle_move_step(sid, data):
         room = data.get('room')
-        question = data.get('question')
-        db = next(database.get_db())
-        try:
+        if not validate_quiz_code(room):
+            return
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if not quiz:
                 return
@@ -116,28 +115,25 @@ def register_game_handlers(sio_manager):
                 players,
                 room=room
             )
-        finally:
-            db.close()
 
     @sio_manager.on('override_score')
     async def handle_override(sid, data):
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get('room')
+        if not validate_quiz_code(room):
+            return
         player_name = data.get('playerName')
         points = data.get('points')
         q_idx = str(data.get('questionIndex'))
-        db = next(database.get_db())
-
-        try:
+        with database.get_db_session() as db:
             player = db.query(models.Player).join(models.Quiz).filter(
                 models.Quiz.code == room,
                 models.Player.name == player_name
-            ).first()
+            ).with_for_update().first()
 
             if player:
                 history = dict(player.scores_history or {})
-                current = history.get(q_idx, 0)
                 if points == 1:
                     history[q_idx] = 1
                 elif points == -1:
@@ -150,18 +146,16 @@ def register_game_handlers(sio_manager):
                     get_players_in_quiz(db, player.quiz_id),
                     room=room
                 )
-        finally:
-            db.close()
 
     @sio_manager.on("check_answers_before_next")
     async def check_answers(sid, data):
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get("room")
+        if not validate_quiz_code(room):
+            return
         question = str(data.get("question"))
-        db = next(database.get_db())
-
-        try:
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if not quiz:
                 return
@@ -184,5 +178,3 @@ def register_game_handlers(sio_manager):
                 {"allAnswered": all_answered},
                 room=sid
             )
-        finally:
-            db.close()

@@ -3,7 +3,7 @@ import logging
 from .. import models, database
 from ..config import PLAYER_EMOJIS
 from ..helpers import get_players_in_quiz
-from ..security import rate_limiter
+from ..security import rate_limiter, validate_quiz_code, validate_player_name, sanitize_text
 
 logger = logging.getLogger(__name__)
 
@@ -12,27 +12,26 @@ def register_lobby_handlers(sio_manager):
 
     @sio_manager.on('disconnect')
     async def handle_disconnect(sid):
-        db = next(database.get_db())
-        try:
+        with database.get_db_session() as db:
             player = db.query(models.Player).filter(models.Player.sid == sid).first()
             if player:
                 player.sid = None
                 db.commit()
                 logger.info(f"Player '{player.name}' disconnected (sid cleared)")
-        finally:
-            db.close()
 
     @sio_manager.on('join_room')
     async def handle_join(sid, data):
         if not rate_limiter.is_allowed(sid):
             return
         room = data.get('room')
-        name = str(data.get('name', 'Игрок'))[:15]
+        if not validate_quiz_code(room):
+            return
+        raw_name = sanitize_text(str(data.get('name', 'Игрок'))[:15]).strip()
+        name = raw_name if validate_player_name(raw_name) else 'Игрок'
         role = data.get('role')
         is_host = (role == 'host')
 
-        db = next(database.get_db())
-        try:
+        with database.get_db_session() as db:
             quiz = db.query(models.Quiz).filter(models.Quiz.code == room).first()
             if quiz:
                 await sio_manager.enter_room(sid, room)
@@ -98,5 +97,3 @@ def register_lobby_handlers(sio_manager):
 
                 db.commit()
                 await sio_manager.emit('update_players', get_players_in_quiz(db, quiz.id), room=room)
-        finally:
-            db.close()

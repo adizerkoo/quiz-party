@@ -161,8 +161,8 @@ function _buildEpicIntroHTML(winners) {
     : `<div class="epic-winner-emoji">${winners[0].emoji}</div>`;
 
   const namesHTML = multi
-    ? `<div class="epic-winner-name-text epic-multi-name">${winners.map(w => w.name).join(' & ')}</div>`
-    : `<div class="epic-winner-name-text">${winners[0].name}</div>`;
+    ? `<div class="epic-winner-name-text epic-multi-name">${winners.map(w => escapeHtml(w.name)).join(' & ')}</div>`
+    : `<div class="epic-winner-name-text">${escapeHtml(winners[0].name)}</div>`;
 
   const titleText = multi ? '🏆 ПОБЕДИТЕЛИ 🏆' : '🏆 ПОБЕДИТЕЛЬ 🏆';
 
@@ -406,7 +406,7 @@ function _buildResultsHTML(winners, others, myData, questions, allPlayers) {
   return `
     <div class="confetti-wrapper">
       <div style="margin-bottom: 20px; text-align: center;">
-        <div class="results-party-title">${quizTitle || 'Quiz Party'}</div>
+        <div class="results-party-title">${escapeHtml(quizTitle) || 'Quiz Party'}</div>
         <h2 style="color: var(--party-purple); font-size: 1.8rem; margin: 5px 0; font-weight: 800;">
           Итоги викторины
         </h2>
@@ -437,7 +437,7 @@ function _buildWinnersSection(winners) {
 
           <div style="text-align: left; flex: 1;">
             <div class="winner-label">Победитель</div>
-            <div class="shiny-text-name">${w.name}</div>
+            <div class="shiny-text-name">${escapeHtml(w.name)}</div>
           </div>
           
           <div class="winner-score-badge">
@@ -469,7 +469,7 @@ function _buildRatingSection(others) {
               <div class="player-row-lobby is-rating-row">
                 <span class="rank-number">${rankDisplay}</span>
                 <div class="participant-emoji-container">${p.emoji}</div>
-                <span class="player-name-lobby">${p.name}</span>
+                <span class="player-name-lobby">${escapeHtml(p.name)}</span>
                 <span class="player-score-lobby">${p.score}</span>
               </div>
             `;
@@ -538,17 +538,17 @@ function _buildReviewCard(question, index, myData, allPlayers) {
   return `
     <div class="review-card" style="animation-delay: ${index * 0.05}s;">
       <div class="review-q-number">Вопрос ${index + 1}</div>
-      <div class="review-q-text">${question.text}</div>
+      <div class="review-q-text">${escapeHtml(question.text)}</div>
       
       <div class="review-answers-grid">
         <div class="answer-box is-correct">
           <div class="answer-label">Верно</div>
-          <div class="answer-value">${question.correct}</div>
+          <div class="answer-value">${escapeHtml(question.correct)}</div>
         </div>
 
         <div class="answer-box is-user ${isCorrect ? "is-correct-status" : "is-wrong-status"}">
           <div class="answer-label">Твой ответ</div>
-          <div class="answer-value">${myAnswer || "—"}</div>
+          <div class="answer-value">${escapeHtml(myAnswer) || "—"}</div>
         </div>
       </div>
 
@@ -580,9 +580,9 @@ function _buildOthersAnswersList(question, index, allPlayers) {
 
       return `
         <div class="other-player-card">
-          <span class="other-player-name">${p.emoji} ${p.name}</span>
+          <span class="other-player-name">${p.emoji} ${escapeHtml(p.name)}</span>
           <span class="other-player-ans ${isAnsCorr ? "is-correct" : ""}">
-            ${ans}
+            ${escapeHtml(ans)}
           </span>
         </div>
       `;
