@@ -10,7 +10,7 @@ const socket = io();
 let quizTitle = "";
 
 // Эмодзи текущего игрока
-let myEmoji = "👤";
+let myEmoji = sessionStorage.getItem("quiz_player_emoji") || "👤";
 
 // Текущий отображаемый шаг (может отличаться от реального, если хост листает историю)
 let currentQuestion = 0;

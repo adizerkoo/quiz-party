@@ -67,6 +67,17 @@ def register_sync_handlers(sio_manager):
                 }, room=sid)
             elif quiz.status == "playing":
                 if player and player.is_host:
+                    # Отправляем список отключённых игроков для хоста
+                    disconnected_names = [
+                        p.name for p in db.query(models.Player).filter(
+                            models.Player.quiz_id == quiz.id,
+                            models.Player.is_host == False,
+                            models.Player.sid == None
+                        ).all()
+                    ]
+                    await sio_manager.emit('init_disconnected', {
+                        'players': disconnected_names
+                    }, room=sid)
                     players_data = get_players_in_quiz(db, quiz.id)
                     await sio_manager.emit('update_answers', players_data, room=sid)
             elif quiz.status == "waiting":

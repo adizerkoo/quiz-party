@@ -59,6 +59,7 @@ function _applyStateSync(data) {
 
   if (data.emoji) {
     myEmoji = data.emoji;
+    sessionStorage.setItem("quiz_player_emoji", myEmoji);
   }
 
   if (data.answersHistory) {

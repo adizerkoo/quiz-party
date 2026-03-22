@@ -119,3 +119,12 @@ function changeScore(targetName, points) {
     questionIndex: currentQuestion,
   });
 }
+
+
+// Исключение игрока из лобби (хост)
+function kickPlayer(targetName) {
+  socket.emit("kick_player", {
+    room: roomCode,
+    playerName: targetName,
+  });
+}

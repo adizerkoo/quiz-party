@@ -34,6 +34,13 @@ function registerAnswerUpdateHandler(socket) {
   socket.on("update_answers", (players) => {
     if (role !== "host") return;
 
+    // Обновляем статус: если игрок снова онлайн, убираем из отключённых
+    players.forEach((p) => {
+      if (!p.is_host && p.connected) {
+        disconnectedPlayers.delete(p.name);
+      }
+    });
+
     renderScoreboard(players);
     const grid = document.getElementById("players-answers-grid");
     if (!grid) return;
@@ -60,6 +67,9 @@ function _renderAnswerCard(player, question) {
   const stepKey = currentQuestion.toString();
   const answerText = answers[stepKey];
   const questionScore = scores[stepKey];
+  const isDisconnected = disconnectedPlayers.has(player.name);
+  const isPastQuestion = currentQuestion < realGameQuestion;
+  const isFutureQuestion = currentQuestion > realGameQuestion;
   
   const isAnswered =
     answerText !== undefined &&
@@ -69,8 +79,60 @@ function _renderAnswerCard(player, question) {
   let statusClass = "waiting";
   let displayAnswer = "⏳ ожидает ответа...";
   let btnHTML = "";
+  // Показываем оффлайн-метки на текущем вопросе (даже если ответил)
+  const showDisconnectedMark = isDisconnected && !isFutureQuestion && !isPastQuestion;
 
-  if (isAnswered) {
+  if (isFutureQuestion) {
+    statusClass = "waiting";
+    displayAnswer = "🔮 ещё не дошли";
+  } else if (isDisconnected && !isAnswered) {
+    if (isPastQuestion) {
+      if (questionScore === 1) {
+        statusClass = "correct";
+        displayAnswer = "⏩ пропущено";
+        btnHTML = `
+          <div class="card-controls">
+            <span class="status-label">Засчитано</span>
+            <button class="btn-mini btn-minus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, -1)" title="Забрать балл">
+              <svg viewBox="0 0 24 24"><path d="M18 12H6" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
+            </button>
+          </div>`;
+      } else {
+        statusClass = "skipped";
+        displayAnswer = "⏩ пропущено";
+        btnHTML = `
+          <div class="card-controls">
+            <button class="btn-mini btn-plus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, 1)" title="Засчитать балл">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
+            </button>
+          </div>`;
+      }
+    } else {
+      statusClass = "disconnected";
+      displayAnswer = "отключился";
+    }
+  } else if (!isAnswered && isPastQuestion) {
+    if (questionScore === 1) {
+      statusClass = "correct";
+      displayAnswer = "⏩ пропущено";
+      btnHTML = `
+        <div class="card-controls">
+          <span class="status-label">Засчитано</span>
+          <button class="btn-mini btn-minus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, -1)" title="Забрать балл">
+            <svg viewBox="0 0 24 24"><path d="M18 12H6" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
+          </button>
+        </div>`;
+    } else {
+      statusClass = "skipped";
+      displayAnswer = "⏩ пропущено";
+      btnHTML = `
+        <div class="card-controls">
+          <button class="btn-mini btn-plus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, 1)" title="Засчитать балл">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
+          </button>
+        </div>`;
+    }
+  } else if (isAnswered) {
     displayAnswer = escapeHtml(answerText);
     const isCorrect =
       answerText.toLowerCase().trim() ===
@@ -80,17 +142,20 @@ function _renderAnswerCard(player, question) {
 
     if (currentStatus === 1) {
       statusClass = "correct";
+      const label = isCorrect ? "Верно" : "Засчитано";
       btnHTML = `
         <div class="card-controls">
-          <span class="status-label">Верно</span>
+          <span class="status-label">${label}</span>
           <button class="btn-mini btn-minus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, -1)" title="Забрать балл">
             <svg viewBox="0 0 24 24"><path d="M18 12H6" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
           </button>
         </div>`;
     } else {
       statusClass = "wrong";
+      const label = isCorrect ? "Отклонено" : "";
       btnHTML = `
         <div class="card-controls">
+          ${label ? `<span class="status-label">${label}</span>` : ""}
           <button class="btn-mini btn-plus" onclick="changeScore(${escapeHtml(JSON.stringify(player.name))}, 1)" title="Засчитать балл">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>
           </button>
@@ -102,8 +167,9 @@ function _renderAnswerCard(player, question) {
     <div class="answer-card ${statusClass}">
       <div class="card-header">
         <div class="player-info">
-          <span class="p-emoji">${player.emoji || "👤"}</span> 
+          <span class="p-emoji ${showDisconnectedMark ? 'emoji-disconnected' : ''}">${player.emoji || "👤"}</span> 
           <span class="p-name">${escapeHtml(player.name)}</span>
+          ${showDisconnectedMark ? '<span class="disconnected-badge">оффлайн</span>' : ''}
         </div>
         <div class="card-controls">
           ${btnHTML}
@@ -152,4 +218,26 @@ function registerAnswerCheckHandler(socket) {
 function initAnswerHandlers(socket) {
   registerAnswerUpdateHandler(socket);
   registerAnswerCheckHandler(socket);
+
+  // Инициализация списка отключённых при загрузке хоста
+  socket.on("init_disconnected", (data) => {
+    if (role !== "host") return;
+    (data.players || []).forEach((name) => disconnectedPlayers.add(name));
+  });
+
+  // Обработчик отключения игрока во время игры
+  socket.on("player_disconnected", (data) => {
+    if (role !== "host") return;
+    disconnectedPlayers.add(data.name);
+    showToast(`${escapeHtml(data.emoji)} <b>${escapeHtml(data.name)}</b> отключился`);
+    socket.emit("get_update", roomCode);
+  });
+
+  // Обработчик переподключения игрока
+  socket.on("player_reconnected", (data) => {
+    if (role !== "host") return;
+    disconnectedPlayers.delete(data.name);
+    showToast(`${escapeHtml(data.emoji)} <b>${escapeHtml(data.name)}</b> вернулся ✅`);
+    socket.emit("get_update", roomCode);
+  });
 }

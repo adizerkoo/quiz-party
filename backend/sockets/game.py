@@ -230,6 +230,9 @@ def register_game_handlers(sio_manager):
             all_answered = True
 
             for p in players:
+                # Пропускаем отключённых игроков
+                if p.sid is None:
+                    continue
                 hist = p.answers_history or {}
                 if question not in hist:
                     all_answered = False

@@ -36,6 +36,7 @@ function registerLobbyHandlers(socket) {
   socket.on("update_players", (players) => {
     const lobbyContainers = ["lobby-players-list", "player-lobby-list"];
     const actualPlayers = players.filter((p) => !p.is_host);
+    const isHostView = role === "host";
 
     // Показ/скрытие пустого состояния лобби
     const emptyState = document.getElementById("lobby-empty-state");
@@ -50,10 +51,12 @@ function registerLobbyHandlers(socket) {
       container.innerHTML = actualPlayers
         .map((p) => {
           const isMe = p.name === playerName;
+          const showKick = isHostView && id === "lobby-players-list";
 
           return `
             <div class="player-card-lobby ${isMe ? "is-me" : ""}" onclick="handleEmojiClick(this)">
               ${isMe ? '<div class="me-badge">ВЫ</div>' : ""}
+              ${showKick ? `<button class="kick-player-btn" onclick="event.stopPropagation(); kickPlayer(${escapeHtml(JSON.stringify(p.name))})" title="Исключить игрока">✕</button>` : ""}
               
               <div class="avatar-emoji">
                 ${p.emoji || "👤"}

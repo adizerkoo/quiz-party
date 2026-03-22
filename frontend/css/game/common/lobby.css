@@ -518,3 +518,58 @@
         font-size: 0.6rem;
     }
 }
+
+/* ============================================
+   КНОПКА ИСКЛЮЧЕНИЯ ИГРОКА (ХОСТ)
+   ============================================ */
+
+.kick-player-btn {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(231, 76, 60, 0.85);
+    color: white;
+    font-size: 0.55rem;
+    font-weight: 900;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease;
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.4);
+}
+
+.player-card-lobby:hover .kick-player-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.kick-player-btn:hover {
+    background: rgba(192, 57, 43, 1);
+    transform: scale(1.15) !important;
+}
+
+.kick-player-btn:active {
+    transform: scale(0.9) !important;
+}
+
+@media (max-width: 480px) {
+    .kick-player-btn {
+        width: 16px;
+        height: 16px;
+        font-size: 0.45rem;
+        top: -3px;
+        right: -3px;
+        /* На мобильных всегда видна */
+        opacity: 1;
+        transform: scale(1);
+    }
+}

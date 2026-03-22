@@ -4,6 +4,9 @@
  * @module handlers/utils
  */
 
+// Множество отключённых игроков (по имени)
+const disconnectedPlayers = new Set();
+
 /**
  * Escapes HTML special characters to prevent XSS
  * @param {string} str - Raw string to escape
@@ -109,4 +112,26 @@ function showModernConfirm(message, onConfirm) {
   };
 
   confirmBtn.addEventListener("click", _currentConfirmHandler);
+}
+
+/**
+ * Показывает toast-уведомление в стиле Quiz Party
+ * @param {string} message - Текст уведомления
+ * @param {number} duration - Длительность в мс (по умолчанию 4000)
+ */
+function showToast(message, duration = 4000) {
+  const toast = document.createElement("div");
+  toast.className = "quiz-toast";
+  toast.innerHTML = message;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add("quiz-toast-visible");
+  });
+
+  setTimeout(() => {
+    toast.classList.remove("quiz-toast-visible");
+    toast.classList.add("quiz-toast-hide");
+    toast.addEventListener("animationend", () => toast.remove());
+  }, duration);
 }
