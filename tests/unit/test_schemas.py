@@ -84,6 +84,36 @@ class TestQuestionSchema:
                 options=["1", "2", "3", "4", "5", "6", "7"],
             )
 
+    @allure.title("Слишком мало вариантов ответа (<2) отклоняется")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_too_few_options(self):
+        """Менее 2 вариантов невалидно."""
+        with pytest.raises(ValidationError, match="2"):
+            QuestionSchema(
+                text="Q", type="options", correct="A",
+                options=["A"],
+            )
+
+    @allure.title("Ровно 2 варианта ответа допустимо")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_min_options_ok(self):
+        """Граничное значение — 2 варианта — проходит."""
+        q = QuestionSchema(
+            text="Q", type="options", correct="A",
+            options=["A", "B"],
+        )
+        assert len(q.options) == 2
+
+    @allure.title("Ровно 6 вариантов ответа допустимо")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_max_options_ok(self):
+        """Граничное значение — 6 вариантов — проходит."""
+        q = QuestionSchema(
+            text="Q", type="options", correct="A",
+            options=["A", "B", "C", "D", "E", "F"],
+        )
+        assert len(q.options) == 6
+
     @allure.title("Слишком длинный вариант ответа (>200) отклоняется")
     @allure.severity(allure.severity_level.NORMAL)
     def test_option_too_long(self):
@@ -91,7 +121,7 @@ class TestQuestionSchema:
         with pytest.raises(ValidationError, match="200"):
             QuestionSchema(
                 text="Q", type="options", correct="A",
-                options=["x" * 201],
+                options=["A", "x" * 201],
             )
 
     @allure.title("options=None допустим для текстовых вопросов")

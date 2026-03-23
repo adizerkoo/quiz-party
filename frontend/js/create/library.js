@@ -92,13 +92,8 @@ function importQuestion(q) {
     if (q.type === 'text') {
         document.getElementById('q-input-correct').value = q.correct || '';
     } else if (q.type === 'options') {
-        q.options.forEach((opt, i) => {
-            const optInput = document.getElementById(`opt-${i + 1}`);
-            if (optInput) optInput.value = opt;
-        });
-        const radios = document.querySelectorAll('input[name="correct-opt"]');
-        radios.forEach((r, i) => r.checked = (q.options[i] === q.correct));
-        updateCorrectHighlight();
+        const correctIdx = q.options.indexOf(q.correct);
+        renderOptionRows(q.options.length, q.options, correctIdx >= 0 ? correctIdx : 0);
     }
 
     setTimeout(() => questionInput.classList.remove('idea-inserted'), 800);

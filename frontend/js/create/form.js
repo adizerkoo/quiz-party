@@ -2,7 +2,12 @@
    ФОРМА СОЗДАНИЯ ВОПРОСА
    Переключение типа, добавление/редактирование
    вопроса, очистка формы, удаление вопроса.
+   Динамическое управление вариантами ответов.
 ========================================= */
+
+const MIN_OPTIONS = 2;
+const MAX_OPTIONS = 6;
+const DEFAULT_OPTIONS = 4;
 
 
 // --- Переключение типа ответа (текст / выбор) ---
@@ -23,6 +28,121 @@ function selectType(type, element) {
         if (fields) fields.style.display = 'none';
         if (correctZone) correctZone.style.display = 'block';
     }
+}
+
+
+/* =========================================
+   ДИНАМИЧЕСКИЕ ВАРИАНТЫ ОТВЕТОВ
+   Рендер строк, добавление, удаление.
+========================================= */
+
+// --- Получить текущее количество вариантов ---
+function getOptionCount() {
+    return document.querySelectorAll('#options-list .opt-create-row').length;
+}
+
+// --- Собрать значения всех вариантов ---
+function collectOptionValues() {
+    const values = [];
+    document.querySelectorAll('#options-list .opt-input').forEach(input => {
+        values.push(input.value);
+    });
+    return values;
+}
+
+// --- Получить индекс выбранного правильного варианта ---
+function getSelectedCorrectIndex() {
+    const radio = document.querySelector('input[name="correct-opt"]:checked');
+    return radio ? parseInt(radio.value) : 0;
+}
+
+// --- Отрисовать строки вариантов ответов ---
+function renderOptionRows(count, values, correctIndex) {
+    const list = document.getElementById('options-list');
+    if (!list) return;
+    list.innerHTML = '';
+    count = Math.max(MIN_OPTIONS, Math.min(MAX_OPTIONS, count || DEFAULT_OPTIONS));
+
+    for (let i = 0; i < count; i++) {
+        const row = document.createElement('div');
+        row.className = 'opt-create-row';
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'input-with-clear';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `opt-${i + 1}`;
+        input.className = 'opt-input';
+        if (values && values[i] != null) input.value = values[i];
+
+        const clearSpan = document.createElement('span');
+        clearSpan.className = 'clear-input';
+        clearSpan.textContent = '×';
+        clearSpan.onclick = function() { clearSingleInput(this); };
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(clearSpan);
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'correct-opt';
+        radio.value = String(i);
+        if (i === (correctIndex ?? 0)) radio.checked = true;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-option';
+        removeBtn.title = 'Удалить вариант';
+        removeBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+        removeBtn.onclick = () => removeOptionRow(i);
+
+        row.appendChild(wrapper);
+        row.appendChild(radio);
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+    }
+
+    updateAddOptionButton();
+    updateCorrectHighlight();
+    updateClearButtons();
+}
+
+// --- Обновить видимость кнопок добавления/удаления ---
+function updateAddOptionButton() {
+    const btn = document.getElementById('btn-add-option');
+    const count = getOptionCount();
+    if (btn) {
+        btn.style.display = count >= MAX_OPTIONS ? 'none' : 'flex';
+    }
+    document.querySelectorAll('.btn-remove-option').forEach(b => {
+        b.style.display = count <= MIN_OPTIONS ? 'none' : 'inline-flex';
+    });
+}
+
+// --- Добавить новый вариант ---
+function addOptionRow() {
+    const count = getOptionCount();
+    if (count >= MAX_OPTIONS) return;
+    const values = collectOptionValues();
+    const correctIndex = getSelectedCorrectIndex();
+    renderOptionRows(count + 1, values, correctIndex);
+    const newInput = document.getElementById(`opt-${count + 1}`);
+    if (newInput) newInput.focus();
+    saveDraftToLocal();
+}
+
+// --- Удалить вариант ---
+function removeOptionRow(index) {
+    const count = getOptionCount();
+    if (count <= MIN_OPTIONS) return;
+    const values = collectOptionValues();
+    let correctIndex = getSelectedCorrectIndex();
+    values.splice(index, 1);
+    if (index === correctIndex) correctIndex = 0;
+    else if (index < correctIndex) correctIndex -= 1;
+    renderOptionRows(count - 1, values, correctIndex);
+    saveDraftToLocal();
 }
 
 
@@ -52,13 +172,13 @@ function addQuestionToList() {
             return;
         }
     } else {
-        for (let i = 1; i <= 4; i++) {
-            const val = document.getElementById(`opt-${i}`).value.trim();
-            if (!val) {
-                showToast(`Заполните вариант ${i}!`);
+        const allOpts = collectOptionValues();
+        for (let i = 0; i < allOpts.length; i++) {
+            if (!allOpts[i].trim()) {
+                showToast(`Заполните вариант ${i + 1}!`);
                 return;
             }
-            options.push(val);
+            options.push(allOpts[i].trim());
         }
 
         const selectedRadio = document.querySelector('input[name="correct-opt"]:checked');
@@ -107,12 +227,8 @@ function editQuestion(index) {
         document.getElementById('q-input-correct').value = q.correct;
     } else {
         selectType('options', typeOptions[1]);
-        q.options.forEach((opt, i) => {
-            document.getElementById(`opt-${i + 1}`).value = opt;
-            if (opt === q.correct) {
-                document.querySelectorAll('input[name="correct-opt"]')[i].checked = true;
-            }
-        });
+        const correctIdx = q.options.indexOf(q.correct);
+        renderOptionRows(q.options.length, q.options, correctIdx >= 0 ? correctIdx : 0);
     }
 
     document.getElementById('add-btn').innerText = "СОХРАНИТЬ ИЗМЕНЕНИЯ";
@@ -124,14 +240,13 @@ function editQuestion(index) {
 function clearForm() {
     document.getElementById('q-input-text').value = "";
     document.getElementById('q-input-correct').value = "";
-    document.querySelectorAll('.opt-input').forEach(i => i.value = "");
+
+    renderOptionRows(DEFAULT_OPTIONS);
 
     const typeOptions = document.querySelectorAll('.type-option');
     if (typeOptions.length > 0) {
         selectType('text', typeOptions[0]);
     }
-    updateCorrectHighlight();
-    updateClearButtons();
 }
 
 
@@ -146,11 +261,6 @@ function removeQuestion(index) {
 
 // --- Очистить все варианты ответов ---
 function clearOptions() {
-    document.querySelectorAll('.opt-input').forEach(input => input.value = "");
-
-    const radios = document.querySelectorAll('input[name="correct-opt"]');
-    if (radios.length) radios[0].checked = true;
-
-    updateCorrectHighlight();
-    updateClearButtons();
+    const count = getOptionCount();
+    renderOptionRows(count);
 }

@@ -150,6 +150,65 @@ input[name="correct-opt"]:checked::after {
 
 
 /* =========================================
+   КНОПКИ ДОБАВЛЕНИЯ / УДАЛЕНИЯ ВАРИАНТА
+========================================= */
+
+/* --- Кнопка «+ Добавить вариант» --- */
+.btn-add-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border: 2px dashed rgba(108, 92, 231, 0.25);
+    border-radius: 12px;
+    background: transparent;
+    color: #6c5ce7;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.btn-add-option:hover {
+    background: rgba(108, 92, 231, 0.06);
+    border-color: rgba(108, 92, 231, 0.45);
+    transform: translateY(-1px);
+}
+
+.btn-add-option:active {
+    transform: translateY(0);
+}
+
+/* --- Кнопка удаления варианта (корзина в строке) --- */
+.btn-remove-option {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: #dfe6e9;
+    cursor: pointer;
+    padding: 4px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-remove-option:hover {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.08);
+}
+
+
+/* =========================================
    КНОПКА ОЧИСТКИ ВСЕХ ВАРИАНТОВ
    Маленькая кнопка-таблетка «Очистить».
 ========================================= */

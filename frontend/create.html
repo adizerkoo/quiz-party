@@ -71,34 +71,11 @@
                             </button>
                         </div>
                         
-                        <div class="opt-create-row">
-                            <div class="input-with-clear">
-                                <input type="text" id="opt-1" class="opt-input">
-                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
-                            </div>
-                            <input type="radio" name="correct-opt" value="0" checked>
-                        </div>
-                        <div class="opt-create-row">
-                            <div class="input-with-clear">
-                                <input type="text" id="opt-2" class="opt-input">
-                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
-                            </div>
-                            <input type="radio" name="correct-opt" value="1">
-                        </div>
-                        <div class="opt-create-row">
-                            <div class="input-with-clear">
-                                <input type="text" id="opt-3" class="opt-input">
-                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
-                            </div>
-                            <input type="radio" name="correct-opt" value="2">
-                        </div>
-                        <div class="opt-create-row">
-                            <div class="input-with-clear">
-                                <input type="text" id="opt-4" class="opt-input">
-                                <span class="clear-input" onclick="clearSingleInput(this)">×</span>
-                            </div>
-                            <input type="radio" name="correct-opt" value="3">
-                        </div>
+                        <div id="options-list"></div>
+
+                        <button type="button" id="btn-add-option" class="btn-add-option" onclick="addOptionRow()">
+                            <i class="fa-solid fa-plus"></i> Добавить вариант
+                        </button>
                     </div>
                 </div>
 

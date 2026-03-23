@@ -24,8 +24,10 @@ class QuestionSchema(BaseModel):
     @field_validator('options')
     @classmethod
     def validate_options(cls, v):
-        """Проверяет варианты ответов: не более 6 штук, каждый до 200 символов."""
+        """Проверяет варианты ответов: от 2 до 6 штук, каждый до 200 символов."""
         if v is not None:
+            if len(v) < 2:
+                raise ValueError('Minimum 2 options required')
             if len(v) > 6:
                 raise ValueError('Maximum 6 options allowed')
             for opt in v:

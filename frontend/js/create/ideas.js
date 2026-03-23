@@ -49,16 +49,8 @@ function insertIdea() {
         if (correctInput) correctInput.value = currentIdea.correct || "";
     } else if (currentIdea.type === "options") {
         selectType("options", typeOptions[1]);
-        currentIdea.options.forEach((opt, i) => {
-            const input = document.getElementById(`opt-${i + 1}`);
-            if (input) input.value = opt;
-
-            const radios = document.querySelectorAll('input[name="correct-opt"]');
-            if (radios[i] && opt === currentIdea.correct) {
-                radios[i].checked = true;
-            }
-        });
-        updateCorrectHighlight();
+        const correctIdx = currentIdea.options.indexOf(currentIdea.correct);
+        renderOptionRows(currentIdea.options.length, currentIdea.options, correctIdx >= 0 ? correctIdx : 0);
     }
 
     updateClearButtons();

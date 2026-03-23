@@ -11,11 +11,7 @@ function saveDraftToLocal() {
     const questionText = document.getElementById('q-input-text').value.trim();
     const type = document.getElementById('q-input-type').value;
     const correctText = document.getElementById('q-input-correct').value.trim();
-    const options = [];
-
-    for (let i = 1; i <= 4; i++) {
-        options.push(document.getElementById(`opt-${i}`).value.trim());
-    }
+    const options = collectOptionValues();
 
     const selectedRadio = document.querySelector('input[name="correct-opt"]:checked');
     const selectedIndex = selectedRadio ? parseInt(selectedRadio.value) : 0;

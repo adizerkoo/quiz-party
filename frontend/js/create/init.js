@@ -37,19 +37,14 @@ document.addEventListener("DOMContentLoaded", () => {
         // Текстовый правильный ответ
         document.getElementById('q-input-correct').value = d.correctText || '';
 
-        // Варианты ответа
-        d.options.forEach((opt, i) => {
-            const el = document.getElementById(`opt-${i + 1}`);
-            if (el) el.value = opt;
-        });
-
-        // Выбранный правильный вариант
-        const radios = document.querySelectorAll('input[name="correct-opt"]');
-        if (radios[d.selectedIndex]) radios[d.selectedIndex].checked = true;
-
-        // Подсветка и кнопки очистки
-        updateCorrectHighlight();
-        updateClearButtons();
+        // Варианты ответа (динамический рендер)
+        if (d.options && d.options.length > 0) {
+            renderOptionRows(d.options.length, d.options, d.selectedIndex || 0);
+        } else {
+            renderOptionRows(DEFAULT_OPTIONS);
+        }
+    } else {
+        renderOptionRows(DEFAULT_OPTIONS);
     }
 
     // ======= 3️⃣ Загружаем библиотеку вопросов =======
@@ -66,7 +61,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // ======= 4️⃣ Автосохранение черновика при вводе =======
     document.addEventListener("input", (e) => {
         if (
-            ['quiz-title-input', 'q-input-text', 'q-input-correct', 'opt-1', 'opt-2', 'opt-3', 'opt-4'].includes(e.target.id) ||
+            ['quiz-title-input', 'q-input-text', 'q-input-correct'].includes(e.target.id) ||
+            e.target.classList.contains('opt-input') ||
             e.target.name === 'correct-opt'
         ) {
             saveDraftToLocal();
