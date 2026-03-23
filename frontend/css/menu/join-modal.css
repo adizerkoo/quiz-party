@@ -1,294 +1,249 @@
 /* =========================================
-   МОДАЛКА «ВОЙТИ В ИГРУ»
-   Всё, что видит пользователь при нажатии
-   «Присоединиться»: оверлей, стеклянная
-   карточка, поля ввода, кнопки, ошибки.
+   МОДАЛКА «ВОЙТИ В ИГРУ»  — v2
+   Полный редизайн: тёмный оверлей, карточка
+   с градиентным бордером, 3D-инпуты,
+   градиентная CTA-кнопка, микроанимации.
 ========================================= */
 
 
 /* =========================================
    1. ОВЕРЛЕЙ И КОНТЕЙНЕР
-   Светлая подложка с блюром, анимация
-   выезда карточки снизу.
 ========================================= */
 
-/* --- Оверлей (светлый с блюром) --- */
 .modal {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(15px);
+    inset: 0;
+    background: linear-gradient(
+        170deg,
+        rgba(30, 20, 60, 0.65) 0%,
+        rgba(60, 30, 90, 0.55) 100%
+    );
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
     justify-content: center;
     align-items: center;
     z-index: 1000;
 }
 
-/* --- Контент модалки --- */
+
+/* =========================================
+   2. КАРТОЧКА — стекло + градиентный бордер
+========================================= */
+
 .modal-content {
     width: 90%;
-    max-width: 400px;
-    padding: 30px;
-}
-
-.modal-content input {
-    width: 100%;
-    padding: 15px;
-    margin-bottom: 15px;
-    border-radius: 12px;
-    border: 2px solid #eee;
-    font-family: 'Montserrat', sans-serif;
+    max-width: 480px;
+    padding: 36px 28px 28px;
     box-sizing: border-box;
 }
 
-/* --- Стеклянная карточка --- */
 .light-glass-card {
-    margin-top: -200px;
-    background: rgba(255, 255, 255, 0.8) !important;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 40px;
-    padding: 40px;
-    width: 90%;
-    max-width: 320px;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
+    position: relative;
+    background: rgba(255, 255, 255, 0.92);
+    border: none;
+    border-radius: 28px;
+    box-shadow:
+        0 24px 80px rgba(108, 92, 231, 0.18),
+        0 4px 20px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
     text-align: center;
-    animation: slideUp 0.4s ease-out;
+    animation: modalCardIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    overflow: hidden;
 }
 
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(30px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-/* --- Бейдж «NEW» --- */
-.badge-new {
-    display: inline-block;
-    background: #6c5ce7;
-    color: white;
-    font-size: 0.65rem;
-    font-weight: 800;
-    padding: 5px 12px;
-    border-radius: 50px;
-    margin-bottom: 15px;
-    letter-spacing: 1px;
-}
-
-/* --- Шапка модалки --- */
-.modal-header h3 {
-    margin-top: 10px;
-}
-
-.modal-header p {
-    font-size: 0.9rem;
-    color: #636e72;
-    margin: 10px 0 30px;
+@keyframes modalCardIn {
+    from {
+        opacity: 0;
+        transform: translateY(40px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 
 /* =========================================
-   2. ПОЛЯ ВВОДА
-   Плавающие подписи (floating labels),
-   иконки внутри инпутов, стили фокуса.
+   3. ШАПКА — декоративная иконка + текст
 ========================================= */
 
-/* --- Контейнер полей --- */
+.modal-hero-icon {
+    font-size: 2.8rem;
+    margin-bottom: 6px;
+    display: block;
+    animation: heroFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 4px 12px rgba(108, 92, 231, 0.25));
+}
+
+@keyframes heroFloat {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50%      { transform: translateY(-6px) rotate(2deg); }
+}
+
+.modal-header {
+    position: relative;
+    z-index: 1;
+}
+
+.modal-header h3 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #4834d4, #6c5ce7, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.modal-header p {
+    font-size: 0.82rem;
+    color: #8b8fa3;
+    margin: 0 0 28px;
+    font-weight: 500;
+}
+
+
+/* =========================================
+   4. ПОЛЯ ВВОДА
+========================================= */
+
 .portal-inputs {
     display: flex;
     flex-direction: column;
-    gap: 25px;
-    margin-bottom: 35px;
+    gap: 12px;
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
 }
 
-/* --- Обёртка одного поля --- */
 .modern-field {
     position: relative;
     width: 100%;
 }
 
-/* --- Инпут (тёмный текст, серый фон) --- */
+/* --- Инпут --- */
 .modern-field input {
     width: 100% !important;
-    background: rgba(240, 242, 245, 0.8) !important;
+    background: #eae6ff !important;
     border: 2px solid transparent !important;
-    border-radius: 16px !important;
-    padding: 18px 20px 10px 45px !important;
+    border-radius: 14px !important;
+    padding: 20px 18px 8px 46px !important;
     font-family: 'Montserrat', sans-serif;
     font-weight: 600;
     color: #2d3436 !important;
-    font-size: 1rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.95rem;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     box-sizing: border-box;
+    outline: none;
 }
 
-/* Фокус: белый фон + фиолетовая рамка */
 .modern-field input:focus {
     background: #ffffff !important;
     border-color: #6c5ce7 !important;
-    box-shadow: 0 8px 20px rgba(108, 92, 231, 0.1) !important;
+    box-shadow:
+        0 0 0 4px rgba(108, 92, 231, 0.1),
+        0 8px 24px rgba(108, 92, 231, 0.08) !important;
 }
 
-/* Выделение текста — розовый акцент */
 .modern-field input::selection {
-    background: rgba(255, 133, 161, 0.2);
-    color: #ff85a1;
+    background: rgba(108, 92, 231, 0.15);
+    color: #4834d4;
 }
 
 
 /* =========================================
-   3. ПЛАВАЮЩИЕ ПОДПИСИ (FLOATING LABELS)
-   Подпись поднимается вверх при фокусе
-   или когда поле заполнено.
+   5. ПЛАВАЮЩИЕ ПОДПИСИ (FLOATING LABELS)
 ========================================= */
 
 .modern-field label {
     position: absolute;
-    left: 45px;
+    left: 46px;
     top: 50%;
     transform: translateY(-50%);
-    color: #a4b0be;
-    font-size: 0.9rem;
+    color: #a4a8bf;
+    font-size: 0.85rem;
     font-weight: 500;
     pointer-events: none;
-    transition: all 0.3s ease;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 2;
 }
 
-/* Поднятая подпись (при фокусе / заполнении) */
 .modern-field input:focus ~ label,
 .modern-field input:not(:placeholder-shown) ~ label {
-    top: 12px;
-    left: 45px;
-    font-size: 0.65rem;
+    top: 11px;
+    left: 46px;
+    font-size: 0.6rem;
     font-weight: 800;
     color: #6c5ce7;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
 }
 
-/* Иконка при фокусе становится ярче */
-.modern-field input:focus ~ .field-icon {
-    opacity: 1;
-    color: #6c5ce7;
-}
 
-/* --- Иконка внутри инпута --- */
+/* =========================================
+   6. ИКОНКИ ПОЛЕЙ
+========================================= */
+
 .modern-field .field-icon {
     position: absolute;
-    left: 10px;
-    top: 38%;
+    left: 14px;
+    top: 50%;
     transform: translateY(-50%);
-    font-size: 1.2rem;
-    opacity: 0.4;
-    z-index: 3;
-    transition: 0.3s;
-}
-
-
-/* =========================================
-   4. УСТАРЕВШИЕ СТИЛИ ПОЛЕЙ (совместимость)
-   input-group-modern, input-wrapper — старые
-   обёртки до перехода на modern-field.
-========================================= */
-
-.input-group-modern {
-    text-align: left;
-    margin-bottom: 20px;
-}
-
-.input-group-modern label {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #b2bec3;
-    margin-left: 15px;
-    margin-bottom: 8px;
-    display: block;
-}
-
-.input-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.input-wrapper .icon {
-    position: absolute;
-    left: 20px;
     font-size: 1.1rem;
+    opacity: 0.35;
+    z-index: 3;
+    transition: all 0.25s ease;
 }
 
-/* Стили инпутов внутри стеклянной карточки */
-.light-glass-card input {
-    width: 100%;
-    background: #f1f2f6 !important;
-    border: 2px solid transparent !important;
-    border-radius: 20px !important;
-    padding: 18px 20px 18px 55px !important;
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 600;
-    color: #2d3436 !important;
-    transition: 0.3s;
-}
-
-.light-glass-card input:focus {
-    background: #fff !important;
-    border-color: #6c5ce7 !important;
-    box-shadow: 0 10px 20px rgba(108, 92, 231, 0.1);
-    outline: none;
+.modern-field input:focus ~ .field-icon {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
 }
 
 
 /* =========================================
-   5. СОСТОЯНИЯ ОШИБОК
-   Красная рамка, подсветка иконки,
-   текст ошибки и анимация тряски.
+   7. СОСТОЯНИЯ ОШИБОК
 ========================================= */
 
-/* Красная рамка и фон при ошибке */
 .modern-field.error-active input {
     border-color: #ff4757 !important;
-    background: #fffafa !important;
+    background: #fff5f5 !important;
+    box-shadow: 0 0 0 4px rgba(255, 71, 87, 0.08) !important;
 }
 
 .modern-field.error-active .field-icon {
     opacity: 1;
-    filter: grayscale(0) brightness(0.8);
 }
 
 .modern-field.error-active .field-border {
     background: #ff4757;
-    box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
 }
 
-/* Текст ошибки под полем */
 .error-msg {
-    color: #ff85a1;
+    color: #ff6b7a;
     font-size: 0.7rem;
     font-weight: 700;
-    margin-top: 8px;
+    margin-top: 6px;
     text-align: left;
     display: none;
 }
 
-/* Подсказка-ошибка (включается через JS) */
 .input-hint {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: #ff4757;
     font-weight: 700;
-    margin: -35px 0 15px 10px;
+    margin: 4px 0 0 14px;
     display: none;
     text-align: left;
-    animation: fadeInError 0.6s ease;
+    animation: fadeInHint 0.35s ease;
 }
 
-@keyframes fadeInError {
-    from { opacity: 0; transform: translateY(-5px); }
+@keyframes fadeInHint {
+    from { opacity: 0; transform: translateY(-4px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Анимация тряски при ошибке */
 .error-shake {
     animation: shake-modern 0.4s cubic-bezier(.36, .07, .19, .97) both;
 }
@@ -301,54 +256,140 @@
 
 
 /* =========================================
-   6. КНОПКИ МОДАЛКИ
-   «Присоединиться», ссылка «Отмена»,
-   кнопка закрытия.
+   8. КНОПКА «ПОГНАЛИ»
 ========================================= */
 
-/* --- Кнопка «Присоединиться» --- */
 .btn-modern-join {
-    background: #6c5ce7;
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(135deg, #6c5ce7 0%, #a855f7 100%);
     color: white;
     border: none;
     width: 100%;
-    padding: 20px;
-    border-radius: 20px;
-    font-size: 1.1rem;
+    padding: 18px;
+    border-radius: 16px;
+    font-size: 1.05rem;
     font-weight: 800;
+    font-family: 'Montserrat', sans-serif;
     cursor: pointer;
-    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.3);
-    transition: 0.3s;
-    margin-top: 10px;
+    box-shadow:
+        0 8px 24px rgba(108, 92, 231, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+    overflow: hidden;
+}
+
+/* Бликовый эффект на кнопке */
+.btn-modern-join::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        transparent
+    );
+    transition: left 0.5s ease;
+}
+
+.btn-modern-join:hover::before {
+    left: 100%;
 }
 
 .btn-modern-join:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 30px rgba(108, 92, 231, 0.4);
-    background: #5b49d6;
+    transform: translateY(-2px);
+    box-shadow:
+        0 12px 32px rgba(108, 92, 231, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* --- Ссылка «Отмена» --- */
+.btn-modern-join:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 4px 16px rgba(108, 92, 231, 0.3);
+}
+
+
+/* =========================================
+   9. КНОПКА «ОТМЕНА» И ЗАКРЫТИЕ
+========================================= */
+
 .btn-cancel-link {
+    position: relative;
+    z-index: 1;
     background: none;
     border: none;
     color: #b2bec3;
-    margin-top: 20px;
+    margin-top: 16px;
+    font-size: 0.85rem;
     font-weight: 600;
+    font-family: 'Montserrat', sans-serif;
     cursor: pointer;
-    transition: 0.3s;
+    transition: color 0.25s ease;
+    padding: 6px 12px;
+    border-radius: 8px;
 }
 
 .btn-cancel-link:hover {
-    color: #636e72;
+    color: #6c5ce7;
 }
 
-/* --- Кнопка закрытия (×) --- */
 .btn-close {
     background: none;
     border: none;
-    color: var(--party-purple);
+    color: var(--party-purple, #6c5ce7);
     margin-top: 10px;
     cursor: pointer;
     font-weight: 600;
+}
+
+
+/* =========================================
+   10. МОБИЛЬНАЯ АДАПТАЦИЯ МОДАЛКИ
+========================================= */
+
+@media screen and (max-width: 480px) {
+    .light-glass-card {
+        padding: 28px 20px 22px;
+        border-radius: 24px;
+    }
+
+    .modal-hero-icon {
+        font-size: 2.2rem;
+    }
+
+    .modal-header h3 {
+        font-size: 1.25rem;
+    }
+
+    .btn-modern-join {
+        padding: 16px;
+        font-size: 0.95rem;
+        border-radius: 14px;
+    }
+
+    .modern-field input {
+        padding: 18px 16px 8px 42px !important;
+        font-size: 0.9rem;
+        border-radius: 12px !important;
+    }
+
+    .modern-field label {
+        left: 42px;
+        font-size: 0.8rem;
+    }
+
+    .modern-field input:focus ~ label,
+    .modern-field input:not(:placeholder-shown) ~ label {
+        left: 42px;
+    }
+
+    .modern-field .field-icon {
+        left: 12px;
+    }
 }
