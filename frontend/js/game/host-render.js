@@ -72,22 +72,9 @@ function renderScoreboard(players) {
     return;
   }
 
-  // Обновление — только обновляем очки на месте, без перестановки
+  // Обновление — обновляем очки и переставляем карточки по новому порядку
   const playerScoreMap = {};
   sorted.forEach(p => { playerScoreMap[p.name] = p.score || 0; });
-
-  for (const card of board.querySelectorAll(".scoreboard-card")) {
-    const name = card.getAttribute("data-player");
-    if (name in playerScoreMap) {
-      const scoreEl = card.querySelector(".scoreboard-score");
-      const newText = `${playerScoreMap[name]}🏆`;
-      if (scoreEl && scoreEl.textContent !== newText) {
-        scoreEl.textContent = newText;
-        card.classList.add("score-changed");
-        card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
-      }
-    }
-  }
 
   // Добавляем новых игроков, которых ещё нет в DOM
   const existingNames = new Set(
@@ -115,6 +102,95 @@ function renderScoreboard(players) {
       board.appendChild(newCard);
     }
   });
+
+  // Снимаем inline-анимацию первичного рендера (fill-mode:both блокирует transform)
+  const allCards = [...board.querySelectorAll(".scoreboard-card")];
+  allCards.forEach(card => {
+    if (card.style.animation) card.style.animation = '';
+  });
+
+  // FLIP — First: запоминаем старые позиции
+  const firstRects = new Map();
+  allCards.forEach(card => {
+    firstRects.set(card, card.getBoundingClientRect());
+  });
+
+  // Обновляем очки, ранги, порядок
+  sorted.forEach((p, i) => {
+    const card = board.querySelector(`[data-player="${CSS.escape(p.name)}"]`);
+    if (!card) return;
+
+    // Обновляем очки
+    const scoreEl = card.querySelector(".scoreboard-score");
+    const newText = `${p.score || 0}🏆`;
+    if (scoreEl && scoreEl.textContent !== newText) {
+      scoreEl.textContent = newText;
+      card.classList.add("score-changed");
+      card.addEventListener("animationend", () => card.classList.remove("score-changed"), { once: true });
+    }
+
+    // Обновляем ранг
+    const rankEmoji = i < 3 ? medals[i] : (i + 1);
+    const rankEl = card.querySelector(".scoreboard-rank");
+    if (rankEl) rankEl.textContent = rankEmoji;
+
+    // Обновляем класс ранга
+    card.classList.remove('rank-1st', 'rank-2nd', 'rank-3rd', 'rank-other', 'is-leader');
+    const rankClass = i === 0 ? 'rank-1st' : i === 1 ? 'rank-2nd' : i === 2 ? 'rank-3rd' : 'rank-other';
+    card.classList.add(rankClass);
+    if (i === 0) card.classList.add('is-leader');
+
+    // Обновляем корону
+    let crownEl = card.querySelector(".scoreboard-crown");
+    if (i === 0 && !crownEl) {
+      crownEl = document.createElement("div");
+      crownEl.className = "scoreboard-crown";
+      crownEl.textContent = "⭐";
+      card.appendChild(crownEl);
+    } else if (i !== 0 && crownEl) {
+      crownEl.remove();
+    }
+
+    // Переставляем карточку в правильную позицию
+    board.appendChild(card);
+  });
+
+  // FLIP — Last + Invert + Play
+  const flips = [];
+  allCards.forEach(card => {
+    const first = firstRects.get(card);
+    if (!first) return;
+    const last = card.getBoundingClientRect();
+    const dx = first.left - last.left;
+    const dy = first.top - last.top;
+    if (dx === 0 && dy === 0) return;
+    flips.push({ card, dx, dy });
+  });
+
+  if (flips.length > 0) {
+    // Invert: мгновенно ставим карточки на старые позиции
+    flips.forEach(({ card, dx, dy }) => {
+      card.style.transform = `translate(${dx}px, ${dy}px)`;
+      card.style.transition = 'transform 0s';
+    });
+
+    // Принудительный reflow — браузер фиксирует текущие transform
+    void board.offsetWidth;
+
+    // Play: анимируем к новым позициям
+    flips.forEach(({ card }) => {
+      card.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      card.style.transform = '';
+    });
+
+    // Cleanup inline-стилей после анимации
+    setTimeout(() => {
+      flips.forEach(({ card }) => {
+        card.style.transition = '';
+        card.style.transform = '';
+      });
+    }, 550);
+  }
 }
 
 

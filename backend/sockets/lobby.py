@@ -28,11 +28,17 @@ def register_lobby_handlers(sio_manager):
         with database.get_db_session() as db:
             player = db.query(models.Player).filter(models.Player.id == player_id).first()
             if player and player.sid is None:
-                await sio_manager.emit('player_disconnected', {
-                    'name': player_name,
-                    'emoji': player_emoji
-                }, room=quiz_code)
-                logger.info("Player disconnect confirmed after delay  name=%s  quiz_code=%s", player_name, quiz_code)
+                quiz = db.query(models.Quiz).filter(models.Quiz.id == player.quiz_id).first()
+                if quiz and quiz.status == "waiting":
+                    players = get_players_in_quiz(db, quiz.id)
+                    await sio_manager.emit('update_players', players, room=quiz_code)
+                    logger.info("Player offline in lobby  name=%s  quiz_code=%s", player_name, quiz_code)
+                else:
+                    await sio_manager.emit('player_disconnected', {
+                        'name': player_name,
+                        'emoji': player_emoji
+                    }, room=quiz_code)
+                    logger.info("Player disconnect confirmed after delay  name=%s  quiz_code=%s", player_name, quiz_code)
         _pending_disconnects.pop(player_id, None)
 
     @sio_manager.on('disconnect')
@@ -49,7 +55,7 @@ def register_lobby_handlers(sio_manager):
                 db.commit()
                 logger.info("Player disconnected  name=%s  quiz_id=%s  sid=%s", player_name, player.quiz_id, sid)
                 # Отложенное уведомление хоста (5с задержка для реконнекта при обновлении страницы)
-                if quiz and quiz.status == "playing" and not player.is_host:
+                if quiz and quiz.status in ("waiting", "playing") and not player.is_host:
                     old_task = _pending_disconnects.pop(player_id, None)
                     if old_task:
                         old_task.cancel()

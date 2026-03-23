@@ -53,6 +53,9 @@ function registerResultsHandler(socket) {
       document.getElementById("finish-screen").style.display = "block";
       _playConfettiAnimation();
     }
+
+    // Игра завершена — закрываем соединение, предотвращаем авто-реконнект
+    socket.disconnect();
   });
 }
 

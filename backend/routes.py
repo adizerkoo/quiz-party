@@ -102,7 +102,39 @@ def register_routes(app):
             "total_questions": quiz.total_questions,
             "current_question": quiz.current_question,
             "status": quiz.status,
+            "created_at": quiz.created_at,
             "started_at": quiz.started_at,
             "finished_at": quiz.finished_at,
             "winner_id": quiz.winner_id,
+        }
+
+    @app.get("/api/v1/quizzes/{code}/results")
+    def get_quiz_results(code: str, db: Session = Depends(database.get_db)):
+        """Возвращает результаты завершённой викторины."""
+        quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        if quiz.status != "finished":
+            raise HTTPException(status_code=400, detail="Quiz is not finished yet")
+
+        players = db.query(models.Player).filter(
+            models.Player.quiz_id == quiz.id,
+            models.Player.is_host == False
+        ).order_by(models.Player.score.desc()).all()
+
+        return {
+            "code": quiz.code,
+            "title": quiz.title,
+            "status": quiz.status,
+            "started_at": quiz.started_at,
+            "finished_at": quiz.finished_at,
+            "total_questions": quiz.total_questions,
+            "questions": quiz.questions_data,
+            "results": [{
+                "name": p.name,
+                "score": p.score,
+                "emoji": p.emoji,
+                "answers": p.answers_history,
+                "answer_times": p.answer_times or {},
+            } for p in players],
         }

@@ -49,6 +49,7 @@ def get_players_in_quiz(db: Session, quiz_id: int):
             "emoji": p.emoji or "👤",
             "answers_history": p.answers_history or {},
             "scores_history": p.scores_history or {},
+            "answer_times": p.answer_times or {},
             "connected": p.sid is not None
         } for p in players
     ]

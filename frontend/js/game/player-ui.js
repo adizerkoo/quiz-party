@@ -151,12 +151,16 @@ function goToCurrentQuestion() {
 // Отправка ответа на сервер + показ подтверждения
 function sendAnswer(val) {
   myAnswersHistory[currentQuestion.toString()] = val;
+  const answerTime = window._questionShownAt
+    ? Math.round((Date.now() - window._questionShownAt) / 100) / 10
+    : null;
 
   socket.emit("send_answer", {
     room: roomCode,
     name: playerName,
     answer: val,
     questionIndex: currentQuestion,
+    answerTime: answerTime,
   });
 
   const answerArea = document.getElementById("player-answer-area");

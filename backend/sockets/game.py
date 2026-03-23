@@ -86,10 +86,24 @@ def register_game_handlers(sio_manager):
                 score_history[q_idx] = 1 if is_correct else 0
                 player.scores_history = score_history
                 player.score = sum(score_history.values())
+
+                # Store answer time
+                raw_time = data.get('answerTime')
+                if raw_time is not None:
+                    try:
+                        t = round(float(raw_time), 1)
+                        if 0 < t < 3600:
+                            new_times = dict(player.answer_times or {})
+                            new_times[q_idx] = t
+                            player.answer_times = new_times
+                    except (TypeError, ValueError):
+                        pass
+
                 db.commit()
+                answer_t = (player.answer_times or {}).get(q_idx)
                 logger.info(
-                    "Answer received  name=%s  room=%s  q=%s  answer=%r  correct=%s  score=%d",
-                    player.name, room, q_idx, answer, is_correct, player.score,
+                    "Answer received  name=%s  room=%s  q=%s  answer=%r  correct=%s  score=%d  time=%s",
+                    player.name, room, q_idx, answer, is_correct, player.score, f"{answer_t}s" if answer_t else "N/A",
                 )
                 players_data = get_players_in_quiz(db, player.quiz_id)
                 await sio_manager.emit('update_answers', players_data, room=room)

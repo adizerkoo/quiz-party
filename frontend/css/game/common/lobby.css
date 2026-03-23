@@ -256,6 +256,37 @@
     z-index: 2;
 }
 
+/* Отключённый игрок в лобби */
+.player-card-lobby.is-offline {
+    opacity: 0.4;
+    filter: grayscale(1);
+    transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+.player-card-lobby.is-offline .avatar-emoji {
+    animation: none !important;
+    text-decoration: line-through;
+}
+
+.player-card-lobby .offline-badge {
+    display: none;
+}
+
+.player-card-lobby.is-offline .offline-badge {
+    display: block;
+    position: absolute;
+    top: -8px;
+    background: #636e72;
+    color: white;
+    font-size: 0.55rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 8px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    z-index: 10;
+}
+
 .player-card-lobby .player-name-label {
     font-size: 0.75rem;
     font-weight: 700;
@@ -517,6 +548,12 @@
     .copy-text-node {
         font-size: 0.6rem;
     }
+
+    .player-card-lobby.is-offline .offline-badge {
+    font-size: 0.25rem;
+    }
+
+    
 }
 
 /* ============================================

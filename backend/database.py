@@ -69,6 +69,9 @@ def _migrate():
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS total_questions INTEGER DEFAULT 0",
         "UPDATE quizzes SET total_questions = jsonb_array_length(questions_data) WHERE total_questions = 0 AND questions_data IS NOT NULL",
         "CREATE INDEX IF NOT EXISTS ix_players_quiz_id_name ON players (quiz_id, name)",
+        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP",
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS answer_times JSONB DEFAULT '{}'::jsonb",
     ]
     with engine.connect() as conn:
         for sql in new_columns:

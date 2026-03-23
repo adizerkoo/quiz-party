@@ -48,27 +48,55 @@ function registerLobbyHandlers(socket) {
       const container = document.getElementById(id);
       if (!container) return;
 
-      container.innerHTML = actualPlayers
-        .map((p) => {
-          const isMe = p.name === playerName;
-          const showKick = isHostView && id === "lobby-players-list";
+      const newPlayersMap = {};
+      actualPlayers.forEach((p) => { newPlayersMap[p.name] = p; });
 
-          return `
-            <div class="player-card-lobby ${isMe ? "is-me" : ""}" onclick="handleEmojiClick(this)">
-              ${isMe ? '<div class="me-badge">ВЫ</div>' : ""}
-              ${showKick ? `<button class="kick-player-btn" onclick="event.stopPropagation(); kickPlayer(${escapeHtml(JSON.stringify(p.name))})" title="Исключить игрока">✕</button>` : ""}
-              
-              <div class="avatar-emoji">
-                ${p.emoji || "👤"}
-              </div>
-              
-              <div class="player-name-label">
-                ${escapeHtml(p.name)}
-              </div>
+      // Remove cards for players no longer in the list
+      const existingCards = [...container.querySelectorAll(".player-card-lobby")];
+      const existingNames = new Set();
+      existingCards.forEach((card) => {
+        const name = card.getAttribute("data-player-name");
+        if (!name || !(name in newPlayersMap)) {
+          card.remove();
+        } else {
+          existingNames.add(name);
+        }
+      });
+
+      actualPlayers.forEach((p) => {
+        const isMe = p.name === playerName;
+        const showKick = isHostView && id === "lobby-players-list";
+        const isOffline = p.connected === false;
+
+        let card = container.querySelector(`[data-player-name="${CSS.escape(p.name)}"]`);
+
+        if (card) {
+          // Update existing card in-place (no re-render)
+          if (isOffline) {
+            card.classList.add("is-offline");
+          } else {
+            card.classList.remove("is-offline");
+          }
+        } else {
+          // Create new card
+          card = document.createElement("div");
+          card.className = `player-card-lobby ${isMe ? "is-me" : ""} ${isOffline ? "is-offline" : ""}`;
+          card.setAttribute("data-player-name", p.name);
+          card.onclick = function () { handleEmojiClick(this); };
+          card.innerHTML = `
+            ${isMe ? '<div class="me-badge">ВЫ</div>' : ""}
+            ${showKick ? `<button class="kick-player-btn" onclick="event.stopPropagation(); kickPlayer(${escapeHtml(JSON.stringify(p.name))})" title="Исключить игрока">✕</button>` : ""}
+            <div class="offline-badge">offline</div>
+            <div class="avatar-emoji">
+              ${p.emoji || "👤"}
+            </div>
+            <div class="player-name-label">
+              ${escapeHtml(p.name)}
             </div>
           `;
-        })
-        .join("");
+          container.appendChild(card);
+        }
+      });
     });
   });
 }

@@ -48,6 +48,7 @@ class QuizResponse(BaseModel):
 
     # 🆕 Новые поля
     status: str
+    created_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     winner_id: Optional[int] = None

@@ -38,6 +38,7 @@ function registerGameStartHandler(socket) {
     if (me) myEmoji = me.emoji;
 
     // Эпическая анимация старта (только при живом событии, не при sync)
+    window._questionShownAt = Date.now();
     playGameStartIntro(players, () => {
       if (role === "host") {
         _handleHostGameStart(players);
@@ -114,6 +115,7 @@ function registerMoveToNextHandler(socket) {
    */
   socket.on("move_to_next", (data) => {
     _nextLocked = false;
+    window._questionShownAt = Date.now();
     currentQuestion = data.question;
     realGameQuestion = data.question;
     playerViewQuestion = data.question;

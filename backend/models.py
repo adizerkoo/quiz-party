@@ -27,6 +27,7 @@ class Quiz(Base):
     finished_at = Column(DateTime, nullable=True)
 
     winner_id = Column(Integer, nullable=True)  # id победителя (Player.id)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # Связь с игроками
     players = relationship("Player", back_populates="quiz", cascade="all, delete-orphan")
@@ -50,5 +51,7 @@ class Player(Base):
     browser = Column(String, nullable=True)         # Chrome / Firefox / Safari …
     browser_version = Column(String, nullable=True) # мажорная версия, напр. "124"
     device_model = Column(String, nullable=True)    # Samsung SM-G991B / Apple iPhone / unknown
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    answer_times = Column(JSON, default=dict)       # {"1": 3.2, "2": 1.5} — время ответа (сек)
     quiz_id = Column(Integer, ForeignKey("quizzes.id"))
     quiz = relationship("Quiz", back_populates="players")
