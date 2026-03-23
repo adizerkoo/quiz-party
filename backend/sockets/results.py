@@ -32,7 +32,7 @@ def register_results_handlers(sio_manager):
                     logger.warning("Non-host attempted finish_game  sid=%s  room=%s", sid, room)
                     return
                 quiz.status = "finished"
-                quiz.finished_at = datetime.datetime.utcnow()
+                quiz.finished_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
                 players = db.query(models.Player).filter(
                     models.Player.quiz_id == quiz.id,

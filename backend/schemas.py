@@ -2,7 +2,7 @@
 Pydantic-схемы для валидации входных данных и формирования ответов API.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -53,5 +53,4 @@ class QuizResponse(BaseModel):
     finished_at: Optional[datetime] = None
     winner_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

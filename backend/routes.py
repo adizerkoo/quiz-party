@@ -62,7 +62,7 @@ def register_routes(app):
             new_quiz = models.Quiz(
                 title=quiz_data.title,
                 code=code,
-                questions_data=[q.dict() for q in quiz_data.questions],
+                questions_data=[q.model_dump() for q in quiz_data.questions],
                 total_questions=len(quiz_data.questions),
                 status="waiting"
             )

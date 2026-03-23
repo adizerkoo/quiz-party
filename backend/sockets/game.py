@@ -31,7 +31,7 @@ def register_game_handlers(sio_manager):
                     return
                 quiz.current_question = 1
                 quiz.status = "playing"
-                quiz.started_at = datetime.datetime.utcnow()
+                quiz.started_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
                 db.commit()
                 players = get_players_in_quiz(db, quiz.id)
                 logger.info("Game started  room=%s  quiz_id=%s  players=%d", room, quiz.id, len(players))

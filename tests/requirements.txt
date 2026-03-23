@@ -1,0 +1,7 @@
+# Test Dependencies
+pytest>=8.0
+pytest-asyncio>=0.23
+httpx>=0.27
+allure-pytest>=2.13
+
+# addopts = --alluredir=allure-results --clean-alluredir
