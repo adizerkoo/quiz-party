@@ -109,16 +109,6 @@
     transition: 0.15s;
 }
 
-.question-card:hover {
-    border-color: #f385ff;
-    background: rgba(252, 204, 241, 0.504);
-}
-
-.question-item-complex:hover {
-    border-color: #ff85a1;
-    transform: translateY(-2px);
-}
-
 /* --- Верхняя строка: номер + текст --- */
 .question-top {
     display: flex;
@@ -236,14 +226,32 @@
     transition: 0.2s;
 }
 
-.action-btn:hover {
-    transform: scale(1.2);
+.action-btn:active {
+    transform: scale(0.95);
+    transition: transform 0.2s ease;
 }
 
-.btn-edit:hover {
-    color: #6c5ce7;
-}
+@media (hover: hover) {
+    .question-card:hover {
+        border-color: #f385ff;
+        background: rgba(252, 204, 241, 0.504);
+    }
 
-.btn-delete:hover {
-    color: #f04b4b;
+    .question-item-complex:hover {
+        border-color: #ff85a1;
+        transform: translateY(-2px);
+    }
+    
+    .action-btn:hover {
+        transform: scale(1.2);
+    }
+
+    .btn-edit:hover {
+        color: #6c5ce7;
+    }
+
+    .btn-delete:hover {
+        color: #f04b4b;
+    }
+
 }

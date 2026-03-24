@@ -14,6 +14,10 @@
     text-align: center;
     /* Почти незаметное радиальное свечение фона */
     background: radial-gradient(circle at center, rgba(108, 92, 231, 0.02) 0%, rgba(255, 255, 255, 0) 70%);
+    
+    /* КРИТИЧНО ДЛЯ МОБИЛОК: заставляет iOS реагировать на :active на обычных div */
+    cursor: pointer; 
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* --- Заголовок с эффектом неонового свечения --- */
@@ -27,12 +31,16 @@
     position: relative;
     display: inline-block;
     color: #4834d4;
+    
     /* Мягкое неоновое свечение за текстом */
     text-shadow:
         0 0 10px rgba(108, 92, 231, 0.1),
         0 0 25px rgba(108, 92, 231, 0.15),
         0 0 45px rgba(108, 92, 231, 0.1);
     animation: quizGlowBreath 4s infinite ease-in-out;
+    
+    /* Плавность добавлена сюда, чтобы анимация была мягкой В ОБЕ стороны */
+    transition: color 0.4s ease, transform 0.4s ease;
 }
 
 /* Анимация пульсации свечения */
@@ -51,13 +59,6 @@
     }
 }
 
-/* Подсветка заголовка при наведении на область логотипа */
-.logo-area:hover .party-title {
-    color: #6c5ce7;
-    transform: scale(1.03);
-    transition: all 0.4s ease;
-}
-
 /* Интерактивная полоска под заголовком */
 .party-title::after {
     content: '';
@@ -72,11 +73,6 @@
     transition: width 0.3s ease, background 0.3s ease;
 }
 
-/* Полоска расширяется и меняет цвет при наведении */
-.logo-area:hover .party-title::after {
-    width: 140px;
-    background: #ff85a1;
-}
 
 /* --- Подзаголовок --- */
 .party-subtitle {
@@ -105,4 +101,36 @@
 @keyframes subtitleReveal {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 0.8; transform: translateY(0); }
+}
+
+
+/* =========================================
+   ИНТЕРАКТИВНОСТЬ (HOVER ДЛЯ ПК, ACTIVE ДЛЯ МОБИЛОК)
+========================================= */
+
+/* 1. Эффект при наведении мышкой (только для компьютеров) */
+@media (hover: hover) {
+    .logo-area:hover .party-title {
+        color: #6c5ce7;
+        transform: scale(1.03);
+    }
+
+    .logo-area:hover .party-title::after {
+        width: 140px;
+        background: #ff85a1;
+    }
+}
+
+/* 2. Эффект при нажатии (тап на телефоне или клик на ПК) */
+.logo-area:active .party-title {
+    color: #6c5ce7;
+    transform: scale(1.03);
+    /* Делаем реакцию на палец мгновенной */
+    transition: all 0.1s ease; 
+}
+
+.logo-area:active .party-title::after {
+    width: 140px;
+    background: #ff85a1;
+    transition: all 0.1s ease;
 }

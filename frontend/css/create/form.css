@@ -9,9 +9,10 @@
 /* --- Контейнер зоны создания --- */
 .creation-zone {
     text-align: left;
-    background: rgba(108, 92, 231, 0.05);
+    background: rgba(108, 92, 231, 0.104);
     padding: 20px;
     border-radius: 20px;
+    border: dashed 1px rgba(108, 92, 231, 0.4);
     margin-bottom: 20px;
 }
 
@@ -31,7 +32,7 @@
 .input-group select {
     width: 100%;
     padding: 12px;
-    border: 2px solid rgba(108, 92, 231, 0.2);
+    border: 1px solid rgba(108, 92, 231, 0.779);
     border-radius: 12px;
     margin-bottom: 15px;
     font-family: 'Montserrat', sans-serif;
@@ -89,9 +90,8 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     padding: 0;
-    background: transparent;
     border: none;
     width: 100%;
 }
@@ -175,14 +175,9 @@ input[name="correct-opt"]:checked::after {
     box-sizing: border-box;
 }
 
-.btn-add-option:hover {
-    background: rgba(108, 92, 231, 0.06);
-    border-color: rgba(108, 92, 231, 0.45);
-    transform: translateY(-1px);
-}
-
 .btn-add-option:active {
-    transform: translateY(0);
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
 }
 
 /* --- Кнопка удаления варианта (корзина в строке) --- */
@@ -190,9 +185,9 @@ input[name="correct-opt"]:checked::after {
     appearance: none;
     border: none;
     background: transparent;
-    color: #dfe6e9;
+    color: #e75c7c;
     cursor: pointer;
-    padding: 4px;
+    padding: 0px;
     font-size: 0.8rem;
     border-radius: 8px;
     flex-shrink: 0;
@@ -201,10 +196,9 @@ input[name="correct-opt"]:checked::after {
     align-items: center;
     justify-content: center;
 }
-
-.btn-remove-option:hover {
-    color: #e74c3c;
-    background: rgba(231, 76, 60, 0.08);
+.btn-remove-option:active {
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
 }
 
 
@@ -240,19 +234,13 @@ input[name="correct-opt"]:checked::after {
     transition: transform 0.2s ease;
 }
 
-.btn-clear-options:hover {
-    background: rgba(231, 92, 143, 0.06);
-    border-color: rgba(231, 92, 157, 0.4);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
-}
-
-.btn-clear-options:hover i {
-    transform: rotate(10deg);
+.btn-clear-options:active i{
+    transform: rotate(15deg);
 }
 
 .btn-clear-options:active {
-    transform: translateY(0px);
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
     box-shadow: 0 1px 3px rgba(231, 92, 182, 0.1);
     background: rgba(231, 92, 194, 0.12);
 }
@@ -288,11 +276,36 @@ input[name="correct-opt"]:checked::after {
     user-select: none;
 }
 
-.clear-input:hover {
-    color: #e74c3c;
-}
-
 /* Отступ снизу для текстового ответа */
 .input-with-clear.correct-text {
     margin-bottom: 20px;
+}
+
+/* Эффект сработает ТОЛЬКО на устройствах с мышкой */
+@media (hover: hover) {
+    .btn-add-option:hover {
+    background: rgba(108, 92, 231, 0.06);
+    border-color: rgba(108, 92, 231, 0.45);
+    transform: translateY(-1px);
+    }
+
+    .btn-remove-option:hover {
+        color: #e75c7c;
+        background: rgba(231, 76, 60, 0.08);
+    }
+    
+    .btn-clear-options:hover {
+        background: rgba(231, 92, 143, 0.06);
+        border-color: rgba(231, 92, 157, 0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
+    }
+    
+    .clear-input:hover {
+    color: #e74c3c;
+    }
+
+    .btn-clear-options:hover i {
+    transform: rotate(10deg);
+    }
 }

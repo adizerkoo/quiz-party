@@ -38,29 +38,16 @@
     transition: transform 0.2s ease;
 }
 
-.btn-inline-library:hover {
-    background: rgba(108, 92, 231, 0.06);
-    border-color: rgba(108, 92, 231, 0.4);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
-}
-
-.btn-inline-library:hover i {
-    transform: rotate(15deg);
-}
-
 .btn-inline-library:active {
-    transform: translateY(0px);
+    transform: scale(0.95);
+    transition: transform 0.3s ease;
     box-shadow: 0 1px 3px rgba(108, 92, 231, 0.1);
     background: rgba(108, 92, 231, 0.12);
 }
 
-/* Кнопка открытия библиотеки (большая) */
-.btn-open-library:hover {
-    transform: scale(1.1) translateY(-5px);
-    box-shadow: 0 15px 25px rgba(108, 92, 231, 0.6);
+.btn-inline-library:active i {
+    transform: rotate(15deg);
 }
-
 
 /* =========================================
    ОВЕРЛЕЙ И КОНТЕЙНЕР МОДАЛКИ
@@ -141,12 +128,6 @@
     transition: all 0.2s ease;
 }
 
-.close-modal:hover {
-    background: #ffe0e6;
-    color: #ff85a1;
-    transform: rotate(90deg);
-}
-
 
 /* =========================================
    СПИСОК ВОПРОСОВ БИБЛИОТЕКИ
@@ -184,13 +165,6 @@
     transition: all 0.25s ease;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
     border: 2px solid #f1f2f6;
-}
-
-.library-item:hover {
-    border-color: #ff85a1;
-    background: #fff;
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(255, 133, 161, 0.15);
 }
 
 .library-item b {
@@ -276,4 +250,38 @@
     background: #6c5ce7;
     color: white;
     border-color: #6c5ce7;
+}
+
+
+@media (hover: hover) {
+    .btn-inline-library:hover {
+        background: rgba(108, 92, 231, 0.06);
+        border-color: rgba(108, 92, 231, 0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
+    }
+    
+    .btn-inline-library:hover i {
+        transform: rotate(15deg);
+    }
+
+    /* Кнопка открытия библиотеки (большая) */
+    .btn-open-library:hover {
+        transform: scale(1.1) translateY(-5px);
+        box-shadow: 0 15px 25px rgba(108, 92, 231, 0.6);
+    }
+    
+    .close-modal:hover {
+        background: #ffe0e6;
+        color: #ff85a1;
+        transform: rotate(90deg);
+    }
+    
+    .library-item:hover {
+        border-color: #ff85a1;
+        background: #fff;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(255, 133, 161, 0.15);
+    }
+
 }

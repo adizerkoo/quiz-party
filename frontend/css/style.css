@@ -1,11 +1,26 @@
 body {
     margin: a; font-family: 'Montserrat', sans-serif;
-    background: linear-gradient(135deg, #fdfcfe 0%, #e0c3fc 100%);
+    background: linear-gradient(180deg, #ffffff 0%, #cfa1fa 100%);
     min-height: 100vh;
+        /* Сайт не станет уже 320 пикселей. Если экран меньше — появится горизонтальный скролл */
+    min-width: 320px; 
+    
+    /* Чтобы контент не прилипал к краям на узких экранах */
 }
 
 .no-scroll {
     overflow: hidden;
+}
+
+
+* {
+  -webkit-user-select: none;
+  user-select: none;
+
+  -webkit-touch-callout: none; /* убирает меню на iOS */
+  -webkit-tap-highlight-color: transparent; /* убирает подсветку */
+
+  -webkit-user-drag: none;
 }
 
 
@@ -21,11 +36,8 @@ body {
 }
 
 .party-card {
-    background: rgba(255,255,255,0.9);
     padding: 30px; border-radius: 30px;
     width: 100%; max-width: 650px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    z-index: 10;
 }
 
 .balloon {
@@ -44,6 +56,8 @@ body {
 /* Отключаем жесты масштабирования на уровне CSS */
 html, body {
     touch-action: pan-x pan-y; /* Разрешает только скролл, запрещает зум щипком */
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 /* Убираем синюю рамку и зум при фокусе */
@@ -55,10 +69,4 @@ input, select, textarea {
     -webkit-tap-highlight-color: transparent; /* Убирает синюю рамку при клике на кнопки/инпуты */
 }
 
-body {
-    /* Сайт не станет уже 320 пикселей. Если экран меньше — появится горизонтальный скролл */
-    min-width: 320px; 
-    
-    /* Чтобы контент не прилипал к краям на узких экранах */
-    overflow-x: hidden; 
-}
+

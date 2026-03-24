@@ -26,32 +26,17 @@
     text-align: left;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
     overflow: hidden; /* для эффекта блика */
+    transform: scale(1);
     transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
     z-index: 1;
 }
 
-/* Стеклянный блик (пробегает при наведении) */
-.menu-item::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 50%;
-    height: 100%;
-    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 0) 100%);
-    transform: skewX(-25deg);
-    transition: left 0.5s ease;
-    z-index: -1;
+.menu-item:active {
+    transform: scale(0.98);
 }
 
-/* Подъём карточки и запуск блика */
-.menu-item:hover {
-    transform: translateY(-5px);
-}
-
-.menu-item:hover::after {
-    left: 150%;
-    transition: all 0.7s ease-in-out;
+.menu-item:active .menu-icon {
+    animation: iconPartyBounce 0.6s ease-in-out;
 }
 
 
@@ -66,10 +51,6 @@
     75%      { transform: translateY(-2px) rotate(8deg) scale(1.1); }
 }
 
-.menu-item:hover .menu-icon {
-    animation: iconPartyBounce 0.6s ease-in-out;
-}
-
 
 /* =========================================
    КНОПКА «ОРГАНИЗАТОР» (розовая)
@@ -77,11 +58,6 @@
 
 .menu-item.create {
     border-color: #ff85a1;
-}
-
-.menu-item.create:hover {
-    border-color: #ff85a1;
-    box-shadow: 0 15px 30px rgba(255, 133, 161, 0.25);
 }
 
 .menu-item.create .menu-icon {
@@ -96,11 +72,6 @@
 
 .menu-item.join {
     border-color: #6c5ce7;
-}
-
-.menu-item.join:hover {
-    border-color: #6c5ce7;
-    box-shadow: 0 15px 30px rgba(108, 92, 231, 0.25);
 }
 
 .menu-item.join .menu-icon {
@@ -148,4 +119,34 @@
     margin-top: 40px;
     font-size: 0.8rem;
     opacity: 0.4;
+}
+
+
+
+@media (hover: hover) {
+    /* Подъём карточки и запуск блика */
+    .menu-item:hover {
+        transform: translateY(-5px);
+    }
+
+    .menu-item:hover::after {
+        left: 150%;
+        transition: all 0.7s ease-in-out;
+    }
+
+    
+    .menu-item:hover .menu-icon {
+        animation: iconPartyBounce 0.6s ease-in-out;
+    }
+
+    .menu-item.create:hover {
+        border-color: #ff85a1;
+        box-shadow: 0 15px 30px rgba(255, 133, 161, 0.25);
+    }
+    
+    .menu-item.join:hover {
+        border-color: #6c5ce7;
+        box-shadow: 0 15px 30px rgba(108, 92, 231, 0.25);
+    }
+
 }

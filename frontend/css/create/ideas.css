@@ -27,7 +27,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    background: rgba(108, 92, 231, 0.08);
+    background: rgba(108, 92, 231, 0.118);
     border-radius: 12px;
     border: 1px solid transparent;
     color: #6c5ce7;
@@ -40,6 +40,13 @@
     line-height: 1.3;
 }
 
+.idea-container:active {
+    background: rgba(108, 92, 231, 0.2);
+    transform: scale(0.98);
+    transition: transform 0.3s ease, background 0.3s ease;
+}
+
+
 /* Переопределение по ID — более компактный вариант */
 #idea-container {
     font-size: 10px;
@@ -48,11 +55,6 @@
     justify-content: flex-start;
     gap: 5px;
     padding-left: 10px;
-}
-
-.idea-container:hover {
-    background: rgba(108, 92, 231, 0.15);
-    border-color: rgba(108, 92, 231, 0.2);
 }
 
 /* Иконка лампочки */
@@ -99,20 +101,13 @@
     transition: all 0.2s ease;
 }
 
-.refresh-btn:hover {
-    border-color: #6c5ce7;
-    background: #f8f7ff;
-}
+
 
 .refresh-btn i {
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Поворот на 180° при наведении */
-.refresh-btn:hover i {
-    transform: rotate(180deg);
-    color: #6c5ce7;
-}
+
 
 /* Полный оборот при клике */
 .refresh-btn:active i {
@@ -180,4 +175,24 @@
 .magic-fly-particle.is-flying {
     transform: translate(calc(-50% + var(--fly-x)), calc(-50% + var(--fly-y))) scale(0.3);
     opacity: 0.5;
+}
+
+@media (hover: hover) {
+    
+    .idea-container:hover {
+        background: rgba(108, 92, 231, 0.15);
+        border-color: rgba(108, 92, 231, 0.2);
+    }
+
+    .refresh-btn:hover {
+    border-color: #6c5ce7;
+    background: #f8f7ff;
+    }
+
+    /* Поворот на 180° при наведении */
+    .refresh-btn:hover i {
+        transform: rotate(180deg);
+        color: #6c5ce7;
+    }
+
 }

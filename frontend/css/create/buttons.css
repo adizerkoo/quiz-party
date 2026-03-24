@@ -15,7 +15,15 @@
     border-radius: 12px;
     font-weight: 800;
     cursor: pointer;
+    transform: scale(1);
+    transition: transform 0.4s ease, box-shadow 0.4s ease, background 0.4s ease;
 }
+.btn-party-add:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 5px rgba(108, 92, 231, 0.1);
+    background: rgb(255, 115, 147);
+}
+
 
 /* --- Кнопка «Запустить вечеринку» --- */
 .btn-party-launch {
@@ -35,9 +43,12 @@
     box-shadow: 0 10px 25px rgba(108, 92, 231, 0.3);
 }
 
-.btn-party-launch:hover {
-    transform: scale(1.02);
+.btn-party-launch:active {
+    transform: scale(0.95);
+    box-shadow: 0 5px 15px rgba(108, 92, 231, 0.2);
+    background: linear-gradient(45deg, #5a4dcf, #ff6f91);
 }
+
 
 /* --- Эффект бегущего свечения --- */
 .btn-glow {
@@ -53,3 +64,4 @@
 @keyframes shine {
     to { left: 200%; }
 }
+
