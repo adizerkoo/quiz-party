@@ -28,7 +28,7 @@ body {
     width: 100%;
     max-width: 700px; /* Было 622px, ставим больше */
     margin: auto;
-    padding: 0 15px;  /* Небольшие отступы, чтобы не липло к краям экрана */
+    padding: 0 0px;  /* Небольшие отступы, чтобы не липло к краям экрана */
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -68,5 +68,3 @@ input, select, textarea {
 * {
     -webkit-tap-highlight-color: transparent; /* Убирает синюю рамку при клике на кнопки/инпуты */
 }
-
-

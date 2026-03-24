@@ -5,6 +5,13 @@
 ========================================= */
 
 
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        // Тут твой старый код инициализации сокетов и стейта
+        console.log("Game initialized after delay");
+    }, 100); 
+});
+
 // Определение устройства, браузера и модели из userAgent
 function getDeviceInfo() {
   const ua = navigator.userAgent;

@@ -70,11 +70,6 @@
     margin: 0;
 }
 
-.icon-only-btn:hover {
-    background: rgba(108, 92, 231, 0.15);
-    transform: scale(1.05);
-}
-
 .icon-only-btn:active {
     transform: scale(0.92);
 }
@@ -243,11 +238,6 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-.player-card-lobby:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-}
-
 .player-card-lobby.is-me {
     background: rgba(255, 255, 255, 0.95);
     border: 2px solid #a29bfe;
@@ -373,28 +363,12 @@
     font-size: 1rem;
 }
 
-/* --- Главный контейнер лобби --- */
-
-.lobby-main-card {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 30px;
-    padding: 24px 16px;
-    box-shadow: 0 15px 35px rgba(108, 92, 231, 0.12);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 10px;
-}
-
 .lobby-header-section {
     text-align: center;
 }
 
 /* Кнопка ПОГНАЛИ (переопределение) */
-.btn-party-direct {
+.btn-start-game {
     width: 100%;
     padding: 16px;
     border-radius: 18px;
@@ -405,18 +379,15 @@
     background: linear-gradient(135deg, #6c5ce7, #8e44ad);
     color: white;
     border: none;
-    box-shadow: 0 8px 20px rgba(108, 92, 231, 0.3);
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 0px 0px rgba(255, 255, 255, 0);
+    transform: scale(1);
+    transition: transform 0.3s ease;
     cursor: pointer;
 }
 
-.btn-party-direct:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 12px 25px rgba(108, 92, 231, 0.4);
-}
-
-.btn-party-direct:active {
+.btn-start-game:active {
     transform: scale(0.96);
+    transition: transform 0.3s ease;
 }
 
 /* --- Кнопка «Редактировать» (назад в создание) --- */
@@ -425,7 +396,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 7px 16px;
+    padding: 5px 10px;
     margin-bottom: 10px;
     border: 1.5px solid rgba(108, 92, 231, 0.25);
     border-radius: 12px;
@@ -434,17 +405,12 @@
     font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.2s ease, border-color 0.2s ease;
+    transform: scale(1);
+    transition: transform 0.3s ease;
 }
 
-.btn-back-to-editor:hover {
-    background: rgba(108, 92, 231, 0.15);
-    border-color: rgba(108, 92, 231, 0.548);
-
-    
-}   
-
 .btn-back-to-editor:active {
+    transform: scale(0.95);
     background: rgba(108, 92, 231, 0.18);
     border-color: rgba(108, 92, 231, 0.4);
 }
@@ -584,16 +550,6 @@
     box-shadow: 0 2px 8px rgba(231, 76, 60, 0.4);
 }
 
-.player-card-lobby:hover .kick-player-btn {
-    opacity: 1;
-    transform: scale(1);
-}
-
-.kick-player-btn:hover {
-    background: rgba(192, 57, 43, 1);
-    transform: scale(1.15) !important;
-}
-
 .kick-player-btn:active {
     transform: scale(0.9) !important;
 }
@@ -608,5 +564,36 @@
         /* На мобильных всегда видна */
         opacity: 1;
         transform: scale(1);
+    }
+}
+
+@media (hover: hover) {
+    .icon-only-btn:hover {
+        background: rgba(108, 92, 231, 0.15);
+        transform: scale(1.05);
+    }
+    
+    .player-card-lobby:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+
+    
+    .btn-back-to-editor:hover {
+        background: rgba(108, 92, 231, 0.15);
+        border-color: rgba(108, 92, 231, 0.548);
+
+        
+    }   
+    
+    .player-card-lobby:hover .kick-player-btn {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    .kick-player-btn:hover {
+        background: rgba(192, 57, 43, 1);
+        transform: scale(1.15) !important;
     }
 }
