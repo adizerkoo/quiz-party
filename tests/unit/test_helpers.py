@@ -7,6 +7,7 @@ get_players_in_quiz — формат данных для фронтенда.
 
 import allure
 import pytest
+from datetime import datetime, timedelta
 
 from backend.models import Quiz, Player
 from backend.helpers import get_quiz_by_code, verify_host, get_players_in_quiz
@@ -198,3 +199,40 @@ class TestGetPlayersInQuiz:
             assert nh["answers_history"] == {}
             assert nh["scores_history"] == {}
             assert nh["answer_times"] == {}
+
+    @allure.title("Players are returned in join order")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_players_are_sorted_by_join_order(self, db_session):
+        """get_players_in_quiz keeps a stable join-order response."""
+        quiz = Quiz(title="Order", code="PARTY-ORDER")
+        db_session.add(quiz)
+        db_session.commit()
+        db_session.refresh(quiz)
+
+        base = datetime(2025, 1, 1, 12, 0, 0)
+        db_session.add_all([
+            Player(
+                name="Bob",
+                sid="sid-bob",
+                quiz_id=quiz.id,
+                joined_at=base + timedelta(seconds=2),
+            ),
+            Player(
+                name="Host",
+                sid="sid-host",
+                quiz_id=quiz.id,
+                is_host=True,
+                joined_at=base,
+            ),
+            Player(
+                name="Alice",
+                sid="sid-alice",
+                quiz_id=quiz.id,
+                joined_at=base + timedelta(seconds=1),
+            ),
+        ])
+        db_session.commit()
+
+        ordered_names = [player["name"] for player in get_players_in_quiz(db_session, quiz.id)]
+
+        assert ordered_names == ["Host", "Alice", "Bob"]

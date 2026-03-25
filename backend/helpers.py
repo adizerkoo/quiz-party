@@ -39,7 +39,12 @@ def verify_host(db: Session, quiz_id: int, sid: str) -> bool:
 
 def get_players_in_quiz(db: Session, quiz_id: int):
     """Возвращает список игроков викторины в формате словарей для фронтенда."""
-    players = db.query(models.Player).filter(models.Player.quiz_id == quiz_id).all()
+    players = db.query(models.Player).filter(
+        models.Player.quiz_id == quiz_id
+    ).order_by(
+        models.Player.joined_at.asc(),
+        models.Player.id.asc()
+    ).all()
     logger.debug("get_players_in_quiz  quiz_id=%s  count=%d", quiz_id, len(players))
     return [
         {
