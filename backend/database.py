@@ -63,7 +63,9 @@ def _migrate():
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser VARCHAR",
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser_version VARCHAR",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS winner_id INTEGER",
+        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS owner_id INTEGER",
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS device_model VARCHAR",
+        "ALTER TABLE players ADD COLUMN IF NOT EXISTS user_id INTEGER",
         "ALTER TABLE quizzes RENAME COLUMN current_step TO current_question",
         "UPDATE quizzes SET current_question = 0 WHERE current_question = -1",
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS total_questions INTEGER DEFAULT 0",
@@ -72,6 +74,35 @@ def _migrate():
         "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP",
         "ALTER TABLE players ADD COLUMN IF NOT EXISTS answer_times JSONB DEFAULT '{}'::jsonb",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_platform VARCHAR",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_brand VARCHAR",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
+        "UPDATE users SET created_at = COALESCE(created_at, NOW()), last_login_at = COALESCE(last_login_at, NOW())",
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'users'
+            ) AND NOT EXISTS (SELECT 1 FROM users LIMIT 1) THEN
+                ALTER TABLE users DROP COLUMN IF EXISTS email;
+                ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+                ALTER TABLE users DROP COLUMN IF EXISTS first_name;
+                ALTER TABLE users DROP COLUMN IF EXISTS last_name;
+                ALTER TABLE users DROP COLUMN IF EXISTS last_logout_at;
+                ALTER TABLE users ALTER COLUMN username SET NOT NULL;
+                ALTER TABLE users ALTER COLUMN avatar_emoji SET NOT NULL;
+                ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW();
+                ALTER TABLE users ALTER COLUMN created_at SET NOT NULL;
+                ALTER TABLE users ALTER COLUMN last_login_at SET DEFAULT NOW();
+                ALTER TABLE users ALTER COLUMN last_login_at SET NOT NULL;
+            END IF;
+        END
+        $$;
+        """,
     ]
     with engine.connect() as conn:
         for sql in new_columns:

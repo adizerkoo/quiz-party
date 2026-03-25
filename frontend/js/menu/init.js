@@ -20,9 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 roomInput.parentElement.classList.add('is-active');
             }
 
-            const nameInput = document.getElementById('player-name');
-            if (nameInput) {
-                setTimeout(() => nameInput.focus(), 400);
+            const roomCodeInput = document.getElementById('room-code');
+            if (roomCodeInput) {
+                setTimeout(() => roomCodeInput.focus(), 400);
             }
         }
     }

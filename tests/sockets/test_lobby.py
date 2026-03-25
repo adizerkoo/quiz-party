@@ -9,7 +9,7 @@ import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.models import Quiz, Player
+from backend.models import Quiz, Player, User
 from backend.sockets.lobby import register_lobby_handlers
 from backend.cache import _quiz_cache
 
@@ -81,6 +81,32 @@ class TestJoinRoom:
             assert player.sid == "new-sid-100"
             assert player.is_host is False
             assert player.emoji is not None
+
+    @allure.title("Сохранённый аватар игрока используется при входе")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_new_player_uses_preferred_emoji(self, sio, db_session, sample_quiz, sample_host):
+        user = User(username="Лиза", avatar_emoji="🐼")
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "new-sid-emoji", {
+                "room": "PARTY-TEST1",
+                "name": "Лиза",
+                "role": "player",
+                "emoji": "🐼",
+                "user_id": user.id,
+            })
+
+        player = db_session.query(Player).filter(Player.sid == "new-sid-emoji").first()
+        assert player is not None
+        assert player.emoji == "🐼"
+        assert player.user_id == user.id
 
     @allure.title("Хост подключается к комнате")
     @allure.severity(allure.severity_level.CRITICAL)

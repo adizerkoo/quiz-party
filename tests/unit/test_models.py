@@ -9,7 +9,7 @@ import allure
 import pytest
 from datetime import datetime
 
-from backend.models import Quiz, Player
+from backend.models import Quiz, Player, User
 
 
 @allure.feature("Models")
@@ -238,3 +238,32 @@ class TestPlayerModel:
                 Player.quiz_id == sample_quiz.id
             ).count()
             assert count >= 5
+
+
+@allure.feature("Models")
+@allure.story("User Model")
+class TestUserModel:
+    """Tests for the persistent user profile model."""
+
+    @allure.title("Создание профиля пользователя сохраняет обязательные поля")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_defaults(self, db_session):
+        with allure.step("Создаём пользователя"):
+            user = User(
+                username="Макс",
+                avatar_emoji="🐸",
+                device_platform="android",
+                device_brand="Samsung",
+            )
+            db_session.add(user)
+            db_session.commit()
+            db_session.refresh(user)
+
+        with allure.step("Проверяем сохранённые поля"):
+            assert user.id is not None
+            assert user.username == "Макс"
+            assert user.avatar_emoji == "🐸"
+            assert user.device_platform == "android"
+            assert user.device_brand == "Samsung"
+            assert isinstance(user.created_at, datetime)
+            assert isinstance(user.last_login_at, datetime)

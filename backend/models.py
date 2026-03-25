@@ -32,10 +32,12 @@ class Quiz(Base):
     finished_at = Column(DateTime, nullable=True)
 
     winner_id = Column(Integer, nullable=True)  # id победителя (Player.id)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=_utc_now)
 
     # Связь с игроками
     players = relationship("Player", back_populates="quiz", cascade="all, delete-orphan")
+    owner = relationship("User", back_populates="owned_quizzes", foreign_keys=[owner_id])
 
 class Player(Base):
     """Модель игрока. Привязан к викторине, хранит ответы, счёт и данные устройства."""
@@ -58,5 +60,22 @@ class Player(Base):
     device_model = Column(String, nullable=True)    # Samsung SM-G991B / Apple iPhone / unknown
     joined_at = Column(DateTime, default=_utc_now)
     answer_times = Column(JSON, default=dict)       # {"1": 3.2, "2": 1.5} — время ответа (сек)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     quiz_id = Column(Integer, ForeignKey("quizzes.id"))
     quiz = relationship("Quiz", back_populates="players")
+    user = relationship("User", back_populates="players", foreign_keys=[user_id])
+
+
+class User(Base):
+    """Persistent mobile user profile."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, nullable=False)
+    avatar_emoji = Column(String, nullable=False)
+    device_platform = Column(String, nullable=True)
+    device_brand = Column(String, nullable=True)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
+    last_login_at = Column(DateTime, default=_utc_now, nullable=False)
+    owned_quizzes = relationship("Quiz", back_populates="owner", foreign_keys="Quiz.owner_id")
+    players = relationship("Player", back_populates="user", foreign_keys="Player.user_id")

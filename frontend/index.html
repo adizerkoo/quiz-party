@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Quiz Party 🎉 — Главная</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Quiz Party 🎉</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/menu/index.css">
@@ -15,10 +15,20 @@
     <div class="balloon balloon-3"></div>
 
     <div class="main-container">
+        <div id="profile-banner" class="profile-banner">
+            <div class="profile-banner-card">
+                <span id="profile-banner-emoji" class="profile-banner-emoji">🐸</span>
+                <div class="profile-banner-copy">
+                    <span class="profile-banner-kicker">Профиль</span>
+                    <div class="profile-banner-name-row"><strong id="profile-banner-name">Игрок</strong></div>
+                </div>
+            </div>
+        </div>
+
         <div class="party-card menu-card">
             <div class="logo-area">
                 <h1 class="party-title">QUIZ PARTY</h1>
-                <p class="party-subtitle reveal-anim-delay">Твой праздник — твои правила!</p>
+                <p class="party-subtitle reveal-anim-delay">Твой праздник, твои правила!</p>
             </div>
 
             <div class="menu-grid">
@@ -34,7 +44,7 @@
                     <div class="menu-icon">🎮</div>
                     <div class="menu-text">
                         <span class="menu-label">Я игрок</span>
-                        <span class="menu-desc">Войти в комнату</span>
+                        <span id="join-menu-desc" class="menu-desc">Войти в комнату</span>
                     </div>
                 </div>
             </div>
@@ -48,38 +58,65 @@
     <div id="join-modal" class="modal">
         <div class="modal-content light-glass-card">
             <div class="modal-header">
-                <span class="modal-hero-icon">🎮</span>
+                <span class="modal-hero-icon">🔑</span>
                 <h3>Вход в игру</h3>
-                <p>Введи данные и присоединяйся к веселью</p>
+                <p>Профиль уже сохранён, теперь нужен только код комнаты</p>
             </div>
-            
-            <div class="portal-inputs">
-                <div class="modern-field" id="field-name">
-                    <input type="text" id="player-name" maxlength="15" placeholder=" " required>
-                    <label>Твоё имя</label>
-                    <span class="field-icon">👤</span>
-                </div>
-                <span class="input-hint" id="hint-name">Пожалуйста, представься 🎭</span>
 
+            <div class="portal-inputs">
                 <div class="modern-field" id="field-code">
                     <input type="text" id="room-code" maxlength="11" placeholder=" " required>
                     <label>Код комнаты</label>
-                    <span class="field-icon">🔑</span>
+                    <span class="field-icon">🚪</span>
                 </div>
-                <span class="input-hint" id="hint-code">Нужен код, чтобы войти 🚪</span>
+                <span class="input-hint" id="hint-code">Нужен код, чтобы войти 🔑</span>
             </div>
 
             <button onclick="startJoining()" class="btn-modern-join">
-                <span>ПОГНАЛИ! 🚀</span>
+                <span>Войти в игру 🚀</span>
             </button>
-            
+
             <button onclick="closeJoinModal()" class="btn-cancel-link">Вернуться назад</button>
         </div>
     </div>
 
-    <!-- JS модули главного меню -->
+    <div id="profile-modal" class="modal">
+        <div class="modal-content light-glass-card profile-modal-card">
+            <div class="modal-header">
+                <span class="modal-hero-icon">👋</span>
+                <h3>Сначала познакомимся</h3>
+                <p>Один раз выбери имя и аватар, дальше в игру можно будет входить только по коду</p>
+            </div>
+
+            <div class="portal-inputs">
+                <div class="modern-field" id="field-profile-name">
+                    <input type="text" id="profile-name" maxlength="15" placeholder=" " required>
+                    <label>Твоё имя</label>
+                    <span class="field-icon">🙂</span>
+                </div>
+                <span class="input-hint" id="hint-profile-name">Пожалуйста, представься</span>
+
+                <div class="avatar-picker-wrap">
+                    <div class="avatar-picker-title">Выбери аватар</div>
+                    <div id="avatar-picker" class="avatar-picker-grid"></div>
+                </div>
+                <span class="input-hint" id="hint-profile-avatar">Выбери аватар</span>
+            </div>
+
+            <div class="profile-helper-text">
+                После подтверждения профиль сохранится в приложении и в базе данных.
+            </div>
+
+            <button onclick="submitProfileRegistration()" class="btn-modern-join">
+                <span>Сохранить профиль ✨</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="js/shared/user-profile.js"></script>
     <script src="js/menu/modal.js"></script>
     <script src="js/menu/join.js"></script>
     <script src="js/menu/init.js"></script>
+    <script src="js/menu/profile.js"></script>
 </body>
 </html>

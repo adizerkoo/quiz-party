@@ -1,42 +1,7 @@
 /* =========================================
-   ИНИЦИАЛИЗАЦИЯ ИГРЫ
-   Загрузка викторины, подключение к комнате,
-   обновление UI, точка входа.
+   GAME INIT
 ========================================= */
 
-
-// Определение устройства, браузера и модели из userAgent
-function getDeviceInfo() {
-  const ua = navigator.userAgent;
-  let device = "desktop";
-  if (/Mobi|Android|iPhone|iPod/i.test(ua)) device = "mobile";
-  else if (/iPad|Tablet/i.test(ua)) device = "tablet";
-
-  const browsers = [
-    { name: "Yandex",  re: /YaBrowser\/(\d+)/ },
-    { name: "Edge",    re: /Edg\/(\d+)/ },
-    { name: "Opera",   re: /OPR\/(\d+)/ },
-    { name: "Chrome",  re: /Chrome\/(\d+)/ },
-    { name: "Firefox", re: /Firefox\/(\d+)/ },
-    { name: "Safari",  re: /Version\/(\d+).*Safari/ },
-  ];
-  let browser = "unknown", browser_version = "unknown";
-  for (const b of browsers) {
-    const m = ua.match(b.re);
-    if (m) { browser = b.name; browser_version = m[1]; break; }
-  }
-
-  let device_model = "unknown";
-  const android = ua.match(/Android[^;]*;\s*([^)]+)\)/);
-  if (android) device_model = android[1].trim();
-  else if (/iPhone/i.test(ua)) device_model = "Apple iPhone";
-  else if (/iPad/i.test(ua))   device_model = "Apple iPad";
-
-  return { device, browser, browser_version, device_model };
-}
-
-
-// Заполняет заголовки викторины на экранах хоста и игроков
 function renderQuizTitle() {
   const hostTitle = document.getElementById("quiz-title-host");
   const playerTitle = document.getElementById("quiz-title-player");
@@ -46,7 +11,6 @@ function renderQuizTitle() {
 }
 
 
-// Главная функция обновления UI после смены шага
 function refreshUI() {
   renderProgress();
   if (role === "host") {
@@ -76,53 +40,71 @@ function refreshUI() {
 }
 
 
-// Стартовая инициализация страницы игры
 async function init() {
+  if (!roomCode) {
+    window.location.href = "index.html";
+    return;
+  }
+
   const displayCodeEl = document.getElementById("display-room-code");
   if (displayCodeEl) {
     displayCodeEl.innerText = roomCode;
   }
 
-  try {
-    const response = await fetch(`/api/v1/quizzes/${roomCode}${role === 'host' ? '?role=host' : ''}`);
+  const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
 
-    if (response.ok) {
-      const data = await response.json();
-      quizTitle = data.title;
-      currentQuestions = data.questions_data;
-
-      renderQuizTitle();
-      renderProgress();
-
-      // Инициализируем все socket обработчики
-      initializeSocketHandlers(socket);
-
-      socket.on("name_assigned", (data) => {
-        playerName = data.name;
-        sessionStorage.setItem("quiz_player_name", playerName);
-        console.log("📝 Имя изменено на:", playerName);
-      });
-
-      socket.emit("join_room", {
-        room: roomCode,
-        name: playerName,
-        role: role,
-        ...getDeviceInfo(),
-      });
-      socket.emit("request_sync", { room: roomCode, name: playerName });
-
-      const screenId = role === "host" ? "host-screen" : "player-screen";
-      const screenEl = document.getElementById(screenId);
-      if (screenEl) screenEl.style.display = "block";
-    } else {
-      window.location.href = "index.html?error=not_found";
+  if (role !== "host") {
+    if (!currentProfile) {
+      window.location.href = `index.html?room=${encodeURIComponent(roomCode)}`;
+      return;
     }
-  } catch (e) {
-    console.error("Ошибка инициализации:", e);
+
+    window.QuizUserProfile?.setPlayerSessionFromProfile?.(currentProfile);
+    playerName = currentProfile.username;
+    myEmoji = currentProfile.avatar_emoji || myEmoji;
+  }
+
+  try {
+    const response = await fetch(`/api/v1/quizzes/${roomCode}${role === "host" ? "?role=host" : ""}`);
+
+    if (!response.ok) {
+      window.location.href = "index.html?error=not_found";
+      return;
+    }
+
+    const data = await response.json();
+    quizTitle = data.title;
+    currentQuestions = data.questions_data;
+
+    renderQuizTitle();
+    renderProgress();
+    initializeSocketHandlers(socket);
+
+    socket.on("name_assigned", (data) => {
+      playerName = data.name;
+      sessionStorage.setItem("quiz_player_name", playerName);
+      console.log("Player name adjusted:", playerName);
+    });
+
+    const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
+    socket.emit("join_room", {
+      room: roomCode,
+      name: playerName,
+      role: role,
+      emoji: currentProfile?.avatar_emoji,
+      user_id: currentProfile?.id,
+      ...deviceInfo,
+    });
+    socket.emit("request_sync", { room: roomCode, name: playerName });
+
+    const screenId = role === "host" ? "host-screen" : "player-screen";
+    const screenEl = document.getElementById(screenId);
+    if (screenEl) screenEl.style.display = "block";
+  } catch (error) {
+    console.error("Game init failed:", error);
     window.location.href = "index.html";
   }
 }
 
 
-// Точка входа
 window.onload = init;

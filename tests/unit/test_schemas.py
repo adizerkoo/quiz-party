@@ -8,8 +8,9 @@ Unit-тесты Pydantic-схем (schemas.py).
 import allure
 import pytest
 from pydantic import ValidationError
+from datetime import datetime
 
-from backend.schemas import QuestionSchema, QuizCreate, QuizResponse
+from backend.schemas import QuestionSchema, QuizCreate, QuizResponse, UserCreate, UserResponse, UserTouch
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -238,3 +239,56 @@ class TestQuizResponse:
         )
         assert resp.created_at is None
         assert resp.winner_id is None
+
+
+@allure.feature("Schemas")
+@allure.story("User Schemas")
+class TestUserSchemas:
+    """Тесты схем профиля пользователя."""
+
+    @allure.title("Валидный профиль пользователя проходит валидацию")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_valid_user_create(self):
+        payload = UserCreate(
+            username="Алиса",
+            avatar_emoji="🐱",
+            device_platform="ios",
+            device_brand="Apple",
+        )
+        assert payload.username == "Алиса"
+        assert payload.avatar_emoji == "🐱"
+
+    @allure.title("Пустое имя пользователя отклоняется")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_user_create_rejects_blank_username(self):
+        with pytest.raises(ValidationError):
+            UserCreate(username="   ", avatar_emoji="🐱")
+
+    @allure.title("Недоступный эмодзи-аватар отклоняется")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_user_create_rejects_unknown_avatar(self):
+        with pytest.raises(ValidationError):
+            UserCreate(username="Алиса", avatar_emoji="🤖")
+
+    @allure.title("UserResponse собирается из ORM-атрибутов")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_user_response_from_attributes(self):
+        class FakeUser:
+            id = 7
+            username = "Макс"
+            avatar_emoji = "🐸"
+            device_platform = "android"
+            device_brand = "Samsung"
+            created_at = datetime.now()
+            last_login_at = datetime.now()
+
+        resp = UserResponse.model_validate(FakeUser())
+        assert resp.id == 7
+        assert resp.username == "Макс"
+
+    @allure.title("UserTouch допускает частичное обновление устройства")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_user_touch_optional(self):
+        touch = UserTouch(device_brand="Google")
+        assert touch.device_brand == "Google"
+        assert touch.device_platform is None

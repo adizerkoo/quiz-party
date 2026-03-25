@@ -19,7 +19,8 @@ function openJoinModal() {
         modal.style.opacity = '1';
     });
 
-    document.getElementById('player-name').focus();
+    const roomCodeInput = document.getElementById('room-code');
+    if (roomCodeInput) roomCodeInput.focus();
 }
 
 
@@ -51,13 +52,13 @@ function closeJoinModal() {
         modal.style.opacity = '';
 
         // Сброс подсветки ошибок
-        ['field-name', 'field-code'].forEach(id => {
+        ['field-code'].forEach(id => {
             const field = document.getElementById(id);
             if (field) field.classList.remove('error-active', 'error-shake');
         });
 
         // Скрытие текстов ошибок
-        ['hint-name', 'hint-code'].forEach(id => {
+        ['hint-code'].forEach(id => {
             const hint = document.getElementById(id);
             if (hint) hint.style.display = 'none';
         });

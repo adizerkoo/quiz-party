@@ -64,10 +64,37 @@ async function saveAndGo() {
 
     // --- Создаём комнату и отправляем на сервер ---
     try {
+        const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+        let ownerId = currentProfile?.id ?? null;
+
+        if (ownerId && window.QuizUserProfile) {
+            try {
+                const touchResponse = await fetch(`/api/v1/users/${ownerId}/touch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+
+                if (touchResponse.ok) {
+                    const syncedProfile = await touchResponse.json();
+                    window.QuizUserProfile.saveStoredUserProfile(syncedProfile);
+                    ownerId = syncedProfile.id;
+                } else {
+                    ownerId = null;
+                }
+            } catch (syncError) {
+                ownerId = null;
+            }
+        }
+
         const response = await fetch('/api/v1/quizzes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, questions: quizQuestions }),
+            body: JSON.stringify({
+                title,
+                questions: quizQuestions,
+                owner_id: ownerId,
+            }),
         });
 
         if (response.ok) {

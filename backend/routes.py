@@ -8,6 +8,7 @@ import string
 import logging
 import secrets
 from pathlib import Path
+from datetime import datetime, UTC
 from fastapi import Depends, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -16,7 +17,8 @@ from sqlalchemy import text
 
 from . import models, schemas, database
 from .cache import cache_quiz
-from .config import FRONTEND_PATH, DATA_PATH
+from .config import FRONTEND_PATH, DATA_PATH, PLAYER_EMOJIS
+from .security import sanitize_text, validate_player_name
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,26 @@ def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
         if not exists:
             return code
     raise HTTPException(status_code=503, detail="Could not generate unique room code")
+
+
+def _utc_now():
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _clean_username(username: str) -> str:
+    cleaned = sanitize_text(username).strip()
+    if not validate_player_name(cleaned):
+        raise HTTPException(status_code=422, detail="Invalid username")
+    return cleaned
+
+
+def _clean_optional_text(value, max_length: int) -> str | None:
+    if value is None:
+        return None
+    cleaned = sanitize_text(str(value)).strip()
+    if not cleaned:
+        return None
+    return cleaned[:max_length]
 
 
 def register_routes(app):
@@ -57,6 +79,10 @@ def register_routes(app):
     def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):
         """Создаёт новую викторину с уникальным кодом комнаты и сохраняет в БД."""
         code = _generate_unique_code(db)
+        if quiz_data.owner_id is not None:
+            owner_exists = db.query(models.User.id).filter(models.User.id == quiz_data.owner_id).first()
+            if not owner_exists:
+                raise HTTPException(status_code=422, detail="Invalid owner_id")
         logger.info("Creating quiz  title=%r  code=%s  questions=%d", quiz_data.title, code, len(quiz_data.questions))
         try:
             new_quiz = models.Quiz(
@@ -64,7 +90,8 @@ def register_routes(app):
                 code=code,
                 questions_data=[q.model_dump() for q in quiz_data.questions],
                 total_questions=len(quiz_data.questions),
-                status="waiting"
+                status="waiting",
+                owner_id=quiz_data.owner_id,
             )
             db.add(new_quiz)
             db.commit()
@@ -76,6 +103,51 @@ def register_routes(app):
             logger.error("Failed to create quiz  code=%s  error=%s", code, e, exc_info=True)
             db.rollback()
             raise
+
+    @app.post("/api/v1/users", response_model=schemas.UserResponse)
+    def create_user(user_data: schemas.UserCreate, db: Session = Depends(database.get_db)):
+        username = _clean_username(user_data.username)
+        new_user = models.User(
+            username=username,
+            avatar_emoji=user_data.avatar_emoji,
+            device_platform=_clean_optional_text(user_data.device_platform, 20),
+            device_brand=_clean_optional_text(user_data.device_brand, 50),
+            created_at=_utc_now(),
+            last_login_at=_utc_now(),
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        logger.info("User profile created  id=%s  username=%s", new_user.id, new_user.username)
+        return new_user
+
+    @app.get("/api/v1/users/meta")
+    def get_users_meta():
+        return {"avatar_emojis": PLAYER_EMOJIS}
+
+    @app.get("/api/v1/users/{user_id}", response_model=schemas.UserResponse)
+    def get_user(user_id: int, db: Session = Depends(database.get_db)):
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
+    @app.post("/api/v1/users/{user_id}/touch", response_model=schemas.UserResponse)
+    def touch_user(user_id: int, touch_data: schemas.UserTouch, db: Session = Depends(database.get_db)):
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.last_login_at = _utc_now()
+        if touch_data.device_platform is not None:
+            user.device_platform = _clean_optional_text(touch_data.device_platform, 20)
+        if touch_data.device_brand is not None:
+            user.device_brand = _clean_optional_text(touch_data.device_brand, 50)
+
+        db.commit()
+        db.refresh(user)
+        logger.info("User profile touched  id=%s", user.id)
+        return user
 
     @app.get("/api/v1/quizzes/{code}")
     def get_quiz(code: str, role: str = Query(default=None), db: Session = Depends(database.get_db)):

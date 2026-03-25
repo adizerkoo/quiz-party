@@ -114,8 +114,19 @@ def register_lobby_handlers(sio_manager):
         name = raw_name if validate_player_name(raw_name) else 'Игрок'
         role = data.get('role')
         is_host = (role == 'host')
+        preferred_emoji = data.get('emoji') if data.get('emoji') in PLAYER_EMOJIS else None
+        requested_user_id = data.get('user_id')
+        try:
+            requested_user_id = int(requested_user_id) if requested_user_id is not None else None
+        except (TypeError, ValueError):
+            requested_user_id = None
 
         with database.get_db_session() as db:
+            resolved_user_id = None
+            if requested_user_id is not None:
+                user = db.query(models.User).filter(models.User.id == requested_user_id).first()
+                if user:
+                    resolved_user_id = user.id
             quiz = get_quiz_by_code(db, room)
             if quiz:
                 # Проверка: если хост уже подключён, блокируем дубликат
@@ -140,6 +151,8 @@ def register_lobby_handlers(sio_manager):
                 if player and player.sid is None:
                     # Реконнект: игрок с таким именем отключился ранее
                     player.sid = sid
+                    if resolved_user_id is not None and player.user_id is None:
+                        player.user_id = resolved_user_id
                     # Отменяем отложенное уведомление об отключении
                     old_task = _pending_disconnects.pop(player.id, None)
                     if old_task:
@@ -180,11 +193,12 @@ def register_lobby_handlers(sio_manager):
 
                     used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
                     available_emojis = [e for e in PLAYER_EMOJIS if e not in used_emojis]
-                    assigned_emoji = random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
+                    assigned_emoji = preferred_emoji or random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
                     player = models.Player(
                         name=name, sid=sid, quiz_id=quiz.id,
                         is_host=is_host, score=0, emoji=assigned_emoji,
                         answers_history={},
+                        user_id=resolved_user_id,
                         device=data.get('device'),
                         browser=data.get('browser'),
                         browser_version=data.get('browser_version'),
@@ -210,11 +224,12 @@ def register_lobby_handlers(sio_manager):
 
                     used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
                     available_emojis = [e for e in PLAYER_EMOJIS if e not in used_emojis]
-                    assigned_emoji = random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
+                    assigned_emoji = preferred_emoji or random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
                     player = models.Player(
                         name=name, sid=sid, quiz_id=quiz.id,
                         is_host=is_host, score=0, emoji=assigned_emoji,
                         answers_history={},
+                        user_id=resolved_user_id,
                         device=data.get('device'),
                         browser=data.get('browser'),
                         browser_version=data.get('browser_version'),

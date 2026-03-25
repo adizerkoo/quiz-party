@@ -52,6 +52,26 @@ class TestCreateQuiz:
         with allure.step("Проверяем уникальность кодов"):
             assert len(codes) == 5
 
+    @allure.title("Квиз может быть создан с owner_id существующего пользователя")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_quiz_with_owner_id(self, client):
+        user_resp = client.post("/api/v1/users", json={
+            "username": "Организатор",
+            "avatar_emoji": "🐶",
+            "device_platform": "android",
+            "device_brand": "Samsung",
+        })
+        owner_id = user_resp.json()["id"]
+
+        resp = client.post("/api/v1/quizzes", json={**VALID_QUIZ_PAYLOAD, "owner_id": owner_id})
+        assert resp.status_code == 200
+
+    @allure.title("Некорректный owner_id отклоняется")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_create_quiz_with_invalid_owner_id(self, client):
+        resp = client.post("/api/v1/quizzes", json={**VALID_QUIZ_PAYLOAD, "owner_id": 99999})
+        assert resp.status_code == 422
+
     @allure.title("Пустой title → 422")
     @allure.severity(allure.severity_level.NORMAL)
     def test_create_quiz_empty_title(self, client):
