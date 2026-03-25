@@ -267,3 +267,26 @@ class TestUserModel:
             assert user.device_brand == "Samsung"
             assert isinstance(user.created_at, datetime)
             assert isinstance(user.last_login_at, datetime)
+
+    @allure.title("Duplicate usernames are allowed for persistent users")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_duplicate_usernames_are_allowed(self, db_session):
+        first = User(
+            username="SameName",
+            avatar_emoji="\U0001F438",
+            device_platform="android",
+            device_brand="Samsung",
+        )
+        second = User(
+            username="SameName",
+            avatar_emoji="\U0001F431",
+            device_platform="ios",
+            device_brand="Apple",
+        )
+
+        db_session.add_all([first, second])
+        db_session.commit()
+
+        assert first.id is not None
+        assert second.id is not None
+        assert first.id != second.id

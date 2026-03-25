@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 
 from . import models, schemas, database
@@ -115,9 +116,14 @@ def register_routes(app):
             created_at=_utc_now(),
             last_login_at=_utc_now(),
         )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
+        try:
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
+        except IntegrityError as exc:
+            db.rollback()
+            logger.warning("User profile create conflict  username=%s", username, exc_info=True)
+            raise HTTPException(status_code=409, detail="User profile could not be saved") from exc
         logger.info("User profile created  id=%s  username=%s", new_user.id, new_user.username)
         return new_user
 
@@ -143,8 +149,13 @@ def register_routes(app):
         user.device_platform = _clean_optional_text(user_data.device_platform, 20)
         user.device_brand = _clean_optional_text(user_data.device_brand, 50)
 
-        db.commit()
-        db.refresh(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except IntegrityError as exc:
+            db.rollback()
+            logger.warning("User profile update conflict  id=%s  username=%s", user_id, user.username, exc_info=True)
+            raise HTTPException(status_code=409, detail="User profile could not be updated") from exc
         logger.info("User profile updated  id=%s  username=%s", user.id, user.username)
         return user
 

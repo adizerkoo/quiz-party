@@ -80,6 +80,11 @@ def _migrate():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
         "UPDATE users SET created_at = COALESCE(created_at, NOW()), last_login_at = COALESCE(last_login_at, NOW())",
+        "ALTER TABLE users DROP CONSTRAINT IF EXISTS uq_users_username",
+        "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_key",
+        "DROP INDEX IF EXISTS uq_users_username",
+        "DROP INDEX IF EXISTS ix_users_username",
+        "DROP INDEX IF EXISTS users_username_key",
         """
         DO $$
         BEGIN
@@ -99,6 +104,54 @@ def _migrate():
                 ALTER TABLE users ALTER COLUMN created_at SET NOT NULL;
                 ALTER TABLE users ALTER COLUMN last_login_at SET DEFAULT NOW();
                 ALTER TABLE users ALTER COLUMN last_login_at SET NOT NULL;
+            END IF;
+        END
+        $$;
+        """,
+        """
+        DO $$
+        DECLARE
+            constraint_name TEXT;
+            index_name TEXT;
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'users'
+            ) THEN
+                FOR constraint_name IN
+                    SELECT con.conname
+                    FROM pg_constraint con
+                    JOIN pg_class rel ON rel.oid = con.conrelid
+                    JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+                    JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
+                    JOIN pg_attribute attr ON attr.attrelid = rel.oid AND attr.attnum = cols.attnum
+                    WHERE nsp.nspname = 'public'
+                      AND rel.relname = 'users'
+                      AND con.contype = 'u'
+                    GROUP BY con.conname
+                    HAVING array_agg(attr.attname ORDER BY cols.ord) = ARRAY['username']
+                LOOP
+                    EXECUTE format('ALTER TABLE public.users DROP CONSTRAINT IF EXISTS %I', constraint_name);
+                END LOOP;
+
+                FOR index_name IN
+                    SELECT index_rel.relname
+                    FROM pg_index idx
+                    JOIN pg_class index_rel ON index_rel.oid = idx.indexrelid
+                    JOIN pg_class table_rel ON table_rel.oid = idx.indrelid
+                    JOIN pg_namespace table_ns ON table_ns.oid = table_rel.relnamespace
+                    JOIN LATERAL unnest(idx.indkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
+                    JOIN pg_attribute attr ON attr.attrelid = table_rel.oid AND attr.attnum = cols.attnum
+                    WHERE table_ns.nspname = 'public'
+                      AND table_rel.relname = 'users'
+                      AND idx.indisunique = TRUE
+                      AND idx.indisprimary = FALSE
+                    GROUP BY index_rel.relname
+                    HAVING array_agg(attr.attname ORDER BY cols.ord) = ARRAY['username']
+                LOOP
+                    EXECUTE format('DROP INDEX IF EXISTS public.%I', index_name);
+                END LOOP;
             END IF;
         END
         $$;
