@@ -9,17 +9,21 @@
 .party-card {
     border-radius: 40px;
     padding: 20px;
+    margin-bottom: 70px;
 }
 
 /* --- Шапка навигации --- */
 .header-nav {
     display: flex;
-    justify-content: flex-start;
-    margin-bottom: -20px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
 }
 
 /* --- Кнопка «Назад» --- */
 .btn-back {
+    flex-shrink: 0;
     text-decoration: none;
     color: #6c5ce7;
     font-weight: 800;
@@ -30,10 +34,13 @@
     transition: 0.3s;
 }
 
-.btn-back:hover {
-    background: #6c5ce7;
-    color: white;
+.btn-back:active {
+    transform: scale(0.95);
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(108, 92, 231, 0.1);
+    background: rgba(108, 92, 231, 0.12);
 }
+
 
 /* Убираем все шарики на странице create */
 body.create-page .balloon {
@@ -74,6 +81,7 @@ body.create-page {
 
 /* --- Градиентный заголовок --- */
 .party-title {
+    flex: 1;
     font-size: 2.5rem;
     font-weight: 900;
     background: linear-gradient(135deg, #4834d4, #ff85a1);
@@ -81,7 +89,7 @@ body.create-page {
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 5px 15px rgba(108, 92, 231, 0.3));
     letter-spacing: -2px;
-    margin: 20px 0;
+    margin: 0;
     text-align: center;
     text-transform: uppercase;
 }
@@ -112,4 +120,13 @@ body.create-page {
 
 .main-title-input::placeholder {
     color: rgba(255, 133, 161, 0.6);
+}
+
+@media (hover: hover) {
+    
+    .btn-back:hover {
+        background: #6c5ce7;
+        color: white;
+    }
+
 }

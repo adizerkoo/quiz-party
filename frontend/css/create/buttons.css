@@ -27,10 +27,18 @@
 
 /* --- Кнопка «Запустить вечеринку» --- */
 .btn-party-launch {
-    position: relative;
-    width: 100%;
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: calc(100% - 40px); /* 👈 отступы */
+    max-width: 500px;
+
+    z-index: 9999;
+
     padding: 20px;
-    margin-top: 20px;
     background: linear-gradient(45deg, #6c5ce7, #ff85a1);
     color: white;
     border: none;
@@ -40,11 +48,10 @@
     cursor: pointer;
     overflow: hidden;
     transition: 0.3s;
-    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.3);
 }
 
 .btn-party-launch:active {
-    transform: scale(0.95);
+    transform: translateX(-50%) scale(0.95);
     box-shadow: 0 5px 15px rgba(108, 92, 231, 0.2);
     background: linear-gradient(45deg, #5a4dcf, #ff6f91);
 }
@@ -64,4 +71,3 @@
 @keyframes shine {
     to { left: 200%; }
 }
-

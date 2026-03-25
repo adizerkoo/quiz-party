@@ -8,11 +8,11 @@
 
     /* --- База и навигация --- */
     .main-container { padding: 0px; max-width: 100%; }
-    .party-card { padding: 0px 0px; border-radius: 25px; }
-    .party-title { font-size: 2.2rem; margin: 10px 0 15px; letter-spacing: -1px; }
+    .party-card { padding: 40px 0px; border-radius: 25px; margin-bottom: 30px;}
+    .party-title { font-size: 2rem; margin: 10px 0 15px; letter-spacing: -1px; }
 
     .header-nav { margin-bottom: 0; }
-    .btn-back { font-size: 0.75rem; padding: 5px 10px; }
+    .btn-back { font-size: 0.75rem; padding: 10px 12px; }
 
     /* --- Название вечеринки --- */
     .main-title-group { padding: 10px; margin-bottom: 15px; }
@@ -32,15 +32,19 @@
     .opt-create-row input[type="radio"] { width: 20px; height: 20px;}
 
     /* --- Карточки вопросов --- */
-    .preview-options-grid { grid-template-columns: 1fr; gap: 4px; }
-    .preview-opt-item { padding: 0px 5px; font-size: 0.7rem; }
+    .preview-options-grid { grid-template-columns: 1fr; gap: 0px; }
+    .preview-opt-item { padding: 5px 5px; font-size: 0.8rem; font-weight: 800; color: rgb(81, 88, 91);}
 
     .question-text { font-size: 0.75rem; }
     .question-card { padding: 8px 10px; }
 
     /* --- Главные кнопки --- */
     .btn-party-add { padding: 12px; font-size: 0.9rem; }
-    .btn-party-launch { padding: 15px; font-size: 1rem; border-radius: 15px; }
+    .btn-party-launch { 
+        padding: 15px 30px; 
+        font-size: 0.9rem;
+        border-radius: 15px;
+    } 
 
     /* --- Модалка библиотеки (выезжает снизу) --- */
     .modal-content,

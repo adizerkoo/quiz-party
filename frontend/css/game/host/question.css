@@ -4,6 +4,7 @@
 
 #quiz-title-host,
 #quiz-title-player {
+    overflow-wrap: break-word;
     font-size: 2rem;
     font-weight: 800;
     margin-bottom: 10px;
@@ -51,7 +52,7 @@
 
 @media (max-width: 480px) {
     #host-question-text {
-        font-size: 0.9rem !important;
+        font-size: 1.2rem !important;
     }
 
     #quiz-title-host,
@@ -60,7 +61,7 @@
     }
 
     #correct-answer {
-        font-size: 0.6rem;
+        font-size: 0.9rem;
         padding: 4px 10px;
     }
 }

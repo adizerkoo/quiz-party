@@ -44,7 +44,7 @@ body {
     position: fixed; border-radius: 50%; opacity: 0.4; z-index: 1;
     animation: float 6s infinite ease-in-out;
 }
-.balloon-1 { width: 80px; height: 100px; background: #ff85a1; top: 10%; left: 5%; }
+.balloon-1 { width: 80px; height: 100px; background: #ff85a1; top: 15%; left: 5%; }
 .balloon-2 { width: 60px; height: 80px; background: #ffeaa7; top: 50%; right: 5%; animation-delay: 2s; }
 .balloon-3 { width: 90px; height: 110px; background: #a29bfe; bottom: 10%; left: 10%; animation-delay: 4s; }
 

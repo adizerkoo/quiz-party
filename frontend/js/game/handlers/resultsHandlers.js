@@ -410,7 +410,7 @@ function _buildResultsHTML(winners, others, myData, questions, allPlayers) {
     <div class="confetti-wrapper">
       <div style="margin-bottom: 20px; text-align: center;">
         <div class="results-party-title">${escapeHtml(quizTitle) || 'Quiz Party'}</div>
-        <h2 style="color: var(--party-purple); font-size: 1.8rem; margin: 5px 0; font-weight: 800;">
+        <h2 style="color: var(--party-purple); font-size: 1.4rem; margin: 5px 0; font-weight: 800;">
           Итоги викторины
         </h2>
       </div>

@@ -67,6 +67,7 @@
     box-sizing: border-box;
     max-height: 100vh;
     overflow: auto;
+    bottom: 0;
     }
     /* Place edit button top-left and above the host screen */
     .btn-back-to-editor {

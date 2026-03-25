@@ -101,7 +101,7 @@
 
 @media (max-width: 520px) {
     .quiz-toast-container {
-        top: 12px;
+        top: 70px;
         gap: 5px;
     }
     .quiz-toast {

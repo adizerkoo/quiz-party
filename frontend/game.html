@@ -12,19 +12,18 @@
 
 </head>
 
-<body class="party-bg">
+<body class="party-bg game-page">
 
-<div class="balloon balloon-1"></div>
-<div class="balloon balloon-2"></div>
-<div class="balloon balloon-3"></div>
 
 <div class="main-container">
-    <button class="btn-back-to-editor" onclick="goBackToEditor()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-        Назад
-    </button>
     <!-- HOST -->
     <div id="host-screen" class="party-card" style="display:none;">
+        <div style="display:flex; justify-content:flex-start; padding-top:0px; margin-bottom:12px;">
+            <button class="btn-back-to-editor" onclick="goBackToEditor()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                Назад
+            </button>
+        </div>
 
         <!-- название -->
         <div class="quiz-header">
@@ -80,10 +79,10 @@
             <div id="scoreboard"></div>
             <span class="mini-label">ОТВЕТЫ ИГРОКОВ</span>
             <div id="players-answers-grid" class="party-scroll-list"></div>
-            <div style="display:flex;gap:10px;margin-top:25px;">
+            <div class="sticky-action-wrap" style="display:flex;gap:10px;margin-top:25px;">
                 <button id="next-btn"
                         onclick="nextQuestion()"
-                        class="btn-party-main"
+                        class="btn-party-main sticky-action-btn"
                         style="background:var(--party-purple);flex:2;">
                     ДАЛЬШЕ ➡️
                 </button>
@@ -134,11 +133,12 @@
     <!-- FINISH -->
     <div id="finish-screen" class="party-card" style="display:none;">
         <div id="final-results-list" class="list-zone"></div>
-        <button onclick="location.href='index.html'"
-                class="btn-party-direct"
-                style="margin-top:20px">
-            В ГЛАВНОЕ МЕНЮ
-        </button>
+        <div class="sticky-action-wrap" style="display:flex;margin-top:20px;">
+            <button onclick="location.href='index.html'"
+                    class="btn-party-direct sticky-action-btn">
+                    В ГЛАВНОЕ МЕНЮ
+            </button>
+        </div>
     </div>
 
     <!-- BLOCKED (игра уже идёт) -->

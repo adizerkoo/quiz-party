@@ -18,7 +18,6 @@
     background: rgba(255, 255, 255, 0.8);
     border-radius: 14px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(108, 92, 231, 0.1);
     position: relative;
     overflow: hidden;
     width: 100%;
@@ -49,21 +48,9 @@
     animation: pulse-dot-anim 0.3s ease-out;
 }
 
-.answer-card:hover {
-    border-color: rgba(108, 92, 231, 0.2);
-    background: rgba(248, 245, 255, 0.9);
-    box-shadow: 0 6px 20px rgba(108, 92, 231, 0.12);
-}
-
-.answer-card:hover::before {
-    background: linear-gradient(180deg, #6c5ce7, #ff85a1);
-    width: 4px;
-}
-
 /* Статус ответа - правильный */
 .answer-card.correct {
-    background: linear-gradient(135deg, rgba(214, 250, 229, 0.6) 0%, rgba(209, 243, 225, 0.4) 100%);
-    border: 1px solid rgba(46, 213, 115, 0.2);
+    background: linear-gradient(135deg, rgb(38 238 124 / 74%) 0%, rgb(255 255 255 / 0%) 100%);
 }
 
 .answer-card.correct::before {
@@ -71,16 +58,9 @@
     transition: background 0.2s ease;
 }
 
-.answer-card.correct:hover {
-    border-color: rgba(46, 213, 115, 0.3);
-    background: linear-gradient(135deg, rgba(209, 243, 225, 0.7) 0%, rgba(200, 240, 220, 0.5) 100%);
-    box-shadow: 0 6px 20px rgba(46, 213, 115, 0.12);
-}
-
 /* Статус ответа - неправильный */
 .answer-card.wrong {
-    background: linear-gradient(135deg, rgba(255, 228, 230, 0.6) 0%, rgba(255, 220, 222, 0.4) 100%);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: linear-gradient(135deg, rgb(255 92 104 / 60%) 0%, rgb(255 255 255 / 40%) 100%);
 }
 
 .answer-card.wrong::before {
@@ -88,16 +68,9 @@
     transition: background 0.2s ease;
 }
 
-.answer-card.wrong:hover {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: linear-gradient(135deg, rgba(255, 220, 222, 0.7) 0%, rgba(255, 210, 213, 0.5) 100%);
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.12);
-}
-
 /* Статус ответа - ожидание */
 .answer-card.waiting {
     background: linear-gradient(135deg, rgba(245, 247, 250, 0.7) 0%, rgba(240, 245, 250, 0.5) 100%);
-    border: 1px solid rgba(108, 92, 231, 0.15);
     opacity: 0.92;
 }
 
@@ -132,10 +105,6 @@
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
 }
 
-.answer-card:hover .p-emoji {
-    transform: scale(1.25) rotate(8deg);
-}
-
 .p-name {
     font-size: 0.8rem;
     font-weight: 700;
@@ -149,7 +118,7 @@
 .card-controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 15px;
     flex-shrink: 0;
     position: relative;
     z-index: 2;
@@ -238,13 +207,14 @@
 
 @media (max-width: 680px) {
     #players-answers-grid {
+        gap: 5px;
         grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 480px) {
     .answer-card {
-        padding: 5px 7px;
+        padding: 7px 10px;
     }
 
     .card-header {
@@ -257,22 +227,18 @@
     }
 
     .p-name {
-        font-size: 0.70rem;
+        font-size: 0.80rem;
     }
 
     .player-answer-bubble {
-        padding: 3px 5px;
-        font-size: 0.70rem;
+        padding: 10px 5px;
+        font-size: 0.85rem;
         line-height: 1.2;
     }
 
     .status-label {
-        font-size: 0.5rem;
+        font-size: 0.65rem;
         padding: 2px 4px;
-    }
-
-    #players-answers-grid {
-        gap: 2px;
     }
 }
 
@@ -318,7 +284,7 @@
 }
 
 .disconnected-badge {
-    font-size: 0.5rem;
+    font-size: 0.65rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -335,8 +301,7 @@
    ============================================ */
 
 .answer-card.skipped {
-    background: linear-gradient(135deg, rgba(241, 196, 15, 0.1) 0%, rgba(243, 156, 18, 0.08) 100%);
-    border: 1px solid rgba(241, 196, 15, 0.2);
+    background: linear-gradient(135deg, rgb(255 204 0 / 27%) 0%, rgb(243 156 18 / 0%) 100%);
     opacity: 0.8;
 }
 
@@ -349,4 +314,34 @@
     border-color: rgba(241, 196, 15, 0.2);
     color: #7d6608;
     font-style: italic;
+}
+
+@media (hover: hover) {
+
+    .answer-card:hover {
+        border-color: rgba(108, 92, 231, 0.2);
+        background: rgba(248, 245, 255, 0.9);
+        box-shadow: 0 6px 20px rgba(108, 92, 231, 0.12);
+    }
+
+    .answer-card:hover::before {
+        background: linear-gradient(180deg, #6c5ce7, #ff85a1);
+        width: 4px;
+    }
+    
+    .answer-card.correct:hover {
+        border-color: rgba(46, 213, 115, 0.3);
+        background: linear-gradient(135deg, rgba(209, 243, 225, 0.7) 0%, rgba(200, 240, 220, 0.5) 100%);
+        box-shadow: 0 6px 20px rgba(46, 213, 115, 0.12);
+    }
+    
+    .answer-card.wrong:hover {
+        border-color: rgba(239, 68, 68, 0.3);
+        background: linear-gradient(135deg, rgba(255, 220, 222, 0.7) 0%, rgba(255, 210, 213, 0.5) 100%);
+        box-shadow: 0 6px 20px rgba(239, 68, 68, 0.12);
+    }
+    
+    .answer-card:hover .p-emoji {
+        transform: scale(1.25) rotate(8deg);
+    }
 }

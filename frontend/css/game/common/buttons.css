@@ -18,6 +18,26 @@
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 1px;
+    margin-bottom: 20px;
+    bottom: 0;
+    
+}
+
+.btn-party-main:active,
+.btn-party-direct:active {
+    transform: scale(0.95);
+    box-shadow: 0 4px 10px rgba(255, 133, 161, 0.2);
+    background: rgb(255, 115, 147) !important;
+}
+
+.sticky-action-wrap {
+    position: sticky;
+    bottom: 12px;
+    z-index: 20;
+}
+
+.sticky-action-btn {
+    margin-bottom: 25;
 }
 
 /* Кнопки ответов */
@@ -124,8 +144,8 @@
     }
 
     .btn-mini {
-        width: 20px;
-        height: 20px;
+        width: 25px;
+        height: 25px;
         border-radius: 4px;
     }
 
@@ -177,4 +197,11 @@
     background: #5849d4;
     }
 
+}
+
+.sticky-action-btn,
+.sticky-action-btn:hover,
+.sticky-action-btn:active {
+    box-shadow: none !important;
+    margin-bottom: 20 !important;
 }

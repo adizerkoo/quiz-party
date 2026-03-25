@@ -77,23 +77,6 @@
     margin-bottom: 10px;
 }
 
-/* --- Скроллируемая область списка --- */
-.party-scroll-list {
-    max-height: 820px;
-    overflow-y: auto;
-    padding-right: 5px;
-}
-
-.party-scroll-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.party-scroll-list::-webkit-scrollbar-thumb {
-    background: #ff85a1;
-    border-radius: 10px;
-}
-
-
 /* =========================================
    КАРТОЧКИ ВОПРОСОВ
    Каждая карточка — превью одного вопроса
@@ -146,7 +129,6 @@
 }
 
 .question-row {
-    padding: 6px 0;
     border-bottom: 1px solid #f1f2f6;
 }
 
@@ -170,7 +152,7 @@
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: normal;
-    padding: 2px 6px;
+    padding: 5px 6px;
     border-radius: 6px;
     margin-top: 3px;
 }
