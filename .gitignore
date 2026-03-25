@@ -58,3 +58,20 @@ htmlcov/
 # Системные файлы
 .DS_Store
 Thumbs.db
+
+# Mobile / Expo / React Native
+quiz-party-mobile/node_modules/
+quiz-party-mobile/.expo/
+quiz-party-mobile/.expo-shared/
+quiz-party-mobile/dist/
+quiz-party-mobile/web-build/
+quiz-party-mobile/coverage/
+quiz-party-mobile/.parcel-cache/
+quiz-party-mobile/.npm/
+quiz-party-mobile/android/
+quiz-party-mobile/ios/
+
+# Mobile local env and editor files
+quiz-party-mobile/.env
+quiz-party-mobile/.env.*
+quiz-party-mobile/.vscode/
