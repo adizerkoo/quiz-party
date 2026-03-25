@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 from datetime import datetime
 
-from backend.schemas import QuestionSchema, QuizCreate, QuizResponse, UserCreate, UserResponse, UserTouch
+from backend.schemas import QuestionSchema, QuizCreate, QuizResponse, UserCreate, UserUpdate, UserResponse, UserTouch
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -292,3 +292,15 @@ class TestUserSchemas:
         touch = UserTouch(device_brand="Google")
         assert touch.device_brand == "Google"
         assert touch.device_platform is None
+
+    @allure.title("UserUpdate валидирует обновление имени и аватара")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_user_update_valid(self):
+        payload = UserUpdate(
+            username="Новый Макс",
+            avatar_emoji="🐸",
+            device_platform="android",
+            device_brand="Google",
+        )
+        assert payload.username == "Новый Макс"
+        assert payload.avatar_emoji == "🐸"

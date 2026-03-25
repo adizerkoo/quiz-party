@@ -19,7 +19,6 @@
             <div class="profile-banner-card">
                 <span id="profile-banner-emoji" class="profile-banner-emoji">🐸</span>
                 <div class="profile-banner-copy">
-                    <span class="profile-banner-kicker">Профиль</span>
                     <div class="profile-banner-name-row"><strong id="profile-banner-name">Игрок</strong></div>
                 </div>
             </div>
@@ -84,8 +83,7 @@
         <div class="modal-content light-glass-card profile-modal-card">
             <div class="modal-header">
                 <span class="modal-hero-icon">👋</span>
-                <h3>Сначала познакомимся</h3>
-                <p>Один раз выбери имя и аватар, дальше в игру можно будет входить только по коду</p>
+                <h3 id="profile-modal-title">Сначала познакомимся</h3>
             </div>
 
             <div class="portal-inputs">
@@ -102,14 +100,10 @@
                 </div>
                 <span class="input-hint" id="hint-profile-avatar">Выбери аватар</span>
             </div>
-
-            <div class="profile-helper-text">
-                После подтверждения профиль сохранится в приложении и в базе данных.
-            </div>
-
             <button onclick="submitProfileRegistration()" class="btn-modern-join">
-                <span>Сохранить профиль ✨</span>
+                <span id="profile-submit-label">Сохранить профиль ✨</span>
             </button>
+            <button id="profile-cancel-btn" onclick="closeProfileModal()" class="btn-cancel-link" style="display:none;">Отмена</button>
         </div>
     </div>
 

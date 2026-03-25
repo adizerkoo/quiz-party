@@ -82,6 +82,10 @@ class UserCreate(BaseModel):
         return value
 
 
+class UserUpdate(UserCreate):
+    pass
+
+
 class UserTouch(BaseModel):
     device_platform: Optional[str] = Field(default=None, max_length=20)
     device_brand: Optional[str] = Field(default=None, max_length=50)

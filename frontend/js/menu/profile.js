@@ -1,9 +1,30 @@
 let availableProfileAvatars = [];
 let selectedProfileAvatar = null;
 let isProfileModalLocked = false;
+let profileModalMode = 'create';
 
 function _profileModal() {
     return document.getElementById('profile-modal');
+}
+
+function _profileNameInput() {
+    return document.getElementById('profile-name');
+}
+
+function _profileTitle() {
+    return document.getElementById('profile-modal-title');
+}
+
+function _profileDescription() {
+    return document.getElementById('profile-modal-description');
+}
+
+function _profileSubmitLabel() {
+    return document.getElementById('profile-submit-label');
+}
+
+function _profileCancelButton() {
+    return document.getElementById('profile-cancel-btn');
 }
 
 function _showProfileModalBase() {
@@ -93,8 +114,17 @@ function showAvatarError(message) {
     hint.style.display = 'block';
 }
 
+function syncProfileNameFieldIcon() {
+    const icon = document.querySelector('#field-profile-name .field-icon');
+    if (!icon) return;
+
+    icon.textContent = selectedProfileAvatar || '🙂';
+}
+
 function selectProfileAvatar(emoji) {
     selectedProfileAvatar = emoji;
+    syncProfileNameFieldIcon();
+
     const buttons = document.querySelectorAll('.avatar-option');
     buttons.forEach((button) => {
         const isSelected = button.dataset.emoji === emoji;
@@ -137,20 +167,51 @@ async function loadProfileAvatars() {
     renderProfileAvatarPicker();
 }
 
-function openProfileModal(options = {}) {
-    isProfileModalLocked = Boolean(options.locked);
-    resetProfileErrors();
-    _showProfileModalBase();
+function _setProfileModalCopy(mode) {
+    const titleEl = _profileTitle();
+    const descriptionEl = _profileDescription();
+    const submitLabelEl = _profileSubmitLabel();
+    const cancelBtn = _profileCancelButton();
 
-    const nameInput = document.getElementById('profile-name');
-    if (nameInput && !nameInput.value) {
-        const stored = window.QuizUserProfile?.getStoredUserProfile?.();
-        if (stored?.username) {
-            nameInput.value = stored.username;
-        }
+    if (mode === 'edit') {
+        if (titleEl) titleEl.textContent = 'Редактировать профиль';
+        if (descriptionEl) descriptionEl.textContent = 'Измени имя или аватар. Мы обновим твой профиль в базе, не создавая новый.';
+        if (submitLabelEl) submitLabelEl.textContent = 'Обновить профиль ✨';
+        if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    } else {
+        if (titleEl) titleEl.textContent = 'Сначала познакомимся';
+        if (descriptionEl) descriptionEl.textContent = 'Один раз выбери имя и аватар, дальше в игру можно будет входить только по коду';
+        if (submitLabelEl) submitLabelEl.textContent = 'Сохранить профиль ✨';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+    }
+}
+
+function _applyProfileModalState(mode, profile = null) {
+    profileModalMode = mode;
+    _setProfileModalCopy(mode);
+
+    const nameInput = _profileNameInput();
+    if (nameInput) {
+        nameInput.value = profile?.username || '';
     }
 
+    selectedProfileAvatar = profile?.avatar_emoji || availableProfileAvatars[0] || null;
+    syncProfileNameFieldIcon();
+    renderProfileAvatarPicker();
+}
+
+function openProfileModal(options = {}) {
+    const storedProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+    const mode = options.mode || (storedProfile ? 'edit' : 'create');
+    const profile = options.profile || (mode === 'edit' ? storedProfile : null);
+
+    isProfileModalLocked = Boolean(options.locked);
+    resetProfileErrors();
+    _applyProfileModalState(mode, profile);
+    _showProfileModalBase();
+
     setTimeout(() => {
+        const nameInput = _profileNameInput();
         if (nameInput) {
             nameInput.focus();
         }
@@ -199,7 +260,7 @@ async function touchStoredProfile(profile) {
 }
 
 async function submitProfileRegistration() {
-    const nameInput = document.getElementById('profile-name');
+    const nameInput = _profileNameInput();
     const nameField = document.getElementById('field-profile-name');
     const nameHint = document.getElementById('hint-profile-name');
     const username = nameInput ? nameInput.value.trim() : '';
@@ -217,10 +278,14 @@ async function submitProfileRegistration() {
     }
 
     const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
+    const storedProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+    const isUpdate = profileModalMode === 'edit' && Boolean(storedProfile?.id);
+    const url = isUpdate ? `/api/v1/users/${storedProfile.id}` : '/api/v1/users';
+    const method = isUpdate ? 'PUT' : 'POST';
 
     try {
-        const response = await fetch('/api/v1/users', {
-            method: 'POST',
+        const response = await fetch(url, {
+            method,
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -231,6 +296,19 @@ async function submitProfileRegistration() {
                 device_brand: deviceInfo.device_brand || null,
             }),
         });
+
+        if (response.status === 404 && isUpdate) {
+            window.QuizUserProfile?.clearStoredUserProfile?.();
+            renderStoredProfile(null);
+            isProfileModalLocked = true;
+            resetProfileErrors();
+            _applyProfileModalState('create', {
+                username,
+                avatar_emoji: selectedProfileAvatar,
+            });
+            showFieldError(nameField, nameHint, 'Профиль не найден. Сохраним его заново.');
+            return;
+        }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => null);
@@ -249,11 +327,11 @@ async function submitProfileRegistration() {
         _hideProfileModalBase();
 
         const roomInput = document.getElementById('room-code');
-        if (roomInput && roomInput.value.trim()) {
+        if (!isUpdate && roomInput && roomInput.value.trim()) {
             openJoinModal();
         }
     } catch (error) {
-        console.error('Profile registration failed', error);
+        console.error('Profile save failed', error);
         showFieldError(nameField, nameHint, 'Ошибка сервера. Попробуй ещё раз');
     }
 }
@@ -267,7 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         touchStoredProfile(storedProfile);
     } else {
         renderStoredProfile(null);
-        openProfileModal({ locked: true });
+        openProfileModal({ locked: true, mode: 'create' });
     }
 
     const modal = _profileModal();
@@ -275,6 +353,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         modal.addEventListener('click', (event) => {
             if (!isProfileModalLocked && event.target === modal) {
                 closeProfileModal();
+            }
+        });
+    }
+
+    const banner = document.getElementById('profile-banner');
+    if (banner) {
+        banner.addEventListener('click', () => {
+            const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+            if (currentProfile) {
+                openProfileModal({ mode: 'edit' });
             }
         });
     }

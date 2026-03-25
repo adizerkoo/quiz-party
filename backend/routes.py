@@ -132,6 +132,22 @@ def register_routes(app):
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
+    @app.put("/api/v1/users/{user_id}", response_model=schemas.UserResponse)
+    def update_user(user_id: int, user_data: schemas.UserUpdate, db: Session = Depends(database.get_db)):
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.username = _clean_username(user_data.username)
+        user.avatar_emoji = user_data.avatar_emoji
+        user.device_platform = _clean_optional_text(user_data.device_platform, 20)
+        user.device_brand = _clean_optional_text(user_data.device_brand, 50)
+
+        db.commit()
+        db.refresh(user)
+        logger.info("User profile updated  id=%s  username=%s", user.id, user.username)
+        return user
+
     @app.post("/api/v1/users/{user_id}/touch", response_model=schemas.UserResponse)
     def touch_user(user_id: int, touch_data: schemas.UserTouch, db: Session = Depends(database.get_db)):
         user = db.query(models.User).filter(models.User.id == user_id).first()

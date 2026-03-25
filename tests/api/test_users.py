@@ -65,6 +65,43 @@ class TestUsersApi:
         assert data["device_platform"] == "ios"
         assert data["device_brand"] == "Apple"
 
+    @allure.title("Профиль пользователя обновляется без создания новой записи")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_update_user(self, client):
+        created = client.post("/api/v1/users", json=VALID_USER_PAYLOAD).json()
+
+        resp = client.put(
+            f"/api/v1/users/{created['id']}",
+            json={
+                "username": "Новая Алиса",
+                "avatar_emoji": "🐸",
+                "device_platform": "ios",
+                "device_brand": "Apple",
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == created["id"]
+        assert data["username"] == "Новая Алиса"
+        assert data["avatar_emoji"] == "🐸"
+        assert data["device_platform"] == "ios"
+        assert data["device_brand"] == "Apple"
+
+    @allure.title("Обновление неизвестного пользователя возвращает 404")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_update_user_not_found(self, client):
+        resp = client.put(
+            "/api/v1/users/99999",
+            json={
+                "username": "Новая Алиса",
+                "avatar_emoji": "🐸",
+                "device_platform": "ios",
+                "device_brand": "Apple",
+            },
+        )
+        assert resp.status_code == 404
+
     @allure.title("Некорректный эмодзи отклоняется")
     @allure.severity(allure.severity_level.NORMAL)
     def test_create_user_invalid_avatar(self, client):
