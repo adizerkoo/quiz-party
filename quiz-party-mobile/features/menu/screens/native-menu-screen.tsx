@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import { Href, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,12 +12,16 @@ import { MenuLogo } from '@/features/menu/components/menu-logo';
 import { ProfileBanner } from '@/features/menu/components/profile-banner';
 import { ProfileModal } from '@/features/menu/components/profile-modal';
 import { MENU_AVATARS } from '@/features/menu/data/avatar-options';
+import { getMenuSessionProfile, setMenuSessionProfile } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 import { MenuProfile, ProfileModalMode } from '@/features/menu/types';
 
 export function NativeMenuScreen() {
-  const [profile, setProfile] = useState<MenuProfile | null>(null);
-  const [profileModalVisible, setProfileModalVisible] = useState(true);
+  const router = useRouter();
+  const initialProfile = getMenuSessionProfile();
+
+  const [profile, setProfile] = useState<MenuProfile | null>(initialProfile);
+  const [profileModalVisible, setProfileModalVisible] = useState(!initialProfile);
   const [profileModalMode, setProfileModalMode] = useState<ProfileModalMode>('create');
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [gameInfoVisible, setGameInfoVisible] = useState(false);
@@ -46,6 +51,7 @@ export function NativeMenuScreen() {
 
   function handleProfileSubmit(nextProfile: MenuProfile) {
     setProfile(nextProfile);
+    setMenuSessionProfile(nextProfile);
     setProfileModalVisible(false);
   }
 
@@ -64,7 +70,7 @@ export function NativeMenuScreen() {
       return;
     }
 
-    setGameInfoVisible(true);
+    router.push('/create' as Href);
   }
 
   function handleGameInfoPress() {
