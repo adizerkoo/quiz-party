@@ -54,11 +54,16 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    // Центруем сетку целиком, чтобы справа не оставался "пустой столбец",
+    // а у рядов было одинаковое визуальное поле слева и справа.
+    justifyContent: 'center',
+    columnGap: 10,
+    rowGap: 10,
   },
   avatar: {
-    width: '18%',
-    minWidth: 52,
+    // Фиксированная ширина даёт ровные плитки на всех экранах,
+    // а центрирование grid само удерживает равные боковые поля.
+    width: 56,
     aspectRatio: 1,
     borderWidth: 2,
     borderColor: 'transparent',

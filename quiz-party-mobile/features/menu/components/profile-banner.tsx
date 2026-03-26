@@ -6,17 +6,18 @@ import { MenuProfile } from '@/features/menu/types';
 type ProfileBannerProps = {
   profile: MenuProfile | null;
   onPress: () => void;
+  align?: 'left' | 'right';
 };
 
 // Верхний компактный баннер профиля.
 // Появляется только после создания профиля.
-export function ProfileBanner({ profile, onPress }: ProfileBannerProps) {
+export function ProfileBanner({ profile, onPress, align = 'left' }: ProfileBannerProps) {
   if (!profile) {
     return null;
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, align === 'right' ? styles.wrapRight : styles.wrapLeft]}>
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
@@ -37,23 +38,35 @@ export function ProfileBanner({ profile, onPress }: ProfileBannerProps) {
 
 const styles = StyleSheet.create({
   // Внешняя зона баннера по ширине экрана.
-  // alignItems: 'flex-start' прижимает баннер к левому краю.
+  // Дополнительный горизонтальный padding здесь не нужен,
+  // потому что баннер уже живёт внутри menuContent с собственными отступами.
+  // Так правый край баннера визуально совпадает с карточками меню.
   wrap: {
     width: '100%',
-    paddingHorizontal: 16,
+  },
+
+  // Баннер можно прижать к левому краю для стандартного режима.
+  wrapLeft: {
     alignItems: 'flex-start',
+  },
+
+  // Для главного меню используем правое выравнивание,
+  // чтобы баннер жил над карточками и не спорил с логотипом по центру.
+  wrapRight: {
+    alignItems: 'flex-end',
   },
 
   // Карточка баннера.
   // maxWidth ограничивает ширину на длинных экранах.
-  // padding управляет "толщиной" баннера.
+  // padding управляет "толщиной" баннера. Уменьшаем его,
+  // чтобы карточка стала немного компактнее по высоте.
   card: {
     maxWidth: 420,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.88)',
     shadowColor: menuTheme.colors.joinBorder,
@@ -70,9 +83,9 @@ const styles = StyleSheet.create({
 
   // Жёлтый блок с эмодзи.
   emojiWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: menuTheme.colors.bannerYellow,
     alignItems: 'center',
     justifyContent: 'center',
@@ -80,7 +93,7 @@ const styles = StyleSheet.create({
 
   // Размер эмодзи в баннере.
   emoji: {
-    fontSize: 22,
+    fontSize: 20,
   },
 
   // Текстовая зона.
@@ -91,8 +104,8 @@ const styles = StyleSheet.create({
 
   // Имя пользователя в баннере.
   name: {
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 18,
     color: menuTheme.colors.text,
     fontWeight: '800',
   },

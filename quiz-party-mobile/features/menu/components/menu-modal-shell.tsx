@@ -216,10 +216,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   titleRow: {
-    flexDirection: 'row',
+    // Контейнер на всю ширину нужен, чтобы заголовок оставался по центру модалки,
+    // даже если слева есть иконка и она визуально "весит" больше текста.
+    width: '100%',
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    position: 'relative',
   },
   heroIcon: {
     fontSize: 44,
@@ -232,6 +235,9 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     textShadowColor: 'rgba(108, 92, 231, 0.24)',
     textShadowRadius: 10,
+    position: 'absolute',
+    left: 0,
+    top: 1,
   },
   title: {
     textAlign: 'center',
@@ -241,11 +247,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   titleLeft: {
+    width: '100%',
     fontSize: 24,
     lineHeight: 30,
     color: menuTheme.colors.title,
     fontWeight: '800',
-    textAlign: 'left',
+    textAlign: 'center',
   },
   subtitle: {
     marginTop: 8,

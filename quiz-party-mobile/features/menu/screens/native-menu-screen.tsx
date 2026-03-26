@@ -88,11 +88,15 @@ export function NativeMenuScreen() {
           bounces={false}
           contentContainerStyle={contentStyle}
           showsVerticalScrollIndicator={false}>
-          <View style={[styles.mainContainer, !hasProfile && styles.mainContainerCentered]}>
-            <ProfileBanner onPress={openEditProfileModal} profile={profile} />
-
+          <View style={[styles.mainContainer, hasProfile ? styles.mainContainerWithProfile : styles.mainContainerCentered]}>
             <View style={styles.menuContent}>
               <MenuLogo />
+
+              <ProfileBanner
+                align="right"
+                onPress={openEditProfileModal}
+                profile={profile}
+              />
 
               <View style={styles.menuGrid}>
                 <MenuActionCard
@@ -170,18 +174,24 @@ const styles = StyleSheet.create({
   },
   contentWithProfile: {
     justifyContent: 'flex-start',
-    paddingTop: 10,
+    // Чем меньше значение, тем выше весь экран поднимается к верхней safe-area.
+    paddingTop: 0,
   },
   mainContainer: {
     width: '100%',
     alignItems: 'center',
+  },
+  mainContainerWithProfile: {
+    // Отдельная вертикальная посадка экрана, когда профиль уже есть.
+    // Так баннер и карточки поднимаются ближе к "чёлке", но не вылезают из safe-area.
+    transform: [{ translateY: -42 }],
   },
   mainContainerCentered: {
     // Главная настройка вертикального положения стартового меню.
     // Если хочешь поднять весь блок выше, делай число более отрицательным:
     // -80, -90 и т.д.
     // Если хочешь опустить ниже, приближай к нулю: -50, -40 и т.д.
-    transform: [{ translateY: -92 }],
+    transform: [{ translateY: -104 }],
   },
   // Главный контейнер меню без лишних промежуточных обёрток.
   // paddingHorizontal отвечает за близость карточек к краям экрана.
@@ -189,11 +199,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 650,
     paddingHorizontal: 6,
-    paddingVertical: 44,
+    // Уменьшаем вертикальный воздух, чтобы логотип, баннер и карточки жили плотнее.
+    paddingVertical: 26,
   },
   menuGrid: {
     width: '100%',
     gap: 10,
+    marginTop: 10,
   },
   footerInfo: {
     marginTop: 20,

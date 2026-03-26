@@ -288,11 +288,11 @@ const styles = StyleSheet.create({
   // Анимированные полноэкранные цветовые слои создают ощущение живого градиента.
   washPink: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 165, 196, 0.22)',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   washPurple: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(135, 118, 255, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
   topFade: {
     position: 'absolute',
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '22%',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgb(255, 255, 255)',
   },
   gradientBlob: {
     position: 'absolute',
@@ -333,16 +333,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 380,
     height: 230,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(216, 243, 250, 0.25)',
   },
   titleGlow: {
     position: 'absolute',
-    top: 115,
+    top: -30,
     alignSelf: 'center',
     width: 320,
     height: 180,
     borderRadius: 999,
-    backgroundColor: 'rgba(108, 92, 231, 0.09)',
+    backgroundColor: 'rgba(30, 0, 255, 0.09)',
   },
   bottomGlow: {
     position: 'absolute',
