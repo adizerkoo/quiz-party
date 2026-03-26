@@ -15,6 +15,8 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
+    // GestureHandlerRootView нужен для корректной работы свайпов во всём приложении,
+    // включая swipe-жесты на карточках вопросов и вариантах ответа.
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

@@ -13,10 +13,13 @@ type CreateOptionRowProps = {
   onSelectCorrect: () => void;
   onRemove: () => void;
   onClear: () => void;
+  onFocus?: () => void;
+  inputRef?: (input: TextInput | null) => void;
 };
 
 // Одна строка варианта ответа.
-// Удаление теперь работает свайпом влево, а не через кнопку-корзину.
+// Удаление работает тем же жестом, что и у карточки вопроса:
+// свайп влево показывает корзину за строкой и после порога удаляет вариант.
 export function CreateOptionRow({
   value,
   index,
@@ -26,37 +29,46 @@ export function CreateOptionRow({
   onSelectCorrect,
   onRemove,
   onClear,
+  onFocus,
+  inputRef,
 }: CreateOptionRowProps) {
   return (
     <CreateSwipeDelete
       disabled={!removable}
-      label="Удалить"
       onDelete={onRemove}>
       <View style={styles.row}>
         <View style={styles.inputWrap}>
           <TextInput
+            ref={inputRef}
             placeholder={`Вариант ${index + 1}`}
             placeholderTextColor={createTheme.colors.muted}
             selectionColor={createTheme.colors.purple}
             style={[styles.input, isCorrect && styles.inputCorrect]}
             value={value}
             onChangeText={onChangeText}
+            onFocus={onFocus}
           />
 
           {value ? (
-            <Pressable hitSlop={10} onPress={onClear} style={({ pressed }) => [
-              styles.clearButton,
-              pressed && styles.clearButtonPressed,
-            ]}>
+            <Pressable
+              hitSlop={10}
+              onPress={onClear}
+              style={({ pressed }) => [
+                styles.clearButton,
+                pressed && styles.clearButtonPressed,
+              ]}>
               <FontAwesome6 color="#888888" iconStyle="solid" name="xmark" size={14} />
             </Pressable>
           ) : null}
         </View>
 
-        <Pressable hitSlop={10} onPress={onSelectCorrect} style={[
-          styles.radio,
-          isCorrect && styles.radioChecked,
-        ]}>
+        <Pressable
+          hitSlop={10}
+          onPress={onSelectCorrect}
+          style={[
+            styles.radio,
+            isCorrect && styles.radioChecked,
+          ]}>
           {isCorrect ? <View style={styles.radioDot} /> : null}
         </Pressable>
       </View>
@@ -74,12 +86,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
 
-  // Обёртка input, чтобы положить внутрь крестик очистки.
+  // Обёртка input нужна, чтобы разместить крестик очистки прямо внутри поля.
   inputWrap: {
     flex: 1,
     position: 'relative',
   },
 
+  // Основное поле варианта ответа.
   input: {
     minHeight: 48,
     paddingLeft: 15,
@@ -93,13 +106,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Подсветка правильного ответа ложится именно на сам input,
-  // а не на всю строку вокруг него. Так поле не сжимается визуально.
+  // Подсветка правильного ответа ложится именно на input, а не на всю строку.
   inputCorrect: {
     borderColor: createTheme.colors.success,
     backgroundColor: createTheme.colors.successSoft,
   },
 
+  // Крестик очищает текст в поле, не затрагивая сам вариант.
   clearButton: {
     position: 'absolute',
     top: '50%',
@@ -116,7 +129,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
 
-  // Кастомная круглая радиокнопка выбора правильного ответа.
+  // Радиокнопка выбирает правильный вариант ответа.
   radio: {
     width: 22,
     height: 22,

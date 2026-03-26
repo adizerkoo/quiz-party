@@ -18,7 +18,6 @@ export function CreateIdeaBanner({ ideaText, onInsert, onRefresh }: CreateIdeaBa
         pressed && styles.ideaCardPressed,
       ]}>
         <FontAwesome6 color="#f1c40f" iconStyle="solid" name="lightbulb" size={14} />
-        <Text style={styles.ideaPrefix}>Идея:</Text>
         <Text numberOfLines={3} style={styles.ideaText}>
           {ideaText}
         </Text>
@@ -48,7 +47,7 @@ const styles = StyleSheet.create({
   // Кликабельный контейнер случайной идеи.
   ideaCard: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 45,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -63,12 +62,6 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
 
-  ideaPrefix: {
-    color: createTheme.colors.purple,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
   // Сам текст идеи занимает оставшееся место и переносится на новые строки.
   ideaText: {
     flex: 1,
@@ -80,8 +73,8 @@ const styles = StyleSheet.create({
 
   // Компактная кнопка обновления идеи.
   refreshButton: {
-    width: 36,
-    height: 36,
+    width: 45,
+    height: 45,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

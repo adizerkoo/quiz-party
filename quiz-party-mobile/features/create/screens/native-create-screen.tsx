@@ -4,6 +4,7 @@ import { Href, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
   View,
+  findNodeHandle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -54,6 +56,10 @@ export function NativeCreateScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const titleInputRef = useRef<TextInput>(null);
   const questionInputRef = useRef<TextInput>(null);
+  const textAnswerInputRef = useRef<TextInput>(null);
+  const optionInputRefs = useRef<Record<number, TextInput | null>>({});
+  const focusedInputRef = useRef<TextInput | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<CreateQuizQuestion[]>([]);
@@ -166,6 +172,28 @@ export function NativeCreateScreen() {
     return () => clearTimeout(timeoutId);
   }, [draft, draftHydrated, questions, title]);
 
+  useEffect(() => {
+    const keyboardEventName = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const showSubscription = Keyboard.addListener(keyboardEventName, () => {
+      if (focusedInputRef.current) {
+        revealInputAboveKeyboard(focusedInputRef.current, 24);
+      }
+    });
+
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      focusedInputRef.current = null;
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
   function pushToast(message: string) {
     const toastId = `${Date.now()}-${Math.random()}`;
     const nextToast = { id: toastId, message };
@@ -179,6 +207,42 @@ export function NativeCreateScreen() {
 
   function updateDraft(patch: Partial<CreateQuestionDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function revealInputAboveKeyboard(input: TextInput | null, extraDelay = 0) {
+    if (!input) {
+      return;
+    }
+
+    const inputHandle = findNodeHandle(input);
+    const scrollResponder = scrollRef.current as (ScrollView & {
+      scrollResponderScrollNativeHandleToKeyboard?: (
+        nodeHandle: number,
+        additionalOffset?: number,
+        preventNegativeScrollOffset?: boolean,
+      ) => void;
+    }) | null;
+
+    if (!inputHandle || !scrollResponder?.scrollResponderScrollNativeHandleToKeyboard) {
+      return;
+    }
+
+    // После фокуса поднимаем нужное поле ближе к верхней части экрана,
+    // чтобы оно не уезжало под клавиатуру, а оставалось над ней.
+    const delay = (Platform.OS === 'ios' ? 140 : 90) + extraDelay;
+
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollResponder.scrollResponderScrollNativeHandleToKeyboard?.(inputHandle, 96, true);
+    }, delay);
+  }
+
+  function handleInputFocus(input: TextInput | null) {
+    focusedInputRef.current = input;
+    revealInputAboveKeyboard(input);
   }
 
   function handleTypeChange(nextType: CreateQuestionDraft['questionType']) {
@@ -320,8 +384,10 @@ export function NativeCreateScreen() {
       if (!title.trim()) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
         titleInputRef.current?.focus();
+        revealInputAboveKeyboard(titleInputRef.current, 40);
       } else if (!questions.length) {
         questionInputRef.current?.focus();
+        revealInputAboveKeyboard(questionInputRef.current, 40);
       }
 
       return;
@@ -366,7 +432,11 @@ export function NativeCreateScreen() {
             bounces={false}
             contentContainerStyle={[
               styles.content,
-              { paddingBottom: 150 + insets.bottom },
+              // Нижний запас под фиксированную кнопку запуска.
+              // Держим его компактнее, чтобы между списком вопросов и кнопкой не было лишней пустоты.
+              // Главная настройка расстояния между последним контентом и нижней CTA-кнопкой.
+              // Чем меньше число, тем ближе кнопка будет к списку вопросов.
+              { paddingBottom: 98 + insets.bottom },
             ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
@@ -380,6 +450,7 @@ export function NativeCreateScreen() {
                   label="Название вечеринки:"
                   maxLength={50}
                   onChangeText={setTitle}
+                  onFocus={() => handleInputFocus(titleInputRef.current)}
                   placeholder="Например: ДР Артёма 🎂"
                   value={title}
                   variant="title"
@@ -403,6 +474,7 @@ export function NativeCreateScreen() {
                   ref={questionInputRef}
                   maxLength={180}
                   onChangeText={(questionText) => updateDraft({ questionText })}
+                  onFocus={() => handleInputFocus(questionInputRef.current)}
                   placeholder="Например: В каком году вышел первый iPhone?"
                   value={draft.questionText}
                 />
@@ -433,10 +505,14 @@ export function NativeCreateScreen() {
                     {draft.options.map((option, index) => (
                       <CreateOptionRow
                         key={`option-${index}`}
+                        inputRef={(input) => {
+                          optionInputRefs.current[index] = input;
+                        }}
                         index={index}
                         isCorrect={draft.selectedCorrectIndex === index}
                         onChangeText={(nextValue) => handleOptionChange(index, nextValue)}
                         onClear={() => handleOptionChange(index, '')}
+                        onFocus={() => handleInputFocus(optionInputRefs.current[index] ?? null)}
                         onRemove={() => handleRemoveOption(index)}
                         onSelectCorrect={() => handleSelectCorrect(index)}
                         removable={draft.options.length > CREATE_MIN_OPTIONS}
@@ -457,7 +533,9 @@ export function NativeCreateScreen() {
                 ) : (
                   <CreateTextField
                     label="Ответ:"
+                    ref={textAnswerInputRef}
                     onChangeText={(correctText) => updateDraft({ correctText })}
+                    onFocus={() => handleInputFocus(textAnswerInputRef.current)}
                     placeholder="Правильный ответ"
                     showClear
                     onClear={() => updateDraft({ correctText: '' })}
@@ -595,7 +673,9 @@ const styles = StyleSheet.create({
     // Небольшой внутренний отступ оставляем, но делаем экран шире и ближе к краям.
     paddingHorizontal: 4,
     paddingTop: 18,
-    paddingBottom: 78,
+    // Дополнительный запас внутри основного контента.
+    // Уменьшаем его, чтобы снизу не было лишнего пустого воздуха.
+    paddingBottom: 40,
     backgroundColor: 'transparent',
   },
 
@@ -707,7 +787,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 8,
-    marginBottom: 8,
+    marginBottom: -15,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: 'rgba(108, 92, 231, 0.25)',
@@ -769,6 +849,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
-    bottom: 0,
+    // Поднимаем кнопку чуть выше от нижней кромки экрана,
+    // чтобы она была ближе к контенту и не выглядела "утонувшей" внизу.
+    // Чем больше это число, тем выше кнопка поднимается от нижнего края экрана.
+    bottom: 28,
   },
 });

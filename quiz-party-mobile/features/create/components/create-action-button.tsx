@@ -11,8 +11,9 @@ type CreateActionButtonProps = {
   disabled?: boolean;
 };
 
-// Универсальная кнопка для экрана создания:
-// обычная розовая для "Добавить вопрос" и крупная сияющая для запуска игры.
+// Универсальная кнопка для экрана создания.
+// Здесь оставляем обычное поведение без long-press эффектов,
+// чтобы CTA был стабильным и не мешал основному сценарию.
 export function CreateActionButton({
   label,
   onPress,
@@ -32,8 +33,6 @@ export function CreateActionButton({
         pressed && !disabled ? styles.buttonPressed : null,
         disabled ? styles.buttonDisabled : null,
       ]}>
-      {isLaunch ? <View pointerEvents="none" style={styles.glowBand} /> : null}
-
       <View style={styles.content}>
         {icon}
         <Text style={[styles.label, isLaunch ? styles.launchLabel : styles.primaryLabel]}>{label}</Text>
@@ -50,37 +49,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Обычная розовая кнопка добавления вопроса.
+  // Розовая кнопка внутри формы создания вопроса.
   primaryButton: {
     width: '100%',
     minHeight: 54,
-    // Небольшой верхний отступ не даёт кнопке прилипать к полю ответа
-    // в текстовом режиме и визуально делает форму аккуратнее.
-    marginTop: 6,
+    // Отступ сверху не даёт кнопке прилипать к полям формы.
+    marginTop: 20,
     borderRadius: 14,
     backgroundColor: createTheme.colors.pink,
   },
 
-  // Крупная нижняя кнопка запуска игры.
+  // Крупная нижняя CTA-кнопка запуска игры.
   launchButton: {
     width: '100%',
     minHeight: 66,
     borderRadius: 20,
     backgroundColor: createTheme.colors.purple,
     shadowColor: createTheme.colors.launchGlow,
-    shadowOpacity: 0.34,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
 
-  // Состояние нажатия.
+  // Обычное состояние нажатия делает кнопку чуть компактнее.
   buttonPressed: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.96,
+    transform: [{ scale: 0.98 }],
+    opacity: 0.97,
   },
 
-  // Полупрозрачность для неактивной кнопки.
+  // Полупрозрачность для неактивного состояния.
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -109,16 +107,5 @@ const styles = StyleSheet.create({
     color: createTheme.colors.white,
     fontSize: 18,
     letterSpacing: 0.2,
-  },
-
-  // Бегущий световой блик, как у web-кнопки запуска.
-  glowBand: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: -40,
-    width: 70,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    transform: [{ skewX: '-18deg' }],
   },
 });

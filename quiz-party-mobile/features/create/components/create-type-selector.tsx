@@ -47,7 +47,7 @@ function TypeChip({ active, label, icon, onPress }: TypeChipProps) {
         color={active ? createTheme.colors.purple : createTheme.colors.textSoft}
         iconStyle="solid"
         name={icon}
-        size={14}
+        size={15}
       />
       <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
     </Pressable>
