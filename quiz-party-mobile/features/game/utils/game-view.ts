@@ -156,7 +156,7 @@ export function getHostAnswerCardState(params: {
   if (isFutureQuestion) {
     return {
       tone: 'future',
-      answerText: '🔮 ещё не дошли',
+      answerText: 'Ещё не дошли',
       actionLabel: null,
       canAddPoint: false,
       canRemovePoint: false,
@@ -168,7 +168,7 @@ export function getHostAnswerCardState(params: {
     if (!isPastQuestion) {
       return {
         tone: 'disconnected',
-        answerText: 'отключился',
+        answerText: 'Отключился',
         actionLabel: null,
         canAddPoint: false,
         canRemovePoint: false,
@@ -179,7 +179,7 @@ export function getHostAnswerCardState(params: {
     if (questionScore === 1) {
       return {
         tone: 'correct',
-        answerText: '⏩ пропущено',
+        answerText: 'Пропущено',
         actionLabel: 'Засчитано',
         canAddPoint: false,
         canRemovePoint: true,
@@ -189,7 +189,7 @@ export function getHostAnswerCardState(params: {
 
     return {
       tone: 'skipped',
-      answerText: '⏩ пропущено',
+      answerText: 'Пропущено',
       actionLabel: null,
       canAddPoint: true,
       canRemovePoint: false,
@@ -201,7 +201,7 @@ export function getHostAnswerCardState(params: {
     if (questionScore === 1) {
       return {
         tone: 'correct',
-        answerText: '⏩ пропущено',
+        answerText: 'Пропущено',
         actionLabel: 'Засчитано',
         canAddPoint: false,
         canRemovePoint: true,
@@ -211,7 +211,7 @@ export function getHostAnswerCardState(params: {
 
     return {
       tone: 'skipped',
-      answerText: '⏩ пропущено',
+      answerText: 'Пропущено',
       actionLabel: null,
       canAddPoint: true,
       canRemovePoint: false,
@@ -246,7 +246,7 @@ export function getHostAnswerCardState(params: {
 
   return {
     tone: 'waiting',
-    answerText: '⏳ ожидает ответа...',
+    answerText: 'Ожидает ответа...',
     actionLabel: null,
     canAddPoint: false,
     canRemovePoint: false,

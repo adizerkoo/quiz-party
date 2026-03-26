@@ -1,15 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
+import { GameIntroParticleBurst } from '@/features/game/components/game-intro-effects';
 import { gameTheme } from '@/features/game/theme/game-theme';
 import { GameResultsPayload } from '@/features/game/types';
 import { getRankDisplay, getResultOthers, getResultWinners, isAnswerCorrect } from '@/features/game/utils/game-view';
@@ -25,6 +27,10 @@ type GameResultsScreenProps = {
 
 type AnimatedWinnerMedalProps = {
   medal: string;
+};
+
+type WinnerConfettiOverlayProps = {
+  burstKey: number;
 };
 
 // Эта функция возвращает номер строки рейтинга так, как он воспринимается в веб-версии.
@@ -66,51 +72,78 @@ function getScoreboardRowTone(rank: number) {
 // Эта функция анимирует медаль победителя, чтобы блок победителей ощущался "живым", как на вебе.
 // Анимация мягкая и цикличная, чтобы не спорить с контентом и не мешать чтению имён.
 function AnimatedWinnerMedal({ medal }: AnimatedWinnerMedalProps) {
-  const rotate = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
+  const phase = useSharedValue(0);
 
   useEffect(() => {
-    rotate.value = withRepeat(
-      withSequence(
-        withTiming(-8, { duration: 420, easing: Easing.inOut(Easing.ease) }),
-        withTiming(8, { duration: 520, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 360, easing: Easing.inOut(Easing.ease) }),
-      ),
+    // Для плавной бесконечной анимации держим один общий phase-цикл.
+    // Так поворот, подъём и масштаб всегда синхронны и не дают прерывистого движения.
+    phase.value = withRepeat(
+      withTiming(Math.PI * 2, {
+        duration: 2600,
+        easing: Easing.linear,
+      }),
       -1,
       false,
     );
 
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(-3, { duration: 420, easing: Easing.out(Easing.ease) }),
-        withTiming(0, { duration: 520, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.08, { duration: 420, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: 520, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, [rotate, scale, translateY]);
+    return () => {
+      cancelAnimation(phase);
+      phase.value = 0;
+    };
+  }, [phase]);
 
   // Собираем покачивание, лёгкий подъём и масштаб в одну анимацию,
   // чтобы медаль выглядела празднично, но не "дёргано".
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${rotate.value}deg` },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const floatWave = Math.sin(phase.value);
+    const scaleWave = (Math.sin(phase.value - Math.PI / 2) + 1) / 2;
+
+    return {
+      transform: [
+        { rotate: `${floatWave * 7}deg` },
+        { translateY: floatWave * -3.4 },
+        { scale: 1 + scaleWave * 0.08 },
+      ],
+    };
+  });
 
   return <Animated.Text style={[styles.winnerMedal, animatedStyle]}>{medal}</Animated.Text>;
+}
+
+// Этот overlay запускает лёгкий confetti-салют прямо поверх блока победителей.
+// Компонент специально монтируется заново по ключу, чтобы каждый tap гарантированно перезапускал burst-анимацию.
+function WinnerConfettiOverlay({ burstKey }: WinnerConfettiOverlayProps) {
+  return (
+    <View key={`winner-confetti-${burstKey}`} pointerEvents="none" style={styles.winnerConfettiLayer}>
+      <GameIntroParticleBurst
+        centerStyle={styles.winnerConfettiBurstTopLeft}
+        count={16}
+        maxDistance={82}
+        palette={['#ffd86b', '#ff85a1', '#43fff2', '#6c5ce7', '#ffffff']}
+      />
+      <GameIntroParticleBurst
+        centerStyle={styles.winnerConfettiBurstTopRight}
+        count={16}
+        delay={50}
+        maxDistance={82}
+        palette={['#ffd86b', '#ffb347', '#ff85a1', '#43fff2', '#ffffff']}
+      />
+      <GameIntroParticleBurst
+        centerStyle={styles.winnerConfettiBurstBottomLeft}
+        count={14}
+        delay={90}
+        maxDistance={72}
+        palette={['#ffd86b', '#6c5ce7', '#43fff2', '#ffffff']}
+      />
+      <GameIntroParticleBurst
+        centerStyle={styles.winnerConfettiBurstBottomRight}
+        count={14}
+        delay={120}
+        maxDistance={72}
+        palette={['#ffd86b', '#ff85a1', '#43fff2', '#ffffff']}
+      />
+    </View>
+  );
 }
 
 // Экран итогов повторяет веб-структуру: отдельно highlighted-победители, отдельно обычный рейтинг и отдельно review.
@@ -123,6 +156,17 @@ export function GameResultsScreen({
   quizTitle,
   reviewExpanded,
 }: GameResultsScreenProps) {
+  const [winnerCelebrationKey, setWinnerCelebrationKey] = useState(0);
+  const winnerHapticTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    // При размонтировании чистим отложенные вибро-импульсы, чтобы экран не оставлял "хвосты" после ухода.
+    return () => {
+      winnerHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+      winnerHapticTimeoutsRef.current = [];
+    };
+  }, []);
+
   if (!payload) {
     return (
       <View style={styles.loadingWrap}>
@@ -144,6 +188,24 @@ export function GameResultsScreen({
   const featuredPlayers = winners.length ? winners : sortedResults.slice(0, 1);
   const scoreboardPlayers = winners.length ? others : sortedResults.slice(1);
 
+  function handleWinnersPress() {
+    // Один tap по блоку победителей запускает и confetti, и плотную победную вибро-цепочку,
+    // чтобы экран ощущался празднично и ближе к веб-эффекту.
+    setWinnerCelebrationKey((currentValue) => currentValue + 1);
+    winnerHapticTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    winnerHapticTimeoutsRef.current = [
+      setTimeout(() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }, 90),
+      setTimeout(() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }, 190),
+    ];
+  }
+
   return (
     <ScrollView bounces={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.scoreboardCard}>
@@ -151,7 +213,11 @@ export function GameResultsScreen({
         <Text style={styles.title}>Итоги викторины</Text>
 
         {/* Победителей оставляем отдельным блоком, как на вебе, чтобы они не сливались с основным рейтингом. */}
-        <View style={styles.winnersSection}>
+        <View style={styles.winnersSectionWrap}>
+          {winnerCelebrationKey > 0 ? <WinnerConfettiOverlay burstKey={winnerCelebrationKey} key={winnerCelebrationKey} /> : null}
+
+          <Pressable onPress={handleWinnersPress} style={({ pressed }) => [styles.winnersSectionPressable, pressed && styles.winnersSectionPressed]}>
+            <View style={styles.winnersSection}>
           {featuredPlayers.map((winner, index) => {
             const isMe = winner.name === playerName;
 
@@ -184,6 +250,8 @@ export function GameResultsScreen({
               </Animated.View>
             );
           })}
+            </View>
+          </Pressable>
         </View>
 
         {scoreboardPlayers.length > 0 ? (
@@ -356,6 +424,37 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 10,
   },
+  winnersSectionWrap: {
+    position: 'relative',
+  },
+  winnersSectionPressable: {
+    borderRadius: 24,
+  },
+  winnersSectionPressed: {
+    opacity: 0.97,
+    transform: [{ scale: 0.995 }],
+  },
+  winnerConfettiLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'visible',
+    zIndex: 4,
+  },
+  winnerConfettiBurstTopLeft: {
+    left: '18%',
+    top: '14%',
+  },
+  winnerConfettiBurstTopRight: {
+    left: '82%',
+    top: '16%',
+  },
+  winnerConfettiBurstBottomLeft: {
+    left: '28%',
+    top: '78%',
+  },
+  winnerConfettiBurstBottomRight: {
+    left: '72%',
+    top: '78%',
+  },
   winnerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -430,7 +529,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   ratingSection: {
-    marginTop: 24,
+    marginTop: 15,
   },
   ratingTitle: {
     marginBottom: 5,
@@ -445,10 +544,10 @@ const styles = StyleSheet.create({
   scoreboardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    minHeight: 70,
+    gap: 10,
+    minHeight: 50,
     paddingHorizontal: 6,
-    paddingVertical: 10,
+    paddingVertical: 0,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(108, 92, 231, 0.08)',
     backgroundColor: 'transparent',
@@ -463,8 +562,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(108, 92, 231, 0.05)',
   },
   rankBadge: {
-    width: 40,
-    height: 40,
+    width: 35,
+    height: 35,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -478,17 +577,17 @@ const styles = StyleSheet.create({
   },
   rankBadgeText: {
     color: gameTheme.colors.text,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '900',
   },
   scoreboardPlayerBlock: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   scoreboardEmoji: {
-    fontSize: 30,
+    fontSize: 25,
   },
   scoreboardInfo: {
     flex: 1,
@@ -501,7 +600,7 @@ const styles = StyleSheet.create({
   scoreboardName: {
     flexShrink: 1,
     color: gameTheme.colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
   },
   scoreboardMeBadge: {
@@ -516,26 +615,26 @@ const styles = StyleSheet.create({
     backgroundColor: gameTheme.colors.purple,
   },
   scoreBadge: {
-    minWidth: 54,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
+    minWidth: 34,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(108, 92, 231, 0.08)',
   },
   scoreBadgeSilver: {
-    backgroundColor: 'rgba(216, 225, 241, 0.92)',
+    backgroundColor: 'rgba(167, 172, 182, 0.62)',
   },
   scoreBadgeBronze: {
-    backgroundColor: 'rgba(241, 214, 191, 0.92)',
+    backgroundColor: 'rgba(242, 200, 163, 0.92)',
   },
   scoreBadgeMe: {
     backgroundColor: 'rgba(108, 92, 231, 0.14)',
   },
   scoreBadgeValue: {
     color: gameTheme.colors.purpleDark,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
   },
   sectionCard: {
@@ -597,20 +696,20 @@ const styles = StyleSheet.create({
   reviewQuestion: {
     marginTop: 6,
     color: gameTheme.colors.purpleDark,
-    fontSize: 17,
+    fontSize: 15,
     lineHeight: 24,
     fontWeight: '900',
   },
   answerBoxRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 5,
     marginTop: 14,
   },
   answerBox: {
     flex: 1,
     borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderWidth: 1,
   },
   answerBoxCorrect: {
@@ -627,7 +726,7 @@ const styles = StyleSheet.create({
   },
   answerBoxLabel: {
     color: gameTheme.colors.textSoft,
-    fontSize: 11,
+    fontSize: 8,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
@@ -649,12 +748,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   otherAnswersScrollContent: {
-    gap: 8,
+    gap: 5,
     paddingRight: 4,
   },
   otherAnswerCard: {
     width: 150,
-    minHeight: 64,
+    minHeight: 54,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -688,11 +787,11 @@ const styles = StyleSheet.create({
   },
   menuButtonPressed: {
     opacity: 0.94,
-    transform: [{ scale: 0.985 }],
+    transform: [{ scale: 0.95 }],
   },
   menuButtonText: {
     color: gameTheme.colors.white,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
   },
 });

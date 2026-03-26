@@ -41,8 +41,8 @@ type GameHostScreenProps = {
 // Плавная layout-анимация даёт рейтингу ту же "живость", что была у веб-версии:
 // карточки не перескакивают, а аккуратно меняют позиции при обновлении очков.
 const scoreboardCardLayout = LinearTransition.springify()
-  .damping(18)
-  .stiffness(190);
+  .damping(55)
+  .stiffness(390);
 
 // Для podium-мест задаём отдельные стили карточек, чтобы top-3 визуально читались сразу:
 // золото, серебро и бронза отличаются только оформлением, а бизнес-логика рейтинга остаётся прежней.
@@ -57,6 +57,24 @@ function getScoreCardRankStyle(rank: number) {
 
   if (rank === 3) {
     return styles.scoreCardThird;
+  }
+
+  return null;
+}
+
+// Для top-3 отдельно увеличиваем именно медальки ранга, чтобы призовые места читались ярче,
+// но обычные позиции ниже оставались компактными и не спорили с основным контентом строки.
+function getScoreRankTextStyle(rank: number) {
+  if (rank === 1) {
+    return styles.scoreRankLeader;
+  }
+
+  if (rank === 2) {
+    return styles.scoreRankSecond;
+  }
+
+  if (rank === 3) {
+    return styles.scoreRankThird;
   }
 
   return null;
@@ -287,7 +305,7 @@ export function GameHostScreen({
             </Text>
             <View style={styles.correctAnswerChip}>
               <Text style={styles.correctAnswerText}>
-                Правильный ответ: {currentQuestionData?.correct ?? '—'}
+                Ответ: {currentQuestionData?.correct ?? '—'}
               </Text>
             </View>
           </View>
@@ -300,7 +318,7 @@ export function GameHostScreen({
                 key={`score-${player.name}`}
                 layout={scoreboardCardLayout}
                 style={[styles.scoreCard, getScoreCardRankStyle(index + 1)]}>
-                <Text style={styles.scoreRank}>{getRankDisplay(index + 1)}</Text>
+                <Text style={[styles.scoreRank, getScoreRankTextStyle(index + 1)]}>{getRankDisplay(index + 1)}</Text>
                 <Text style={styles.scoreEmoji}>{player.emoji ?? '👤'}</Text>
                 <View style={styles.scoreInfo}>
                   <Text style={styles.scoreName}>{player.name}</Text>
@@ -388,7 +406,7 @@ export function GameHostScreen({
 const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
     paddingTop: 4,
     paddingBottom: 32,
   },
@@ -420,7 +438,7 @@ const styles = StyleSheet.create({
   },
   quizHeader: {
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 15,
   },
   quizSub: {
     color: gameTheme.colors.textMuted,
@@ -438,7 +456,7 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     borderRadius: gameTheme.radius.card,
-    paddingHorizontal: 16,
+    paddingHorizontal: 5,
     paddingVertical: 18,
     backgroundColor: gameTheme.colors.panel,
     borderWidth: 1,
@@ -504,6 +522,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1.4,
+    textAlign: 'center'
   },
   miniLabelCentered: {
     textAlign: 'center',
@@ -720,15 +739,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   scoreboardWrap: {
-    gap: 10,
+    gap: 2,
   },
   scoreCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderRadius: gameTheme.radius.section,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    gap: 2,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
     backgroundColor: gameTheme.colors.panelStrong,
     borderWidth: 1,
     borderColor: gameTheme.colors.panelBorder,
@@ -739,26 +758,44 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   scoreCardLeader: {
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255, 216, 107, 0.18)',
+    paddingVertical: 5,
+    backgroundColor: 'rgba(255, 216, 107, 0.55)',
     borderColor: 'rgba(255, 216, 107, 0.36)',
   },
   scoreCardSecond: {
-    paddingVertical: 12,
-    backgroundColor: 'rgba(201, 208, 224, 0.24)',
+    paddingVertical: 5,
+    backgroundColor: 'rgba(201, 208, 224, 0.45)',
     borderColor: 'rgba(168, 178, 196, 0.42)',
   },
   scoreCardThird: {
-    paddingVertical: 12,
-    backgroundColor: 'rgba(205, 127, 50, 0.16)',
+    paddingVertical: 5,
+    backgroundColor: 'rgba(205, 128, 50, 0.29)',
     borderColor: 'rgba(205, 127, 50, 0.34)',
   },
   scoreRank: {
     width: 32,
     textAlign: 'center',
     color: gameTheme.colors.text,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '900',
+  },
+  scoreRankLeader: {
+    width: 42,
+    fontSize: 30,
+    lineHeight: 28,
+    marginLeft: -7,
+  },
+  scoreRankSecond: {
+    width: 40,
+    fontSize: 30,
+    lineHeight: 26,
+    marginLeft: -7,
+  },
+  scoreRankThird: {
+    width: 38,
+    fontSize: 30,
+    lineHeight: 25,
+    marginLeft: -7,
   },
   scoreEmoji: {
     fontSize: 28,
@@ -797,15 +834,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   answersWrap: {
-    gap: 10,
+    gap: 2,
   },
   answerCard: {
     borderRadius: gameTheme.radius.section,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: gameTheme.colors.panelStrong,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#f9f9f9',
     borderWidth: 1,
-    borderColor: gameTheme.colors.panelBorder,
+    borderColor: '#cecece75',
     borderLeftWidth: 4,
     borderLeftColor: gameTheme.colors.purple,
     shadowColor: gameTheme.colors.shadow,
@@ -911,17 +948,17 @@ const styles = StyleSheet.create({
     borderRadius: gameTheme.radius.control,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    backgroundColor: 'rgba(255,255,255,0.88)',
+    backgroundColor: 'rgba(234, 254, 252, 0.54)',
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: 'rgba(108, 92, 231, 0.22)',
   },
   answerBubbleCorrect: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(196, 252, 213, 0.41)',
     borderColor: 'rgba(46, 204, 113, 0.35)',
   },
   answerBubbleWrong: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(252, 216, 216, 0.72)',
     borderColor: 'rgba(255, 118, 117, 0.35)',
   },
   answerBubbleSkipped: {
