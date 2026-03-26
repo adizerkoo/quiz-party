@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: gameTheme.colors.purpleDark,
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '900',
   },
   reviewHeader: {
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: 16,
     paddingHorizontal: 10,
-    paddingVertical: 14,
+    paddingVertical: 10,
     backgroundColor: 'rgba(108, 92, 231, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(108, 92, 231, 0.14)',
