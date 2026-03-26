@@ -1,3 +1,4 @@
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -6,12 +7,12 @@ import Animated, {
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
+import { LobbyPlayerEmoji } from '@/features/game/components/lobby-player-emoji';
 import { gameTheme } from '@/features/game/theme/game-theme';
 import { GameLobbyPlayer, GameQuestion, GameStatus } from '@/features/game/types';
 import { getHostAnswerCardState, getRankDisplay, getSortedLeaderboard } from '@/features/game/utils/game-view';
@@ -37,82 +38,28 @@ type GameHostScreenProps = {
   onStartGame: () => void;
 };
 
-type AnimatedLobbyEmojiProps = {
-  delay: number;
-  emoji: string;
-  isOffline?: boolean;
-};
-
 // Плавная layout-анимация даёт рейтингу ту же "живость", что была у веб-версии:
 // карточки не перескакивают, а аккуратно меняют позиции при обновлении очков.
 const scoreboardCardLayout = LinearTransition.springify()
   .damping(18)
   .stiffness(190);
 
-// Анимация эмодзи в лобби делает экран ожидания живым.
-// Для offline-игроков останавливаем движение, чтобы не потерять читаемость их статуса.
-function AnimatedLobbyEmoji({ delay, emoji, isOffline = false }: AnimatedLobbyEmojiProps) {
-  const translateY = useSharedValue(0);
-  const rotation = useSharedValue(0);
-  const scale = useSharedValue(1);
+// Для podium-мест задаём отдельные стили карточек, чтобы top-3 визуально читались сразу:
+// золото, серебро и бронза отличаются только оформлением, а бизнес-логика рейтинга остаётся прежней.
+function getScoreCardRankStyle(rank: number) {
+  if (rank === 1) {
+    return styles.scoreCardLeader;
+  }
 
-  useEffect(() => {
-    if (isOffline) {
-      translateY.value = withTiming(0, { duration: 180 });
-      rotation.value = withTiming(0, { duration: 180 });
-      scale.value = withTiming(1, { duration: 180 });
-      return;
-    }
+  if (rank === 2) {
+    return styles.scoreCardSecond;
+  }
 
-    translateY.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(-6, { duration: 650, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 650, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-        false,
-      ),
-    );
+  if (rank === 3) {
+    return styles.scoreCardThird;
+  }
 
-    rotation.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(-4, { duration: 420, easing: Easing.inOut(Easing.ease) }),
-          withTiming(4, { duration: 420, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 420, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-
-    scale.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(1.06, { duration: 520, easing: Easing.out(Easing.ease) }),
-          withTiming(1, { duration: 520, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-  }, [delay, isOffline, rotation, scale, translateY]);
-
-  // Комбинируем лёгкое покачивание, микроповорот и масштаб,
-  // чтобы эмодзи выглядело нативно, а не "роботом" по таймеру.
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { rotate: `${rotation.value}deg` },
-      { scale: scale.value },
-    ],
-  }));
-
-  return <Animated.Text style={[styles.playerEmoji, animatedStyle]}>{emoji}</Animated.Text>;
+  return null;
 }
 
 // Пульсирующая точка показывает текущий "живой" шаг игры и повторяет веб-референс.
@@ -213,7 +160,9 @@ export function GameHostScreen({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
+        {/* Кнопку "Назад" оформляем так же легко, как на create-экране, чтобы навигация в игре выглядела единообразно. */}
         <Pressable onPress={onBackToCreate} style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
+          <FontAwesome6 color={gameTheme.colors.purple} iconStyle="solid" name="chevron-left" size={18} />
           <Text style={styles.backButtonText}>Назад</Text>
         </Pressable>
       </View>
@@ -231,11 +180,19 @@ export function GameHostScreen({
 
             <View style={styles.roomActions}>
               <Pressable onPress={onShareRoom} style={({ pressed }) => [styles.secondaryAction, pressed && styles.secondaryActionPressed]}>
-                <Text style={styles.secondaryActionText}>Поделиться</Text>
+                {/* Иконку ставим слева от текста, чтобы кнопка читалась быстрее и выглядела современнее. */}
+                <View style={styles.secondaryActionContent}>
+                  <FontAwesome6 color={gameTheme.colors.purple} iconStyle="solid" name="share-nodes" size={14} />
+                  <Text style={styles.secondaryActionText}>Поделиться</Text>
+                </View>
               </Pressable>
 
               <Pressable onPress={onCopyRoom} style={({ pressed }) => [styles.secondaryAction, pressed && styles.secondaryActionPressed]}>
-                <Text style={styles.secondaryActionText}>Скопировать</Text>
+                {/* Для копирования используем отдельную иконку, чтобы действия визуально не путались между собой. */}
+                <View style={styles.secondaryActionContent}>
+                  <FontAwesome6 color={gameTheme.colors.purple} iconStyle="solid" name="copy" size={14} />
+                  <Text style={styles.secondaryActionText}>Скопировать</Text>
+                </View>
               </Pressable>
             </View>
           </View>
@@ -244,7 +201,13 @@ export function GameHostScreen({
 
           {!actualPlayers.length ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🎭</Text>
+              {/* Когда комната пустая, эмодзи тоже остаётся "живым", но без реакции на тап, потому что это декоративный элемент. */}
+              <LobbyPlayerEmoji
+                emoji="🎭"
+                idleDelay={0}
+                isInteractive={false}
+                style={styles.emptyEmoji}
+              />
               <Text style={styles.emptyTitle}>Пока тут пусто...</Text>
               <Text style={styles.emptyHint}>Отправь код комнаты друзьям, чтобы они присоединились.</Text>
             </View>
@@ -257,11 +220,12 @@ export function GameHostScreen({
                     <Text style={styles.kickButtonText}>×</Text>
                   </Pressable>
 
-                  {/* Эмодзи слегка покачивается, как в веб-версии lobby, и остаётся статичным в offline-состоянии. */}
-                  <AnimatedLobbyEmoji
-                    delay={(index % 4) * 180}
+                  {/* Эмодзи теперь не только живёт в idle-анимации, но и реагирует на тап вибрацией и pop-эффектом. */}
+                  <LobbyPlayerEmoji
+                    idleDelay={(index % 4) * 180}
                     emoji={player.emoji ?? '👤'}
                     isOffline={player.connected === false}
+                    style={styles.playerEmoji}
                   />
 
                   <Text style={styles.playerName}>{player.name}</Text>
@@ -328,21 +292,20 @@ export function GameHostScreen({
             </View>
           </View>
 
-          <Text style={styles.miniLabel}>РЕЙТИНГ</Text>
+          <Text style={[styles.miniLabel, styles.miniLabelCentered]}>РЕЙТИНГ</Text>
           <View style={styles.scoreboardWrap}>
             {leaderboard.length ? leaderboard.map((player, index) => (
               <Animated.View
                 entering={FadeInDown.duration(320).delay(index * 45)}
                 key={`score-${player.name}`}
                 layout={scoreboardCardLayout}
-                style={[styles.scoreCard, index === 0 && styles.scoreCardLeader]}>
+                style={[styles.scoreCard, getScoreCardRankStyle(index + 1)]}>
                 <Text style={styles.scoreRank}>{getRankDisplay(index + 1)}</Text>
                 <Text style={styles.scoreEmoji}>{player.emoji ?? '👤'}</Text>
                 <View style={styles.scoreInfo}>
                   <Text style={styles.scoreName}>{player.name}</Text>
-                  <Text style={styles.scoreValue}>{player.score ?? 0}🏆</Text>
+                  <Text numberOfLines={1} style={styles.scoreValue}>{player.score ?? 0}</Text>
                 </View>
-                {index === 0 ? <Text style={styles.scoreCrown}>👑</Text> : null}
               </Animated.View>
             )) : (
               <View style={styles.emptyScoreboard}>
@@ -426,34 +389,38 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 10,
-    paddingTop: 12,
+    paddingTop: 4,
     paddingBottom: 32,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: 12,
+    position: 'relative',
+    justifyContent: 'center',
+    minHeight: 44,
+    marginBottom: 8,
   },
   backButton: {
-    minHeight: 42,
-    paddingHorizontal: 16,
-    borderRadius: gameTheme.radius.control,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 2,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: gameTheme.colors.panel,
+    gap: 5,
+    paddingRight: 10,
   },
   backButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.65,
+    transform: [{ scale: 0.97 }],
   },
   backButtonText: {
-    color: gameTheme.colors.text,
-    fontSize: 14,
-    fontWeight: '800',
+    color: gameTheme.colors.purple,
+    fontSize: 17,
+    fontWeight: '600',
   },
   quizHeader: {
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   quizSub: {
     color: gameTheme.colors.textMuted,
@@ -463,7 +430,7 @@ const styles = StyleSheet.create({
   },
   quizTitle: {
     marginTop: 4,
-    color: gameTheme.colors.purpleDark,
+    color: gameTheme.colors.pinkDark,
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '900',
@@ -515,6 +482,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: gameTheme.colors.panelStrong,
   },
+  secondaryActionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
   secondaryActionPressed: {
     opacity: 0.92,
     transform: [{ scale: 0.98 }],
@@ -531,6 +504,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1.4,
+  },
+  miniLabelCentered: {
+    textAlign: 'center',
   },
   emptyState: {
     borderRadius: gameTheme.radius.section,
@@ -559,15 +535,15 @@ const styles = StyleSheet.create({
   playerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   playerCard: {
     width: '48%',
-    minHeight: 118,
+    minHeight: 92,
     borderRadius: gameTheme.radius.section,
-    paddingTop: 18,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingTop: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -649,14 +625,14 @@ const styles = StyleSheet.create({
   },
   progressRow: {
     flexGrow: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   progressInlineRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     gap: 8,
-    paddingLeft: 20,
+    paddingHorizontal: 4,
   },
   progressWrap: {
     alignItems: 'center',
@@ -716,31 +692,32 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   questionCard: {
-    borderRadius: gameTheme.radius.section,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: gameTheme.colors.panelStrong,
-    borderWidth: 1,
-    borderColor: gameTheme.colors.panelBorder,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
+    backgroundColor: 'transparent',
   },
   questionTitle: {
     color: gameTheme.colors.text,
     fontSize: 22,
     lineHeight: 30,
     fontWeight: '900',
+    textAlign: 'center',
   },
   correctAnswerChip: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
+    marginTop: 10,
+    alignSelf: 'center',
     borderRadius: gameTheme.radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     backgroundColor: gameTheme.colors.purpleSoft,
+    borderWidth: 1,
+    borderColor: gameTheme.colors.panelBorder,
   },
   correctAnswerText: {
     color: gameTheme.colors.purpleDark,
     fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
   },
   scoreboardWrap: {
     gap: 10,
@@ -751,7 +728,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: gameTheme.radius.section,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 9,
     backgroundColor: gameTheme.colors.panelStrong,
     borderWidth: 1,
     borderColor: gameTheme.colors.panelBorder,
@@ -762,8 +739,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   scoreCardLeader: {
+    paddingVertical: 12,
     backgroundColor: 'rgba(255, 216, 107, 0.18)',
     borderColor: 'rgba(255, 216, 107, 0.36)',
+  },
+  scoreCardSecond: {
+    paddingVertical: 12,
+    backgroundColor: 'rgba(201, 208, 224, 0.24)',
+    borderColor: 'rgba(168, 178, 196, 0.42)',
+  },
+  scoreCardThird: {
+    paddingVertical: 12,
+    backgroundColor: 'rgba(205, 127, 50, 0.16)',
+    borderColor: 'rgba(205, 127, 50, 0.34)',
   },
   scoreRank: {
     width: 32,
@@ -777,20 +765,24 @@ const styles = StyleSheet.create({
   },
   scoreInfo: {
     flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   scoreName: {
     color: gameTheme.colors.text,
     fontSize: 15,
     fontWeight: '800',
+    flex: 1,
+    flexShrink: 1,
   },
   scoreValue: {
-    marginTop: 2,
-    color: gameTheme.colors.textSoft,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  scoreCrown: {
-    fontSize: 20,
+    color: gameTheme.colors.text,
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'right',
   },
   emptyScoreboard: {
     borderRadius: gameTheme.radius.section,
@@ -810,7 +802,7 @@ const styles = StyleSheet.create({
   answerCard: {
     borderRadius: gameTheme.radius.section,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 10,
     backgroundColor: gameTheme.colors.panelStrong,
     borderWidth: 1,
     borderColor: gameTheme.colors.panelBorder,
@@ -846,7 +838,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
   },
   answerPlayerInfo: {
     flex: 1,
@@ -890,17 +882,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(108, 92, 231, 0.14)',
   },
   scoreActionPositive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: gameTheme.colors.success,
   },
   scoreActionNegative: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: gameTheme.colors.danger,
@@ -915,10 +907,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   answerBubble: {
-    marginTop: 12,
+    marginTop: 8,
     borderRadius: gameTheme.radius.control,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 9,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -943,7 +935,7 @@ const styles = StyleSheet.create({
   answerBubbleText: {
     color: gameTheme.colors.text,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 20,
     fontWeight: '700',
   },
   nextButton: {

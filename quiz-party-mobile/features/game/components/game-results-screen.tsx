@@ -219,8 +219,6 @@ export function GameResultsScreen({
                           </Text>
                           {isMe ? <Text style={styles.scoreboardMeBadge}>ты</Text> : null}
                         </View>
-
-                        <Text style={styles.scoreboardSubline}>Финальный счёт</Text>
                       </View>
                     </View>
 
@@ -435,10 +433,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   ratingTitle: {
-    marginBottom: 10,
-    color: gameTheme.colors.purpleDark,
-    fontSize: 18,
+    marginBottom: 5,
+    color: gameTheme.colors.textSoft,
+    fontSize: 14,
     fontWeight: '900',
+    textAlign: 'center',
   },
   ratingList: {
     backgroundColor: 'transparent',
@@ -515,12 +514,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     overflow: 'hidden',
     backgroundColor: gameTheme.colors.purple,
-  },
-  scoreboardSubline: {
-    marginTop: 4,
-    color: gameTheme.colors.textSoft,
-    fontSize: 13,
-    fontWeight: '700',
   },
   scoreBadge: {
     minWidth: 54,
@@ -661,11 +654,11 @@ const styles = StyleSheet.create({
   },
   otherAnswerCard: {
     width: 150,
-    minHeight: 86,
+    minHeight: 64,
     borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    justifyContent: 'space-between',
+    paddingVertical: 9,
+    justifyContent: 'flex-start',
     backgroundColor: 'rgba(108, 92, 231, 0.07)',
     borderWidth: 1,
     borderColor: 'rgba(108, 92, 231, 0.12)',
@@ -677,10 +670,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   otherAnswerValue: {
-    marginTop: 8,
+    marginTop: 6,
     color: gameTheme.colors.text,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 18,
     fontWeight: '700',
   },
   otherAnswerValueCorrect: {

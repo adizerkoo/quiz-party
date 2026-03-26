@@ -38,6 +38,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
   const playerNameRef = useRef(role === 'host' ? 'HOST' : profile?.name ?? 'Игрок');
   const realGameQuestionRef = useRef(0);
   const currentQuestionRef = useRef(0);
+  const questionsCountRef = useRef(0);
   const toastTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -77,6 +78,12 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
   useEffect(() => {
     currentQuestionRef.current = currentQuestion;
   }, [currentQuestion]);
+
+  useEffect(() => {
+    // Количество вопросов храним в ref, чтобы socket-обработчики с длинным жизненным циклом
+    // всегда читали актуальное значение, а не старое значение из замыкания.
+    questionsCountRef.current = questions.length;
+  }, [questions]);
 
   useEffect(() => {
     return () => {
@@ -164,10 +171,25 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     socketRef.current?.emit('get_update', roomCode);
   }
 
+  function syncQuestions(nextQuestions: GameQuestion[]) {
+    // Держим state и ref синхронными через одну функцию, чтобы и UI, и socket-логика
+    // опирались на один и тот же актуальный список вопросов.
+    questionsCountRef.current = nextQuestions.length;
+    setQuestions(nextQuestions);
+  }
+
   function proceedToNextQuestion() {
+    // Это защитный слой от преждевременного завершения игры:
+    // здесь нельзя опираться на questions.length из старого замыкания socket-обработчика.
+    const totalQuestions = questionsCountRef.current;
     setConfirmVisible(false);
 
-    if (currentQuestionRef.current < questions.length) {
+    if (totalQuestions <= 0) {
+      emitGetUpdate();
+      return;
+    }
+
+    if (currentQuestionRef.current < totalQuestions) {
       socketRef.current?.emit('next_question_signal', {
         room: roomCode,
         expectedQuestion: currentQuestionRef.current,
@@ -326,7 +348,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         }
 
         setQuizTitle(quiz.title);
-        setQuestions(quiz.questions_data);
+        syncQuestions(quiz.questions_data);
         setGameStatus(quiz.status);
 
         const socket = io(WEB_APP_ORIGIN, {
@@ -469,7 +491,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
           }
 
           if (data.questions?.length) {
-            setQuestions(data.questions);
+            syncQuestions(data.questions);
           }
 
           if (data.status === 'playing') {
@@ -480,7 +502,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         socket.on('show_results', (data: GameResultsPayload) => {
           startTransition(() => {
             setResultsPayload(data);
-            setQuestions(data.questions);
+            syncQuestions(data.questions);
             setGameStatus('finished');
             setReviewExpanded(false);
 

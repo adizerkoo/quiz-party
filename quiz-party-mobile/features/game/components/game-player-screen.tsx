@@ -1,5 +1,6 @@
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { LobbyPlayerEmoji } from '@/features/game/components/lobby-player-emoji';
 import { gameTheme } from '@/features/game/theme/game-theme';
 import { GameLobbyPlayer, GameQuestion, GameStatus } from '@/features/game/types';
 
@@ -44,6 +45,7 @@ export function GamePlayerScreen({
   quizTitle,
   realGameQuestion,
 }: GamePlayerScreenProps) {
+  // Из общего списка игроков исключаем хоста, чтобы в лобби показывать только участников комнаты.
   const actualPlayers = players.filter((player) => !player.is_host);
   const isPastQuestion = playerViewQuestion < realGameQuestion;
   const myAnswer = myAnswersHistory[String(playerViewQuestion)];
@@ -71,7 +73,13 @@ export function GamePlayerScreen({
                 return (
                   <View key={player.name} style={[styles.playerCard, isMe && styles.playerCardMe, player.connected === false && styles.playerCardOffline]}>
                     {isMe ? <Text style={styles.meBadge}>ВЫ</Text> : null}
-                    <Text style={styles.playerEmoji}>{player.emoji ?? '👤'}</Text>
+                    {/* Эмодзи участника реагирует на нажатие так же, как у хоста: с pop-анимацией и вибро-откликом. */}
+                    <LobbyPlayerEmoji
+                      emoji={player.emoji ?? '👤'}
+                      idleDelay={0}
+                      isOffline={player.connected === false}
+                      style={styles.playerEmoji}
+                    />
                     <Text style={styles.playerNameLabel}>{player.name}</Text>
                   </View>
                 );
@@ -181,13 +189,13 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingHorizontal: 10, paddingTop: 18, paddingBottom: 30 },
   quizHeader: { alignItems: 'center', marginBottom: 14 },
   quizSub: { color: gameTheme.colors.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: 1.6 },
-  quizTitle: { marginTop: 4, color: gameTheme.colors.purpleDark, fontSize: 28, lineHeight: 34, fontWeight: '900', textAlign: 'center' },
+  quizTitle: { marginTop: 4, color: gameTheme.colors.pinkDark, fontSize: 28, lineHeight: 34, fontWeight: '900', textAlign: 'center' },
   sectionCard: { borderRadius: gameTheme.radius.card, paddingHorizontal: 16, paddingVertical: 18, backgroundColor: gameTheme.colors.panel, borderWidth: 1, borderColor: gameTheme.colors.panelBorder },
   waitTitle: { color: gameTheme.colors.purpleDark, fontSize: 30, lineHeight: 36, fontWeight: '900', textAlign: 'center' },
   waitSubtitle: { marginTop: 10, color: gameTheme.colors.textSoft, fontSize: 15, lineHeight: 22, textAlign: 'center' },
   miniLabel: { marginTop: 18, marginBottom: 10, color: gameTheme.colors.textMuted, fontSize: 12, fontWeight: '900', letterSpacing: 1.4 },
-  playerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  playerCard: { width: '48%', borderRadius: gameTheme.radius.section, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: gameTheme.colors.panelStrong, alignItems: 'center' },
+  playerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  playerCard: { width: '48%', minHeight: 86, borderRadius: gameTheme.radius.section, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: gameTheme.colors.panelStrong, alignItems: 'center', justifyContent: 'center' },
   playerCardMe: { borderWidth: 1.5, borderColor: gameTheme.colors.pink },
   playerCardOffline: { opacity: 0.72 },
   meBadge: { marginBottom: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: gameTheme.radius.pill, overflow: 'hidden', color: gameTheme.colors.white, fontSize: 11, fontWeight: '900', backgroundColor: gameTheme.colors.pink },
