@@ -1,3 +1,4 @@
+import { Href, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -13,6 +14,7 @@ type JoinModalProps = {
 };
 
 export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
+  const router = useRouter();
   const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -28,13 +30,19 @@ export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
   }, [visible]);
 
   function handlePreviewJoin() {
-    if (!roomCode.trim()) {
+    const normalizedCode = roomCode.trim().toUpperCase();
+
+    if (!normalizedCode) {
       setError('Нужен код, чтобы войти 🔑');
       return;
     }
 
     setError(null);
     onClose();
+    router.push({
+      pathname: '/player-game' as Href,
+      params: { room: normalizedCode },
+    } as Href);
   }
 
   return (
@@ -53,7 +61,7 @@ export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
         label="Код комнаты"
         maxLength={11}
         onBlur={() => setIsInputFocused(false)}
-        onChangeText={setRoomCode}
+        onChangeText={(value) => setRoomCode(value.toUpperCase())}
         onFocus={() => setIsInputFocused(true)}
         value={roomCode}
       />

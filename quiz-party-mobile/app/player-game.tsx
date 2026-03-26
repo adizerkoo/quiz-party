@@ -2,9 +2,9 @@ import { useLocalSearchParams } from 'expo-router';
 
 import { NativeGameScreen } from '@/features/game';
 
-export default function HostGameScreen() {
+export default function PlayerGameScreen() {
   const params = useLocalSearchParams<{ room?: string }>();
   const roomCode = typeof params.room === 'string' ? params.room : '';
 
-  return <NativeGameScreen role="host" roomCode={roomCode} />;
+  return <NativeGameScreen role="player" roomCode={roomCode} />;
 }
