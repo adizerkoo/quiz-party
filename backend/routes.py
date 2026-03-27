@@ -19,7 +19,7 @@ from . import database, models, schemas
 from .cache import cache_quiz
 from .config import DATA_PATH, FRONTEND_PATH, PLAYER_EMOJIS
 from .helpers import get_quiz_by_code
-from .logging_config import build_log_extra, log_event
+from .logging_config import build_log_extra, log_event, log_game_event
 from .security import sanitize_text, validate_player_name
 from .services import (
     DevicePayload,
@@ -129,7 +129,7 @@ def register_routes(app):
             db.commit()
             db.refresh(quiz)
             cache_quiz(code, quiz.id, quiz.questions_data, quiz.total_questions)
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "quiz.create.completed",

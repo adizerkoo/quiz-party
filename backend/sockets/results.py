@@ -8,7 +8,7 @@ import logging
 from .. import database
 from ..cache import invalidate_quiz
 from ..helpers import get_player_by_sid, get_quiz_by_code, verify_host
-from ..logging_config import build_log_extra, log_event, logged_socket_handler
+from ..logging_config import build_log_extra, log_event, log_game_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import validate_quiz_code
 from ..services import (
@@ -100,7 +100,7 @@ def register_results_handlers(sio_manager):
             winner_names = [
                 participant.name for participant in players if participant.final_rank == 1
             ]
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.finish_game_signal.completed",

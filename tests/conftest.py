@@ -6,11 +6,14 @@
 """
 
 import os
+from pathlib import Path
 
 # ── Устанавливаем фиктивный DATABASE_URL до импорта backend ──────────
 # database.py создаёт engine при импорте — нужен валидный postgresql:// URL,
 # чтобы модуль загрузился. Реального подключения в тестах не будет.
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test_quiz")
+_TEST_LOG_DIR = Path(__file__).resolve().parent / "logs"
+os.environ["LOG_DIR"] = str(_TEST_LOG_DIR)
 
 import pytest
 from unittest.mock import patch as _patch

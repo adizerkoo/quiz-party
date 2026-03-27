@@ -7,7 +7,7 @@ import logging
 
 from .. import database, models
 from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
-from ..logging_config import build_log_extra, log_event, logged_socket_handler
+from ..logging_config import build_log_extra, log_event, log_game_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_answer, validate_quiz_code
 from ..services import (
@@ -86,7 +86,7 @@ def register_game_handlers(sio_manager):
             )
             db.commit()
             players = get_players_in_quiz(db, quiz.id)
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.start_game_signal.completed",
@@ -214,12 +214,13 @@ def register_game_handlers(sio_manager):
                 },
             )
             db.commit()
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.send_answer.completed",
                 "Answer received",
                 **build_log_extra(quiz=quiz, participant=participant, sid=sid, question=question.position),
+                submitted_answer=answer,
                 correct=bool(stored_answer.is_correct),
                 score=participant.score,
                 answer_time_seconds=answer_time_seconds,
@@ -299,7 +300,7 @@ def register_game_handlers(sio_manager):
                 payload={"question": next_question},
             )
             db.commit()
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.next_question_signal.completed",
@@ -340,7 +341,7 @@ def register_game_handlers(sio_manager):
                 payload={"question": step},
             )
             db.commit()
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.move_to_step.completed",
@@ -420,7 +421,7 @@ def register_game_handlers(sio_manager):
                 },
             )
             db.commit()
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.override_score.completed",

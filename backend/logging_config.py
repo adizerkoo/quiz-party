@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
@@ -23,6 +23,7 @@ _LOG_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
 )
 _LOGGING_CONFIGURED = False
 _QUIZPARTY_HANDLER_FLAG = "_quizparty_handler"
+_LOG_CHANNEL_GAME_EVENTS = "game_events"
 _STANDARD_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__.keys()) | {
     "message",
     "asctime",
@@ -53,6 +54,14 @@ def _is_meaningful(value: Any) -> bool:
     if isinstance(value, (list, tuple, set, dict)):
         return bool(value)
     return True
+
+
+def _normalize_channels(channels: Iterable[str] | str | None) -> tuple[str, ...]:
+    if channels is None:
+        return ()
+    if isinstance(channels, str):
+        return (channels,) if channels else ()
+    return tuple(channel for channel in channels if channel)
 
 
 class QuizPartyFormatter(logging.Formatter):
@@ -118,6 +127,18 @@ class QuizPartyFormatter(logging.Formatter):
         return str(value)
 
 
+class ChannelFilter(logging.Filter):
+    """Routes log records to handlers based on explicit internal channels."""
+
+    def __init__(self, channel: str):
+        super().__init__()
+        self.channel = channel
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        channels = getattr(record, "_quizparty_channels", ())
+        return self.channel in channels
+
+
 def _resolve_level(value: str | None, default: str) -> str:
     candidate = (value or default).upper()
     if candidate not in logging._nameToLevel:  # type: ignore[attr-defined]
@@ -129,8 +150,8 @@ def _level_number(level_name: str) -> int:
     return int(logging._nameToLevel[level_name])  # type: ignore[attr-defined]
 
 
-def _default_log_file() -> Path:
-    return Path(__file__).resolve().parent.parent / "logs" / "quiz-party.log"
+def _default_log_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "logs"
 
 
 def generate_request_id(value: str | None = None) -> str:
@@ -229,10 +250,14 @@ def log_event(
     *,
     exc_info: Any = False,
     stack_info: bool = False,
+    channels: Iterable[str] | str | None = None,
     **context: Any,
 ) -> None:
     """Writes a log record with the unified event field and contextual extras."""
     extra = {"event": event}
+    normalized_channels = _normalize_channels(channels)
+    if normalized_channels:
+        extra["_quizparty_channels"] = normalized_channels
     extra.update({key: value for key, value in context.items() if _is_meaningful(value)})
     logger.log(
         level,
@@ -240,6 +265,29 @@ def log_event(
         extra=extra,
         exc_info=exc_info,
         stack_info=stack_info,
+    )
+
+
+def log_game_event(
+    logger: logging.Logger,
+    level: int,
+    event: str,
+    message: str | None = None,
+    *,
+    exc_info: Any = False,
+    stack_info: bool = False,
+    **context: Any,
+) -> None:
+    """Writes an explicitly marked gameplay event for game-events.log routing."""
+    log_event(
+        logger,
+        level,
+        event,
+        message,
+        exc_info=exc_info,
+        stack_info=stack_info,
+        channels=(_LOG_CHANNEL_GAME_EVENTS,),
+        **context,
     )
 
 
@@ -307,6 +355,38 @@ def logged_socket_handler(sio_manager, event_name: str, logger: logging.Logger):
     return decorator
 
 
+def _has_handler(root: logging.Logger, handler_flag: str) -> bool:
+    return any(
+        getattr(handler, _QUIZPARTY_HANDLER_FLAG, "") == handler_flag
+        for handler in root.handlers
+    )
+
+
+def _build_file_handler(
+    *,
+    path: Path,
+    level_name: str,
+    formatter: logging.Formatter,
+    handler_flag: str,
+    rotation_bytes: int,
+    backup_count: int,
+    filters: Iterable[logging.Filter] | None = None,
+) -> RotatingFileHandler:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(
+        filename=str(path),
+        maxBytes=rotation_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
+    handler.setLevel(_level_number(level_name))
+    handler.setFormatter(formatter)
+    setattr(handler, _QUIZPARTY_HANDLER_FLAG, handler_flag)
+    for log_filter in filters or ():
+        handler.addFilter(log_filter)
+    return handler
+
+
 def setup_logging() -> None:
     """Configures console and rotating file logging for the backend."""
     global _LOGGING_CONFIGURED
@@ -317,43 +397,113 @@ def setup_logging() -> None:
         os.getenv("LOG_CONSOLE_LEVEL") or os.getenv("LOG_LEVEL"),
         "INFO",
     )
-    file_level_name = _resolve_level(os.getenv("LOG_FILE_LEVEL"), "DEBUG")
+    app_log_level_name = _resolve_level(
+        os.getenv("APP_LOG_LEVEL") or os.getenv("LOG_FILE_LEVEL"),
+        "DEBUG",
+    )
+    error_log_level_name = _resolve_level(os.getenv("ERROR_LOG_LEVEL"), "ERROR")
+    game_events_log_level_name = _resolve_level(os.getenv("GAME_EVENTS_LOG_LEVEL"), "INFO")
     sqlalchemy_level_name = _resolve_level(
         os.getenv("LOG_SQLALCHEMY_LEVEL"),
-        "INFO" if file_level_name == "DEBUG" else "WARNING",
+        "INFO" if app_log_level_name == "DEBUG" else "WARNING",
     )
-    log_file = Path(os.getenv("LOG_FILE", str(_default_log_file())))
+
+    log_dir = Path(os.getenv("LOG_DIR", str(_default_log_dir())))
+    app_log_file = Path(
+        os.getenv("APP_LOG_FILE", os.getenv("LOG_FILE", str(log_dir / "app.log")))
+    )
+    error_log_file = Path(os.getenv("ERROR_LOG_FILE", str(log_dir / "error.log")))
+    game_events_log_file = Path(
+        os.getenv("GAME_EVENTS_LOG_FILE", str(log_dir / "game-events.log"))
+    )
+
     rotation_bytes = int(
         os.getenv("LOG_ROTATION_BYTES", os.getenv("LOG_FILE_MAX", str(5 * 1024 * 1024)))
     )
     backup_count = int(os.getenv("LOG_BACKUP_COUNT", os.getenv("LOG_FILE_COUNT", "5")))
-    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     formatter = QuizPartyFormatter(datefmt="%Y-%m-%d %H:%M:%S")
     root = logging.getLogger()
-    root.setLevel(min(_level_number(console_level_name), _level_number(file_level_name)))
+    root.setLevel(
+        min(
+            _level_number(console_level_name),
+            _level_number(app_log_level_name),
+            _level_number(game_events_log_level_name),
+        )
+    )
 
-    if not any(getattr(handler, _QUIZPARTY_HANDLER_FLAG, "") == "console" for handler in root.handlers):
+    if not _has_handler(root, "console"):
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(_level_number(console_level_name))
         console_handler.setFormatter(formatter)
         setattr(console_handler, _QUIZPARTY_HANDLER_FLAG, "console")
         root.addHandler(console_handler)
 
+    logger = logging.getLogger(__name__)
+
     try:
-        if not any(getattr(handler, _QUIZPARTY_HANDLER_FLAG, "") == "file" for handler in root.handlers):
-            file_handler = RotatingFileHandler(
-                filename=str(log_file),
-                maxBytes=rotation_bytes,
-                backupCount=backup_count,
-                encoding="utf-8",
+        if not _has_handler(root, "app_file"):
+            root.addHandler(
+                _build_file_handler(
+                    path=app_log_file,
+                    level_name=app_log_level_name,
+                    formatter=formatter,
+                    handler_flag="app_file",
+                    rotation_bytes=rotation_bytes,
+                    backup_count=backup_count,
+                )
             )
-            file_handler.setLevel(_level_number(file_level_name))
-            file_handler.setFormatter(formatter)
-            setattr(file_handler, _QUIZPARTY_HANDLER_FLAG, "file")
-            root.addHandler(file_handler)
     except Exception:
-        root.warning("Failed to enable rotating file logging", exc_info=True)
+        log_event(
+            logger,
+            logging.WARNING,
+            "logging.app_file.failed",
+            "Failed to enable app.log handler",
+            exc_info=True,
+        )
+
+    try:
+        if not _has_handler(root, "error_file"):
+            root.addHandler(
+                _build_file_handler(
+                    path=error_log_file,
+                    level_name=error_log_level_name,
+                    formatter=formatter,
+                    handler_flag="error_file",
+                    rotation_bytes=rotation_bytes,
+                    backup_count=backup_count,
+                )
+            )
+    except Exception:
+        log_event(
+            logger,
+            logging.WARNING,
+            "logging.error_file.failed",
+            "Failed to enable error.log handler",
+            exc_info=True,
+        )
+
+    try:
+        if not _has_handler(root, "game_events_file"):
+            root.addHandler(
+                _build_file_handler(
+                    path=game_events_log_file,
+                    level_name=game_events_log_level_name,
+                    formatter=formatter,
+                    handler_flag="game_events_file",
+                    rotation_bytes=rotation_bytes,
+                    backup_count=backup_count,
+                    filters=(ChannelFilter(_LOG_CHANNEL_GAME_EVENTS),),
+                )
+            )
+    except Exception:
+        log_event(
+            logger,
+            logging.WARNING,
+            "logging.game_events_file.failed",
+            "Failed to enable game-events.log handler",
+            exc_info=True,
+        )
 
     logging.captureWarnings(True)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -364,13 +514,17 @@ def setup_logging() -> None:
 
     _LOGGING_CONFIGURED = True
     log_event(
-        logging.getLogger(__name__),
+        logger,
         logging.INFO,
         "logging.configured",
         "Logging configured",
-        log_file=str(log_file),
+        app_log_file=str(app_log_file),
+        error_log_file=str(error_log_file),
+        game_events_log_file=str(game_events_log_file),
         console_level=console_level_name,
-        file_level=file_level_name,
+        app_log_level=app_log_level_name,
+        error_log_level=error_log_level_name,
+        game_events_log_level=game_events_log_level_name,
         rotation_bytes=rotation_bytes,
         backups=backup_count,
     )

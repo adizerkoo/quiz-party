@@ -9,7 +9,7 @@ import logging
 from .. import database, models
 from ..config import PLAYER_EMOJIS
 from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
-from ..logging_config import build_log_extra, log_event, logged_socket_handler
+from ..logging_config import build_log_extra, log_event, log_game_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_player_name, validate_quiz_code
 from ..services import (
@@ -324,7 +324,7 @@ def register_lobby_handlers(sio_manager):
                 payload={"participant_name": participant.name},
             )
             db.commit()
-            log_event(
+            log_game_event(
                 logger,
                 logging.INFO,
                 "socket.kick_player.completed",
@@ -402,6 +402,7 @@ def register_lobby_handlers(sio_manager):
             host_token_to_return = None
             participant = None
             name_assigned = None
+            is_reconnect = False
 
             if is_host:
                 if quiz.host_secret_hash and not verify_secret(submitted_host_token, quiz.host_secret_hash):
@@ -469,6 +470,7 @@ def register_lobby_handlers(sio_manager):
                     # При реконнекте хоста переиспользуем прежнюю participant-запись.
                     # При reconnect сохраняем уже выбранное имя хоста для стабильного UX в рамках сессии.
                     participant = existing_host
+                    is_reconnect = True
                     if _is_placeholder_host_name(participant.name) and resolved_user is not None:
                         repaired_host_name = _ensure_unique_name(quiz, _normalized_name(resolved_user.username))
                         if repaired_host_name != participant.name:
@@ -580,6 +582,7 @@ def register_lobby_handlers(sio_manager):
                         name_assigned = assigned_name
                 else:
                     # Реконнект игрока обновляет device/install info, но не создаёт новую запись.
+                    is_reconnect = True
                     participant.user = resolved_user or participant.user
                     participant.installation = installation or participant.installation
                     participant.device = device.device_family or participant.device
@@ -610,7 +613,7 @@ def register_lobby_handlers(sio_manager):
                 quiz=quiz,
                 participant=participant,
                 installation=participant.installation,
-                event_type="participant_joined" if participant.joined_at == participant.last_seen_at else "participant_reconnected",
+                event_type="participant_reconnected" if is_reconnect else "participant_joined",
                 payload={"participant_name": participant.name, "role": participant.role},
             )
             db.commit()
@@ -635,12 +638,16 @@ def register_lobby_handlers(sio_manager):
                     {"name": participant.name, "emoji": participant.emoji or "👤"},
                     room=room,
                 )
-            log_event(
+            join_event = "socket.reconnect.completed" if is_reconnect else "socket.join_room.completed"
+            join_message = "Participant reconnected" if is_reconnect else "Participant joined room"
+            join_log = log_game_event if (quiz.status == "waiting" or is_reconnect) else log_event
+            join_log(
                 logger,
                 logging.INFO,
-                "socket.join_room.completed",
-                "Participant joined room",
+                join_event,
+                join_message,
                 **build_log_extra(quiz=quiz, participant=participant, sid=sid),
-                reconnect=bool(submitted_participant_token or submitted_host_token),
+                reconnect=is_reconnect,
                 assigned_name=name_assigned,
+                status=quiz.status,
             )
