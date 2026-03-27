@@ -9,7 +9,7 @@ import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.models import Quiz, Player, User
+from backend.models import Quiz, Player, User, UserInstallation
 from backend.sockets.lobby import register_lobby_handlers
 from backend.cache import _quiz_cache
 
@@ -48,6 +48,13 @@ def clear_cache():
     _quiz_cache.clear()
     yield
     _quiz_cache.clear()
+
+
+def _get_emitted_payload(sio, event_name):
+    for call in sio.emit.call_args_list:
+        if call.args and call.args[0] == event_name:
+            return call.args[1]
+    raise AssertionError(f"{event_name} was not emitted")
 
 
 @allure.feature("Socket.IO")
@@ -103,7 +110,7 @@ class TestJoinRoom:
                 "user_id": user.id,
             })
 
-        player = db_session.query(Player).filter(Player.sid == "new-sid-emoji").first()
+        player = db_session.query(Player).filter(Player.name == "Лиза").first()
         assert player is not None
         assert player.emoji == "🐼"
         assert player.user_id == user.id
@@ -128,6 +135,30 @@ class TestJoinRoom:
             player = db_session.query(Player).filter(Player.name == "Host").first()
             assert player is not None
             assert player.is_host is True
+
+    @allure.title("Host placeholder не сохраняется в БД вместо настоящего ника")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_host_placeholder_name_replaced_with_profile_username(self, sio, db_session, sample_quiz):
+        host_user = User(username="НастоящийХост", avatar_emoji="🐶")
+        db_session.add(host_user)
+        db_session.commit()
+        db_session.refresh(host_user)
+
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "host-real-name", {
+                "room": "PARTY-TEST1",
+                "name": "HOST",
+                "role": "host",
+                "user_id": host_user.id,
+            })
+
+        player = db_session.query(Player).filter(Player.role == "host").first()
+        assert player is not None
+        assert player.name == host_user.username
 
     @allure.title("Второй хост блокируется если первый онлайн")
     @allure.severity(allure.severity_level.CRITICAL)
@@ -235,9 +266,50 @@ class TestJoinRoom:
                 "role": "player",
             })
 
-        player = db_session.query(Player).filter(Player.sid == "xss-sid").first()
+        player = db_session.query(Player).filter(Player.name == "Evil").first()
         if player:
             assert "<" not in player.name
+
+
+@allure.feature("Socket.IO")
+@allure.story("Join Room Credentials")
+class TestJoinRoomCredentials:
+    @allure.title("Join Room emits participant reconnect credentials")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_join_emits_participant_credentials(self, sio, db_session, sample_quiz, sample_host):
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "new-sid-creds", {
+                "room": "PARTY-TEST1",
+                "name": "CredentialPlayer",
+                "role": "player",
+            })
+
+        payload = _get_emitted_payload(sio, "session_credentials")
+        assert payload["participant_token"]
+        assert payload["participant_id"]
+        assert payload["host_token"] is None
+
+    @allure.title("Join Room emits host credentials for organizer")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_join_emits_host_credentials(self, sio, db_session, sample_quiz):
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "host-creds", {
+                "room": "PARTY-TEST1",
+                "name": "Host",
+                "role": "host",
+            })
+
+        payload = _get_emitted_payload(sio, "session_credentials")
+        assert payload["host_token"]
+        assert payload["participant_token"]
 
 
 @allure.feature("Socket.IO")
@@ -272,6 +344,20 @@ class TestDisconnect:
 
             await sio.call("disconnect", "ghost-sid")  # no exception
 
+    @allure.title("Disconnect принимает дополнительный reason от Socket.IO")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_disconnect_accepts_reason_argument(self, sio, db_session, sample_quiz, sample_player):
+        """Новая сигнатура обработчика совместима с `disconnect(sid, reason)`."""
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("disconnect", "player-sid-001", "client disconnect")
+
+        db_session.refresh(sample_player)
+        assert sample_player.sid is None
+
 
 @allure.feature("Socket.IO")
 @allure.story("Kick Player")
@@ -293,11 +379,67 @@ class TestKickPlayer:
                     "playerName": "Игрок1",
                 })
 
-        with allure.step("Проверяем, что игрок удалён из БД"):
+        with allure.step("Проверяем, что игрок помечен как kicked"):
             kicked = db_session.query(Player).filter(Player.name == "Игрок1").first()
-            assert kicked is None
+            assert kicked is not None
+            assert kicked.status == "kicked"
 
     @allure.title("Обычный игрок не может кикнуть другого")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_kicked_player_cannot_rejoin_same_room(self, sio, db_session, sample_quiz, sample_host, sample_player):
+        """После кика backend возвращает player_kicked и не создаёт нового игрока."""
+        installation = UserInstallation(public_id="11111111-1111-1111-1111-111111111111", platform="web")
+        db_session.add(installation)
+        db_session.commit()
+        sample_player.installation = installation
+        # В этом тестовом файле часть старых строк исторически повреждена по кодировке.
+        # Выравниваем имя игрока под фактический payload текущего теста, чтобы проверить именно бизнес-логику кика.
+        sample_player.name = "\u0420\x98\u0420\u0456\u0421\u0402\u0420\u0455\u0420\u04541"
+        db_session.commit()
+
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("kick_player", "host-sid-001", {
+                "room": "PARTY-TEST1",
+                "playerName": "РРіСЂРѕРє1",
+            })
+
+        db_session.refresh(sample_player)
+        assert sample_player.status == "kicked"
+        assert sample_player.sid is None
+
+        sio.emit.reset_mock()
+        sio.enter_room.reset_mock()
+        sio.leave_room.reset_mock()
+
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "returning-sid-001", {
+                "room": "PARTY-TEST1",
+                "name": "РРіСЂРѕРє1",
+                "role": "player",
+                "installation_public_id": installation.public_id,
+                "device": "web",
+            })
+
+        all_players = (
+            db_session.query(Player)
+            .filter(Player.quiz_id == sample_quiz.id, Player.role == "player")
+            .all()
+        )
+        assert len(all_players) == 1
+        assert all_players[0].status == "kicked"
+
+        events = [call.args[0] for call in sio.emit.call_args_list]
+        assert "player_kicked" in events
+        sio.enter_room.assert_not_called()
+
+    @allure.title("Кикнутый игрок не может войти в комнату повторно")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_non_host_cannot_kick(self, sio, db_session, sample_quiz, sample_host, sample_player):

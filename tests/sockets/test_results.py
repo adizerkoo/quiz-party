@@ -1,17 +1,17 @@
 """
-Тесты Socket.IO — обработчики завершения игры (results.py).
+Тесты Socket.IO - обработчики завершения игры.
 
-Тестирует finish_game_signal — фиксацию результатов, определение победителя,
-отправку show_results и отключение игроков.
+Фокус на finish_game_signal: статус игры, final_rank,
+show_results и отключение участников после публикации итогов.
 """
 
 import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.models import Quiz, Player
-from backend.sockets.results import register_results_handlers
 from backend.cache import _quiz_cache, cache_quiz
+from backend.models import Player
+from backend.sockets.results import register_results_handlers
 
 
 class FakeSioManager:
@@ -24,12 +24,14 @@ class FakeSioManager:
         def decorator(fn):
             self._handlers[event] = fn
             return fn
+
         return decorator
 
     async def call(self, event, *args):
         handler = self._handlers.get(event)
         if handler:
             return await handler(*args)
+        return None
 
 
 @pytest.fixture()
@@ -57,78 +59,105 @@ def _patch_db(db_session):
 @allure.feature("Socket.IO")
 @allure.story("Finish Game")
 class TestFinishGame:
-    """Тесты завершения игры и формирования результатов."""
+    """Тесты завершения игры и формирования финальных результатов."""
 
     @allure.title("finish_game_signal устанавливает status=finished")
     @allure.severity(allure.severity_level.BLOCKER)
     @pytest.mark.asyncio
     async def test_finish_sets_status(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Хост завершает игру → status=finished, finished_at заполнен."""
-        with allure.step("Хост отправляет finish_game_signal"):
-            mock = _patch_db(db_session)
-            try:
-                await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
-            finally:
-                mock.stop()
+        """Хост завершает игру -> status=finished и filled finished_at."""
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
 
-        with allure.step("Проверяем статус и время завершения"):
-            db_session.refresh(playing_quiz)
-            assert playing_quiz.status == "finished"
-            assert playing_quiz.finished_at is not None
+        db_session.refresh(playing_quiz)
+        assert playing_quiz.status == "finished"
+        assert playing_quiz.finished_at is not None
 
-    @allure.title("Победитель — игрок с максимальным score")
+    @allure.title("Игрок с максимальным score получает final_rank=1")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
-    async def test_finish_determines_winner(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Игрок с наибольшим score записывается в winner_id."""
-        with allure.step("Устанавливаем score=5 игроку"):
-            sample_player.score = 5
-            db_session.commit()
+    async def test_finish_assigns_first_rank_to_leader(self, sio, db_session, playing_quiz, sample_host, sample_player):
+        """Лидер по очкам получает итоговый ранг 1."""
+        sample_player.score = 5
+        db_session.commit()
 
-        with allure.step("Завершаем игру"):
-            mock = _patch_db(db_session)
-            try:
-                await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
-            finally:
-                mock.stop()
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
 
-        with allure.step("Проверяем победителя"):
-            db_session.refresh(playing_quiz)
-            assert playing_quiz.winner_id == sample_player.id
+        db_session.refresh(sample_player)
+        assert sample_player.final_rank == 1
 
-    @allure.title("Отправляется событие show_results с данными")
+    @allure.title("При ничьей оба лидера получают final_rank=1")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_finish_assigns_same_rank_to_tied_winners(self, sio, db_session, playing_quiz, sample_host, sample_player):
+        """Ничья фиксируется в БД через одинаковый final_rank у всех лидеров."""
+        sample_player.score = 5
+        tied_player = Player(
+            name="TieMate",
+            sid="sid-tie",
+            quiz_id=playing_quiz.id,
+            score=5,
+            emoji="🦊",
+            answers_history={"1": "Ответ"},
+            scores_history={"1": 1},
+        )
+        db_session.add(tied_player)
+        db_session.commit()
+
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
+
+        db_session.refresh(sample_player)
+        db_session.refresh(tied_player)
+
+        assert sample_player.final_rank == 1
+        assert tied_player.final_rank == 1
+
+        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
+        winners = [item for item in show_call.args[1]["results"] if item["final_rank"] == 1]
+        assert {item["name"] for item in winners} == {sample_player.name, tied_player.name}
+
+    @allure.title("show_results содержит final_rank в payload")
     @allure.severity(allure.severity_level.BLOCKER)
     @pytest.mark.asyncio
     async def test_finish_emits_show_results(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """emit('show_results') содержит results (массив игроков) и questions."""
-        with allure.step("Подготавливаем данные игрока"):
-            sample_player.score = 3
-            sample_player.answers_history = {"1": "A"}
-            db_session.commit()
+        """emit('show_results') содержит results и questions, включая final_rank."""
+        sample_player.score = 3
+        sample_player.answers_history = {"1": "A"}
+        db_session.commit()
 
-        with allure.step("Завершаем игру"):
-            mock = _patch_db(db_session)
-            try:
-                await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
-            finally:
-                mock.stop()
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
 
-        with allure.step("Проверяем содержимое show_results"):
-            events = [c.args[0] for c in sio.emit.call_args_list]
-            assert "show_results" in events
+        events = [call.args[0] for call in sio.emit.call_args_list]
+        assert "show_results" in events
 
-            show_call = next(c for c in sio.emit.call_args_list if c.args[0] == "show_results")
-            data = show_call.args[1]
-            assert "results" in data
-            assert "questions" in data
-            assert len(data["results"]) >= 1
-            assert data["results"][0]["name"] == sample_player.name
+        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
+        data = show_call.args[1]
+        assert "results" in data
+        assert "questions" in data
+        assert len(data["results"]) >= 1
+        assert data["results"][0]["name"] == sample_player.name
+        assert data["results"][0]["final_rank"] == 1
 
-    @allure.title("После finish все игроки отключаются")
+    @allure.title("После finish все подключённые участники отключаются")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_finish_disconnects_all(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """sio.disconnect вызывается для всех участников."""
+        """После публикации результатов сокеты разрываются."""
         mock = _patch_db(db_session)
         try:
             await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
@@ -141,25 +170,22 @@ class TestFinishGame:
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_finish_invalidates_cache(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Закэшированная запись удаляется при finish."""
-        with allure.step("Кэшируем викторину"):
-            cache_quiz(playing_quiz.code, playing_quiz.id, [], 0)
+        """Закэшированная запись удаляется после finish."""
+        cache_quiz(playing_quiz.code, playing_quiz.id, [], 0)
 
-        with allure.step("Завершаем игру"):
-            mock = _patch_db(db_session)
-            try:
-                await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
-            finally:
-                mock.stop()
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
 
-        with allure.step("Проверяем инвалидацию кэша"):
-            assert playing_quiz.code not in _quiz_cache
+        assert playing_quiz.code not in _quiz_cache
 
     @allure.title("Обычный игрок не может завершить игру")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_non_host_cannot_finish(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """finish_game_signal от игрока → status остаётся playing."""
+        """finish_game_signal от игрока не должен менять статус сессии."""
         mock = _patch_db(db_session)
         try:
             await sio.call("finish_game_signal", "player-sid-001", {"room": playing_quiz.code})
@@ -167,52 +193,53 @@ class TestFinishGame:
             mock.stop()
 
         db_session.refresh(playing_quiz)
-        assert playing_quiz.status == "playing"  # не изменился
+        assert playing_quiz.status == "playing"
 
-    @allure.title("Невалидный код комнаты — ничего не происходит")
+    @allure.title("Невалидный код комнаты игнорируется")
     @allure.severity(allure.severity_level.MINOR)
     @pytest.mark.asyncio
     async def test_finish_invalid_room(self, sio):
-        """XSS в room → emit не вызывается."""
+        """Если room невалиден, show_results не отправляется."""
         await sio.call("finish_game_signal", "sid", {"room": "<bad>"})
         sio.emit.assert_not_called()
 
-    @allure.title("В результатах нет хоста")
+    @allure.title("Хост не попадает в результаты")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_finish_results_exclude_host(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Массив results в show_results не содержит хоста."""
+        """Массив results не содержит хоста."""
         mock = _patch_db(db_session)
         try:
             await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
         finally:
             mock.stop()
 
-        show_call = next(c for c in sio.emit.call_args_list if c.args[0] == "show_results")
-        names = [r["name"] for r in show_call.args[1]["results"]]
+        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
+        names = [item["name"] for item in show_call.args[1]["results"]]
         assert sample_host.name not in names
 
-    @allure.title("Несколько игроков сортируются по score DESC")
+    @allure.title("Несколько игроков отсортированы по score DESC")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_finish_multiple_players_sorted(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Игроки в results отсортированы по убыванию очков."""
-        with allure.step("Добавляем игрока с высоким score"):
-            p2 = Player(
-                name="Pro", sid="sid-pro", quiz_id=playing_quiz.id,
-                score=10, emoji="🦊", answers_history={},
-            )
-            db_session.add(p2)
-            db_session.commit()
+        """Результаты отсортированы по убыванию очков."""
+        strong_player = Player(
+            name="Pro",
+            sid="sid-pro",
+            quiz_id=playing_quiz.id,
+            score=10,
+            emoji="🦉",
+            answers_history={},
+        )
+        db_session.add(strong_player)
+        db_session.commit()
 
-        with allure.step("Завершаем игру"):
-            mock = _patch_db(db_session)
-            try:
-                await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
-            finally:
-                mock.stop()
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("finish_game_signal", "host-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
 
-        with allure.step("Проверяем сортировку по убыванию"):
-            show_call = next(c for c in sio.emit.call_args_list if c.args[0] == "show_results")
-            scores = [r["score"] for r in show_call.args[1]["results"]]
-            assert scores == sorted(scores, reverse=True)
+        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
+        scores = [item["score"] for item in show_call.args[1]["results"]]
+        assert scores == sorted(scores, reverse=True)

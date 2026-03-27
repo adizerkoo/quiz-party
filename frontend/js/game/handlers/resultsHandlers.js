@@ -39,8 +39,7 @@ function registerResultsHandler(socket) {
 
     // Определяем победителей для эпической анимации
     const players = data.results || [];
-    const maxScore = players.length > 0 ? players[0].score : 0;
-    const winners = players.filter(p => p.score === maxScore && maxScore > 0);
+    const winners = _getWinners(players);
 
     if (winners.length > 0) {
       _playEpicWinnerIntro(winners, () => {
@@ -155,6 +154,25 @@ function _pluralOchko(n) {
  * Строит HTML эпического интро
  * @private
  */
+function _getWinners(players) {
+  if (!players.length) {
+    return [];
+  }
+
+  const hasPersistedRanks = players.some((player) => typeof player.final_rank === 'number');
+  if (hasPersistedRanks) {
+    return players.filter((player) => player.final_rank === 1);
+  }
+
+  const maxScore = players.length > 0 ? players[0].score : 0;
+  return players.filter((player) => player.score === maxScore && maxScore > 0);
+}
+
+function _getOthers(players) {
+  const winnerNames = new Set(_getWinners(players).map((player) => player.name));
+  return players.filter((player) => !winnerNames.has(player.name));
+}
+
 function _buildEpicIntroHTML(winners) {
   const multi = winners.length > 1;
   const emojisHTML = multi
@@ -383,13 +401,8 @@ function _renderResultsContent(data) {
   const myData = players.find((p) => p.name === playerName);
 
   // Разделение на победителей и остальных
-  const maxScoreLocal = players.length > 0 ? players[0].score : 0;
-  const winners = players.filter(
-    (p) => p.score === maxScoreLocal && maxScoreLocal > 0
-  );
-  const others = players.filter(
-    (p) => p.score !== maxScoreLocal || maxScoreLocal === 0
-  );
+  const winners = _getWinners(players);
+  const others = _getOthers(players);
 
   const html = _buildResultsHTML(winners, others, myData, questions, players);
   resultsList.innerHTML = html;
@@ -465,7 +478,7 @@ function _buildRatingSection(others) {
       <div>
         ${others
           .map((p, i) => {
-            const rank = i + 2;
+            const rank = typeof p.final_rank === 'number' ? p.final_rank : (i + 2);
             const rankDisplay = _getRankDisplay(rank);
 
             return `

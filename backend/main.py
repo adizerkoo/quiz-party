@@ -1,21 +1,15 @@
-"""
-Точка входа приложения.
-
-Создаёт экземпляр FastAPI, подключает middleware (CORS, логирование),
-Socket.IO, HTTP-маршруты и инициализирует БД.
-Запуск: uvicorn backend.main:app
-"""
+"""Точка входа backend-приложения Quiz Party."""
 
 import logging
 import time
 
 from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import fastapi_socketio as socketio
 
-from .config import ALLOWED_ORIGINS, FRONTEND_PATH
 from . import database
+from .config import ALLOWED_ORIGINS, FRONTEND_PATH
 from .routes import register_routes
 from .sockets import register_socket_handlers
 
@@ -23,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# ── Request logging middleware ────────────────────────────────────────
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Логирует каждый HTTP-запрос: метод, путь, статус, время ответа."""
+    """Логирует каждый HTTP-запрос вместе с длительностью его обработки."""
     start = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -47,14 +41,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-sio_manager = socketio.SocketManager(app=app, mount_location='/socket.io', cors_allowed_origins=ALLOWED_ORIGINS)
+sio_manager = socketio.SocketManager(
+    app=app,
+    mount_location="/socket.io",
+    cors_allowed_origins=ALLOWED_ORIGINS,
+)
 
 database.init_db()
-
 register_routes(app)
 register_socket_handlers(sio_manager)
 
-# Catch-all static mount (должен быть последним)
+# Catch-all static mount держим последним, чтобы не перекрыть API и socket routes.
 app.mount("/", StaticFiles(directory=str(FRONTEND_PATH)), name="static")
 
 logger.info("Application startup complete")

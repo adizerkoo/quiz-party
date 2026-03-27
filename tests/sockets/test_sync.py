@@ -119,7 +119,8 @@ class TestRequestSync:
     async def test_sync_includes_player_data(self, sio, db_session, playing_quiz, sample_host, sample_player):
         """Ответ содержит score, emoji, answersHistory конкретного игрока."""
         with allure.step("Устанавливаем данные игрока"):
-            sample_player.score = 5
+            sample_player.scores_history = {"1": 1}
+            sample_player.score = 1
             sample_player.emoji = "🐱"
             sample_player.answers_history = {"1": "test"}
             db_session.commit()
@@ -133,7 +134,7 @@ class TestRequestSync:
 
         with allure.step("Проверяем данные игрока в sync_state"):
             state = sio.emit.call_args_list[0].args[1]
-            assert state["score"] == 5
+            assert state["score"] == 1
             assert state["emoji"] == "🐱"
             assert state["answersHistory"] == {"1": "test"}
 
@@ -169,6 +170,22 @@ class TestRequestSync:
 
     @allure.title("Пустой код комнаты — ничего не отправляется")
     @allure.severity(allure.severity_level.MINOR)
+    @pytest.mark.asyncio
+    async def test_sync_ignored_without_active_participant(self, sio, db_session, sample_quiz, sample_host, sample_player):
+        """Защищает от фантомной комнаты, если join_room был отклонён или ещё не завершился."""
+        sample_player.sid = None
+        db_session.commit()
+
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("request_sync", "ghost-sid", {"room": sample_quiz.code})
+        finally:
+            mock.stop()
+
+        sio.emit.assert_not_called()
+
+    @allure.title("Sync не отправляется, если sid не привязан к участнику комнаты")
+    @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_sync_invalid_room(self, sio):
         """Пустой room → emit не вызывается."""

@@ -1,22 +1,21 @@
-"""
-Инициализация подключения к PostgreSQL и управление сессиями.
+"""Настройка SQLAlchemy engine, сессий и первичной инициализации схемы."""
 
-Создаёт SQLAlchemy engine с пулом соединений, предоставляет
-контекстные менеджеры для сокет-обработчиков и HTTP-маршрутов.
-"""
+from __future__ import annotations
 
-import os
 import logging
+import os
 from contextlib import contextmanager
 from pathlib import Path
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from uuid import uuid4
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import sessionmaker
+
 from .models import Base
 
 logger = logging.getLogger(__name__)
 
-# Явно указываем путь к файлу .env
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
@@ -43,133 +42,186 @@ engine = create_engine(
     pool_recycle=300,
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,
+    bind=engine,
+)
+
+
+def _repair_schema_after_fallback():
+    """Доводит существующую PostgreSQL-схему до состояния, нужного текущему ORM.
+
+    Эта функция нужна только как аварийный мост для локальной разработки, когда
+    Alembic недоступен и приложение было вынуждено уйти в `create_all()`.
+    Она добавляет только отсутствующие колонки и заполняет безопасные значения,
+    не помечая миграцию как выполненную. Благодаря этому полноценный Alembic
+    backfill можно будет запустить позже без потери данных.
+    """
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+        repaired_columns: dict[str, list[str]] = {}
+
+        if inspector.has_table("users"):
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            missing_user_columns = []
+
+            if "public_id" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN public_id VARCHAR(36)"))
+                missing_user_columns.append("public_id")
+            if "updated_at" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP WITHOUT TIME ZONE"))
+                missing_user_columns.append("updated_at")
+            if "profile_metadata" not in user_columns:
+                connection.execute(
+                    text("ALTER TABLE users ADD COLUMN profile_metadata JSON DEFAULT '{}' NOT NULL")
+                )
+                missing_user_columns.append("profile_metadata")
+
+            if missing_user_columns:
+                repaired_columns["users"] = missing_user_columns
+
+            user_ids_without_public_id = connection.execute(
+                text("SELECT id FROM users WHERE public_id IS NULL")
+            ).scalars().all()
+            for user_id in user_ids_without_public_id:
+                connection.execute(
+                    text("UPDATE users SET public_id = :public_id WHERE id = :user_id"),
+                    {"public_id": str(uuid4()), "user_id": user_id},
+                )
+
+            connection.execute(
+                text(
+                    """
+                    UPDATE users
+                    SET updated_at = COALESCE(updated_at, created_at, last_login_at)
+                    WHERE updated_at IS NULL
+                    """
+                )
+            )
+            connection.execute(
+                text("UPDATE users SET profile_metadata = '{}' WHERE profile_metadata IS NULL")
+            )
+            connection.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_public_id ON users (public_id)")
+            )
+
+        if inspector.has_table("session_participants"):
+            participant_columns = {
+                column["name"] for column in inspector.get_columns("session_participants")
+            }
+            missing_participant_columns = []
+
+            if "device" not in participant_columns:
+                connection.execute(
+                    text("ALTER TABLE session_participants ADD COLUMN device VARCHAR(20)")
+                )
+                missing_participant_columns.append("device")
+            if "browser" not in participant_columns:
+                connection.execute(
+                    text("ALTER TABLE session_participants ADD COLUMN browser VARCHAR(40)")
+                )
+                missing_participant_columns.append("browser")
+            if "browser_version" not in participant_columns:
+                connection.execute(
+                    text("ALTER TABLE session_participants ADD COLUMN browser_version VARCHAR(20)")
+                )
+                missing_participant_columns.append("browser_version")
+            if "device_model" not in participant_columns:
+                connection.execute(
+                    text("ALTER TABLE session_participants ADD COLUMN device_model VARCHAR(120)")
+                )
+                missing_participant_columns.append("device_model")
+            if "participant_metadata" not in participant_columns:
+                connection.execute(
+                    text(
+                        """
+                        ALTER TABLE session_participants
+                        ADD COLUMN participant_metadata JSON DEFAULT '{}' NOT NULL
+                        """
+                    )
+                )
+                missing_participant_columns.append("participant_metadata")
+            if "final_rank" not in participant_columns:
+                connection.execute(
+                    text("ALTER TABLE session_participants ADD COLUMN final_rank INTEGER")
+                )
+                missing_participant_columns.append("final_rank")
+
+            if missing_participant_columns:
+                repaired_columns["session_participants"] = missing_participant_columns
+
+            connection.execute(
+                text(
+                    """
+                    UPDATE session_participants
+                    SET participant_metadata = '{}'
+                    WHERE participant_metadata IS NULL
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_session_participants_quiz_final_rank
+                    ON session_participants (quiz_id, final_rank)
+                    """
+                )
+            )
+
+        if inspector.has_table("game_sessions"):
+            session_columns = {column["name"] for column in inspector.get_columns("game_sessions")}
+            if "winner_id" in session_columns:
+                # winner_id больше не используется: победители определяются через session_participants.final_rank.
+                connection.execute(
+                    text("ALTER TABLE game_sessions DROP CONSTRAINT IF EXISTS fk_game_sessions_winner_id")
+                )
+                connection.execute(text("ALTER TABLE game_sessions DROP COLUMN IF EXISTS winner_id"))
+                repaired_columns.setdefault("game_sessions", []).append("winner_id(dropped)")
+
+        for table_name, columns in repaired_columns.items():
+            logger.warning(
+                "Schema fallback repaired missing columns  table=%s  columns=%s",
+                table_name,
+                ", ".join(columns),
+            )
+
 
 def init_db():
-    """Создаёт таблицы в БД (если отсутствуют) и применяет миграции."""
-    logger.info("Running init_db — creating tables and migrations")
-    Base.metadata.create_all(bind=engine)
-    _migrate()
-    logger.info("init_db complete")
+    """Применяет миграции при старте приложения.
 
-def _migrate():
-    """Применяет инкрементальные миграции: добавляет колонки, индексы, обновляет данные.
-
-    Безопасна при повторном запуске — каждая миграция обёрнута в try/except.
+    В штатном сценарии используется Alembic. Резервный `create_all` оставлен
+    только как безопасный локальный fallback, чтобы разработчик не оставался
+    без схемы БД в пустом окружении.
     """
-    from sqlalchemy import text
-    new_columns = [
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS device VARCHAR",
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser VARCHAR",
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS browser_version VARCHAR",
-        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS winner_id INTEGER",
-        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS owner_id INTEGER",
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS device_model VARCHAR",
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS user_id INTEGER",
-        "ALTER TABLE quizzes RENAME COLUMN current_step TO current_question",
-        "UPDATE quizzes SET current_question = 0 WHERE current_question = -1",
-        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS total_questions INTEGER DEFAULT 0",
-        "UPDATE quizzes SET total_questions = jsonb_array_length(questions_data) WHERE total_questions = 0 AND questions_data IS NOT NULL",
-        "CREATE INDEX IF NOT EXISTS ix_players_quiz_id_name ON players (quiz_id, name)",
-        "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP",
-        "ALTER TABLE players ADD COLUMN IF NOT EXISTS answer_times JSONB DEFAULT '{}'::jsonb",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_platform VARCHAR",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS device_brand VARCHAR",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
-        "UPDATE users SET created_at = COALESCE(created_at, NOW()), last_login_at = COALESCE(last_login_at, NOW())",
-        "ALTER TABLE users DROP CONSTRAINT IF EXISTS uq_users_username",
-        "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_key",
-        "DROP INDEX IF EXISTS uq_users_username",
-        "DROP INDEX IF EXISTS ix_users_username",
-        "DROP INDEX IF EXISTS users_username_key",
-        """
-        DO $$
-        BEGIN
-            IF EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'users'
-            ) AND NOT EXISTS (SELECT 1 FROM users LIMIT 1) THEN
-                ALTER TABLE users DROP COLUMN IF EXISTS email;
-                ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
-                ALTER TABLE users DROP COLUMN IF EXISTS first_name;
-                ALTER TABLE users DROP COLUMN IF EXISTS last_name;
-                ALTER TABLE users DROP COLUMN IF EXISTS last_logout_at;
-                ALTER TABLE users ALTER COLUMN username SET NOT NULL;
-                ALTER TABLE users ALTER COLUMN avatar_emoji SET NOT NULL;
-                ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW();
-                ALTER TABLE users ALTER COLUMN created_at SET NOT NULL;
-                ALTER TABLE users ALTER COLUMN last_login_at SET DEFAULT NOW();
-                ALTER TABLE users ALTER COLUMN last_login_at SET NOT NULL;
-            END IF;
-        END
-        $$;
-        """,
-        """
-        DO $$
-        DECLARE
-            constraint_name TEXT;
-            index_name TEXT;
-        BEGIN
-            IF EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = 'users'
-            ) THEN
-                FOR constraint_name IN
-                    SELECT con.conname
-                    FROM pg_constraint con
-                    JOIN pg_class rel ON rel.oid = con.conrelid
-                    JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-                    JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
-                    JOIN pg_attribute attr ON attr.attrelid = rel.oid AND attr.attnum = cols.attnum
-                    WHERE nsp.nspname = 'public'
-                      AND rel.relname = 'users'
-                      AND con.contype = 'u'
-                    GROUP BY con.conname
-                    HAVING array_agg(attr.attname ORDER BY cols.ord) = ARRAY['username']
-                LOOP
-                    EXECUTE format('ALTER TABLE public.users DROP CONSTRAINT IF EXISTS %I', constraint_name);
-                END LOOP;
+    if os.getenv("QUIZPARTY_SKIP_DB_INIT") == "1":
+        logger.info("Database init skipped by QUIZPARTY_SKIP_DB_INIT")
+        return
 
-                FOR index_name IN
-                    SELECT index_rel.relname
-                    FROM pg_index idx
-                    JOIN pg_class index_rel ON index_rel.oid = idx.indexrelid
-                    JOIN pg_class table_rel ON table_rel.oid = idx.indrelid
-                    JOIN pg_namespace table_ns ON table_ns.oid = table_rel.relnamespace
-                    JOIN LATERAL unnest(idx.indkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
-                    JOIN pg_attribute attr ON attr.attrelid = table_rel.oid AND attr.attnum = cols.attnum
-                    WHERE table_ns.nspname = 'public'
-                      AND table_rel.relname = 'users'
-                      AND idx.indisunique = TRUE
-                      AND idx.indisprimary = FALSE
-                    GROUP BY index_rel.relname
-                    HAVING array_agg(attr.attname ORDER BY cols.ord) = ARRAY['username']
-                LOOP
-                    EXECUTE format('DROP INDEX IF EXISTS public.%I', index_name);
-                END LOOP;
-            END IF;
-        END
-        $$;
-        """,
-    ]
-    with engine.connect() as conn:
-        for sql in new_columns:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-                logger.info("Migration applied: %s", sql)
-            except Exception as e:
-                conn.rollback()
-                logger.debug("Migration skipped: %s — %s", sql, e)
+    alembic_ini = Path(__file__).with_name("alembic.ini")
+    if alembic_ini.exists():
+        try:
+            from alembic import command
+            from alembic.config import Config
+
+            config = Config(str(alembic_ini))
+            config.set_main_option("sqlalchemy.url", DATABASE_URL)
+            command.upgrade(config, "head")
+            logger.info("Alembic migrations applied successfully")
+            return
+        except Exception as exc:  # pragma: no cover - exercised in real env
+            # Если Alembic временно недоступен, не роняем локальную разработку.
+            logger.warning("Alembic upgrade failed, falling back to create_all: %s", exc)
+
+    Base.metadata.create_all(bind=engine)
+    _repair_schema_after_fallback()
+    logger.warning("Database schema created/repaired via create_all fallback")
+
 
 @contextmanager
 def get_db_session():
-    """Контекстный менеджер для сокет-обработчиков — гарантирует закрытие сессии."""
+    """Открывает короткоживущую SQLAlchemy-сессию для внутреннего кода backend."""
     db = SessionLocal()
     try:
         yield db
@@ -178,7 +230,7 @@ def get_db_session():
 
 
 def get_db():
-    """Генератор для FastAPI Depends() — используется в HTTP-маршрутах."""
+    """FastAPI dependency, отдающая сессию БД на время одного HTTP-запроса."""
     db = SessionLocal()
     try:
         yield db

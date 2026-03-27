@@ -38,6 +38,7 @@ class TestCreateQuiz:
             assert len(data["code"]) == 11
             assert data["status"] == "waiting"
             assert data["id"] > 0
+            assert data["host_token"]
 
     @allure.title("Каждая викторина получает уникальный код")
     @allure.severity(allure.severity_level.CRITICAL)
@@ -174,7 +175,7 @@ class TestGetQuiz:
                 "id", "code", "title", "questions_data",
                 "total_questions", "current_question",
                 "status", "created_at", "started_at",
-                "finished_at", "winner_id",
+                "finished_at",
             }
             assert set(data.keys()) == expected_fields
 
@@ -192,11 +193,10 @@ class TestGetQuiz:
     @allure.title("Начальное состояние викторины корректно")
     @allure.severity(allure.severity_level.NORMAL)
     def test_get_quiz_initial_state(self, client):
-        """Новая викторина: status=waiting, current_question=0, winner_id=None."""
+        """Новая викторина: status=waiting и current_question=0."""
         code = self._create_quiz(client)
         resp = client.get(f"/api/v1/quizzes/{code}")
         data = resp.json()
 
         assert data["status"] == "waiting"
         assert data["current_question"] == 0
-        assert data["winner_id"] is None

@@ -28,7 +28,6 @@ export type GameQuizResponse = {
   created_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
-  winner_id?: number | null;
 };
 
 export type GameLobbyPlayer = {
@@ -45,6 +44,7 @@ export type GameLobbyPlayer = {
 export type GameResultPlayer = {
   name: string;
   score: number;
+  final_rank?: number | null;
   emoji?: string;
   answers?: GameAnswersHistory;
 };

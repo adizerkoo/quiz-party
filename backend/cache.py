@@ -1,24 +1,21 @@
-"""In-memory кэш активных викторин (room_code → данные квиза).
-
-Хранит id, вопросы и количество вопросов для быстрого доступа без обращения к БД.
-"""
+"""Простой in-memory кэш активных игровых сессий."""
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# room_code → {"id": int, "questions_data": list, "total_questions": int}
+# В кэше держим только лёгкий снимок, чтобы не таскать весь ORM-граф без нужды.
 _quiz_cache: Dict[str, Dict[str, Any]] = {}
 
 
 def get_cached_quiz(room_code: str) -> Optional[Dict[str, Any]]:
-    """Возвращает данные викторины из кэша или None, если отсутствует."""
+    """Возвращает закэшированный снимок сессии по коду комнаты."""
     return _quiz_cache.get(room_code)
 
 
 def cache_quiz(room_code: str, quiz_id: int, questions_data: list, total_questions: int) -> None:
-    """Сохраняет данные викторины в кэш."""
+    """Сохраняет в кэш минимальные данные, нужные для повторного поиска сессии."""
     _quiz_cache[room_code] = {
         "id": quiz_id,
         "questions_data": questions_data,
@@ -28,6 +25,6 @@ def cache_quiz(room_code: str, quiz_id: int, questions_data: list, total_questio
 
 
 def invalidate_quiz(room_code: str) -> None:
-    """Удаляет викторину из кэша (например, после завершения игры)."""
+    """Удаляет сессию из кэша, когда локальная копия могла устареть."""
     if _quiz_cache.pop(room_code, None) is not None:
         logger.debug("Quiz cache invalidated  room=%s", room_code)

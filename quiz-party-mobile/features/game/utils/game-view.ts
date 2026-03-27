@@ -25,6 +25,11 @@ export function getResultWinners(results: GameResultPlayer[]) {
     return [];
   }
 
+  const hasPersistedRanks = results.some((player) => typeof player.final_rank === 'number');
+  if (hasPersistedRanks) {
+    return results.filter((player) => player.final_rank === 1);
+  }
+
   const maxScore = results[0]?.score ?? 0;
   if (maxScore <= 0) {
     return [];
@@ -79,20 +84,20 @@ export function getRankDisplay(rank: number) {
 }
 
 export function buildBlockedState(
-  type: 'room_full' | 'game_started' | 'host_connected' | 'player_kicked' | 'missing_room' | 'missing_profile' | 'not_found' | 'network',
+  type: 'room_full' | 'game_started' | 'host_connected' | 'host_auth_failed' | 'player_kicked' | 'missing_room' | 'missing_profile' | 'not_found' | 'network',
 ): GameBlockedState {
   switch (type) {
     case 'room_full':
       return {
         icon: '😱',
         title: 'Комната переполнена',
-        subtitle: 'В этой комнате уже максимум игроков. Попробуй позже или создай свою игру.',
+        subtitle: 'В этой комнате уже максимум игроков. Попробуй подключиться позже или создай свою игру.',
       };
     case 'game_started':
       return {
         icon: '🚫',
         title: 'Игра уже идёт',
-        subtitle: 'Комната уже в разгаре. Попробуй присоединиться к другой игре.',
+        subtitle: 'К этой комнате уже нельзя подключиться. Вернись в меню и выбери другую игру.',
       };
     case 'host_connected':
       return {
@@ -100,15 +105,21 @@ export function buildBlockedState(
         title: 'Хост уже подключён',
         subtitle: 'Другой ведущий уже управляет этой игрой. Если это ты, закрой предыдущий экран и попробуй снова.',
       };
+    case 'host_auth_failed':
+      return {
+        icon: '🔒',
+        title: 'Доступ хоста не подтверждён',
+        subtitle: 'Токен ведущего устарел или был потерян. Вернись в меню и открой комнату заново.',
+      };
     case 'player_kicked':
       return {
-        icon: '😿',
-        title: 'Вас исключили',
-        subtitle: 'Организатор убрал вас из комнаты. Можно вернуться в меню и выбрать другую игру.',
+        icon: '⛔',
+        title: 'Вас исключили из комнаты',
+        subtitle: 'Организатор удалил вас из этой игры. Вернитесь в меню и выберите другую комнату.',
       };
     case 'missing_room':
       return {
-        icon: '🔑',
+        icon: '🗝️',
         title: 'Код комнаты не передан',
         subtitle: 'Не удалось открыть игру без кода комнаты. Вернись в меню и зайди в комнату заново.',
       };
@@ -172,7 +183,7 @@ export function getHostAnswerCardState(params: {
         actionLabel: null,
         canAddPoint: false,
         canRemovePoint: false,
-        showDisconnectedBadge: showDisconnectedBadge,
+        showDisconnectedBadge,
       };
     }
 
@@ -230,7 +241,7 @@ export function getHostAnswerCardState(params: {
         actionLabel: isCorrect ? 'Верно' : 'Засчитано',
         canAddPoint: false,
         canRemovePoint: true,
-        showDisconnectedBadge: showDisconnectedBadge,
+        showDisconnectedBadge,
       };
     }
 
@@ -240,7 +251,7 @@ export function getHostAnswerCardState(params: {
       actionLabel: isCorrect ? 'Отклонено' : 'Не верно',
       canAddPoint: true,
       canRemovePoint: false,
-      showDisconnectedBadge: showDisconnectedBadge,
+      showDisconnectedBadge,
     };
   }
 
@@ -250,6 +261,6 @@ export function getHostAnswerCardState(params: {
     actionLabel: null,
     canAddPoint: false,
     canRemovePoint: false,
-    showDisconnectedBadge: showDisconnectedBadge,
+    showDisconnectedBadge,
   };
 }

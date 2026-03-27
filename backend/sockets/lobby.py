@@ -1,244 +1,544 @@
-"""
-Socket.IO обработчики лобби.
+"""Socket.IO обработчики лобби, входа в комнату и реконнекта."""
 
-Подключение/отключение игроков, реконнект, разрешение конфликтов
-имён, ограничение на 50 игроков в комнате.
-"""
+from __future__ import annotations
 
 import asyncio
 import random
 import logging
-from .. import models, database
+
+from .. import database, models
 from ..config import PLAYER_EMOJIS
-from ..helpers import get_players_in_quiz, get_quiz_by_code, verify_host
-from ..security import rate_limiter, validate_quiz_code, validate_player_name, sanitize_text
+from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
+from ..runtime_state import connection_registry
+from ..security import rate_limiter, sanitize_text, validate_player_name, validate_quiz_code
+from ..services import (
+    DevicePayload,
+    ensure_installation,
+    hash_secret,
+    issue_participant_token,
+    issue_secret,
+    log_session_event,
+    verify_secret,
+)
 
 logger = logging.getLogger(__name__)
 
-# Таймеры отложенного уведомления об отключении (player_id -> asyncio.Task)
-_pending_disconnects = {}
+_pending_disconnects: dict[int, asyncio.Task] = {}
+
+
+def _normalized_name(raw_name: str) -> str:
+    """Санитизирует имя игрока и подставляет безопасный fallback."""
+    cleaned = sanitize_text(raw_name[:15]).strip()
+    return cleaned if validate_player_name(cleaned) else "Игрок"
+
+
+def _is_placeholder_host_name(name: str) -> bool:
+    """Проверяет, что клиент прислал технический placeholder вместо ника хоста."""
+    normalized = sanitize_text(name).strip()
+    return normalized in {"HOST", "Ведущий", "Игрок"}
+
+
+def _ensure_unique_name(quiz: models.Quiz, requested_name: str) -> str:
+    """Гарантирует уникальность отображаемого имени внутри одной игровой сессии."""
+    existing_names = {
+        participant.name
+        for participant in quiz.players
+        if participant.status != "kicked"
+    }
+    name = requested_name
+    if name not in existing_names:
+        return name
+
+    original_name = name
+    counter = 1
+    while name in existing_names:
+        name = f"{original_name} ({counter})"
+        counter += 1
+    return name
+
+
+def _pick_emoji(quiz: models.Quiz, preferred_emoji: str | None) -> str:
+    """Подбирает emoji участнику с учётом уже занятых аватаров в лобби."""
+    used_emojis = {
+        participant.emoji
+        for participant in quiz.players
+        if participant.status != "kicked" and participant.emoji
+    }
+    available_emojis = [emoji for emoji in PLAYER_EMOJIS if emoji not in used_emojis]
+    return preferred_emoji or random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
+
+
+def _find_disconnected_participant_by_token(
+    quiz: models.Quiz,
+    submitted_token: str | None,
+) -> models.Player | None:
+    """Ищет отключившегося участника по reconnect token."""
+    if not submitted_token:
+        return None
+    for participant in quiz.players:
+        if participant.is_host or participant.status == "kicked":
+            continue
+        if connection_registry.is_connected(participant.id):
+            continue
+        if verify_secret(submitted_token, participant.reconnect_token_hash):
+            return participant
+    return None
+
+
+def _find_reconnect_candidate(
+    quiz: models.Quiz,
+    *,
+    name: str,
+    resolved_user_id: int | None,
+    submitted_token: str | None,
+) -> models.Player | None:
+    """Подбирает кандидата на реконнект по токену, имени или user_id."""
+    by_token = _find_disconnected_participant_by_token(quiz, submitted_token)
+    if by_token is not None:
+        return by_token
+
+    for participant in quiz.players:
+        if participant.is_host or participant.status == "kicked":
+            continue
+        if connection_registry.is_connected(participant.id):
+            continue
+        if participant.name == name:
+            return participant
+        if resolved_user_id is not None and participant.user_id == resolved_user_id:
+            return participant
+    return None
+
+
+def _find_kicked_participant(
+    quiz: models.Quiz,
+    *,
+    name: str,
+    resolved_user_id: int | None,
+    installation_id: int | None,
+    submitted_token: str | None,
+) -> models.Player | None:
+    """Ищет уже кикнутого игрока, чтобы не создавать ему новую запись при повторном входе."""
+    kicked_players = [
+        participant
+        for participant in quiz.players
+        if not participant.is_host and participant.status == "kicked"
+    ]
+    if not kicked_players:
+        return None
+
+    if submitted_token:
+        for participant in kicked_players:
+            if verify_secret(submitted_token, participant.reconnect_token_hash):
+                return participant
+
+    if resolved_user_id is not None:
+        for participant in kicked_players:
+            if participant.user_id == resolved_user_id:
+                return participant
+
+    if installation_id is not None:
+        for participant in kicked_players:
+            if participant.installation_id == installation_id:
+                return participant
+
+    if submitted_token is None and resolved_user_id is None and installation_id is None:
+        # Legacy fallback: если у клиента нет стабильной identity, остаётся только имя.
+        for participant in kicked_players:
+            if participant.name == name:
+                return participant
+
+    return None
+
+
+async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player, host_token: str | None, participant_token: str) -> None:
+    """Отправляет клиенту актуальные reconnect/host credentials после join."""
+    await sio_manager.emit(
+        "session_credentials",
+        {
+            "participant_id": participant.public_id,
+            "participant_token": participant_token,
+            "host_token": host_token,
+            "installation_public_id": participant.installation.public_id if participant.installation else None,
+        },
+        room=sid,
+    )
 
 
 def register_lobby_handlers(sio_manager):
-    """Регистрирует события лобби на Socket.IO менеджере."""
-
-    async def _delayed_disconnect_notify(player_id, player_name, player_emoji, quiz_code):
-        """Ждёт 5 секунд и отправляет уведомление если игрок не переподключился."""
+    """Регистрирует socket-события лобби: join, disconnect и kick."""
+    async def _delayed_disconnect_notify(participant_id: int, participant_name: str, participant_emoji: str, quiz_code: str):
+        """Отложенно подтверждает отключение игрока, если реконнекта не произошло."""
         await asyncio.sleep(5)
+        if connection_registry.is_connected(participant_id):
+            _pending_disconnects.pop(participant_id, None)
+            return
+
         with database.get_db_session() as db:
-            player = db.query(models.Player).filter(models.Player.id == player_id).first()
-            if player and player.sid is None:
-                quiz = db.query(models.Quiz).filter(models.Quiz.id == player.quiz_id).first()
+            participant = db.query(models.Player).filter(models.Player.id == participant_id).first()
+            if participant and participant.status == "disconnected":
+                quiz = db.query(models.Quiz).filter(models.Quiz.id == participant.quiz_id).first()
                 if quiz and quiz.status == "waiting":
+                    # В лобби просто переотрисовываем список игроков без отдельного toast-события.
                     players = get_players_in_quiz(db, quiz.id)
-                    await sio_manager.emit('update_players', players, room=quiz_code)
-                    logger.info("Player offline in lobby  name=%s  quiz_code=%s", player_name, quiz_code)
+                    await sio_manager.emit("update_players", players, room=quiz_code)
                 else:
-                    await sio_manager.emit('player_disconnected', {
-                        'name': player_name,
-                        'emoji': player_emoji
-                    }, room=quiz_code)
-                    logger.info("Player disconnect confirmed after delay  name=%s  quiz_code=%s", player_name, quiz_code)
-        _pending_disconnects.pop(player_id, None)
-
-    @sio_manager.on('disconnect')
-    async def handle_disconnect(sid):
-        """Обрабатывает отключение: обнуляет sid игрока для возможности реконнекта."""
-        with database.get_db_session() as db:
-            player = db.query(models.Player).filter(models.Player.sid == sid).first()
-            if player:
-                quiz = db.query(models.Quiz).filter(models.Quiz.id == player.quiz_id).first()
-                player_id = player.id
-                player_name = player.name
-                player_emoji = player.emoji or '👤'
-                player.sid = None
-                db.commit()
-                logger.info("Player disconnected  name=%s  quiz_id=%s  sid=%s", player_name, player.quiz_id, sid)
-                # Отложенное уведомление хоста (5с задержка для реконнекта при обновлении страницы)
-                if quiz and quiz.status in ("waiting", "playing") and not player.is_host:
-                    old_task = _pending_disconnects.pop(player_id, None)
-                    if old_task:
-                        old_task.cancel()
-                    _pending_disconnects[player_id] = asyncio.create_task(
-                        _delayed_disconnect_notify(player_id, player_name, player_emoji, quiz.code)
+                    await sio_manager.emit(
+                        "player_disconnected",
+                        {"name": participant_name, "emoji": participant_emoji},
+                        room=quiz_code,
                     )
-            else:
-                logger.debug("Unknown sid disconnected  sid=%s", sid)
+        _pending_disconnects.pop(participant_id, None)
 
-    @sio_manager.on('kick_player')
+    @sio_manager.on("disconnect")
+    async def handle_disconnect(sid, *_):
+        """Переводит участника в disconnected/finished и планирует отложенное уведомление."""
+        connection = connection_registry.unbind_sid(sid)
+
+        with database.get_db_session() as db:
+            if connection is not None:
+                participant = db.query(models.Player).filter(models.Player.id == connection.participant_id).first()
+            else:
+                participant = get_player_by_sid(db, sid)
+            if participant is not None:
+                participant.sid = None
+            if participant is None:
+                logger.debug("Unknown sid disconnected  sid=%s", sid)
+                return
+
+            quiz = db.query(models.Quiz).filter(models.Quiz.id == participant.quiz_id).first()
+            if quiz is None:
+                return
+
+            participant.last_seen_at = models._utc_now()
+            if quiz.status == "finished":
+                # После завершения игры не держим участника в disconnected-state.
+                if participant.status != "kicked":
+                    participant.status = "finished"
+                db.commit()
+                return
+
+            participant.status = "disconnected"
+            participant.disconnected_at = models._utc_now()
+            if participant.is_host:
+                quiz.host_left_at = participant.disconnected_at
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=participant,
+                installation=participant.installation,
+                event_type="participant_disconnected",
+                payload={"participant_name": participant.name},
+            )
+            db.commit()
+
+            if quiz.status in ("waiting", "playing") and not participant.is_host:
+                # Даём игроку короткое окно на реконнект, чтобы не шуметь лишними событиями.
+                old_task = _pending_disconnects.pop(participant.id, None)
+                if old_task:
+                    old_task.cancel()
+                _pending_disconnects[participant.id] = asyncio.create_task(
+                    _delayed_disconnect_notify(
+                        participant.id,
+                        participant.name,
+                        participant.emoji or "👤",
+                        quiz.code,
+                    )
+                )
+
+    @sio_manager.on("kick_player")
     async def handle_kick_player(sid, data):
-        """Хост исключает игрока из комнаты ожидания."""
+        """Исключает игрока из лобби по команде хоста."""
         if not rate_limiter.is_allowed(sid):
             return
-        room = data.get('room')
+        room = data.get("room")
         if not validate_quiz_code(room):
             return
-        target_name = data.get('playerName')
+        target_name = data.get("playerName")
         if not target_name:
             return
+
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if not quiz:
+            if not quiz or not verify_host(db, quiz.id, sid) or quiz.status != "waiting":
                 return
-            if not verify_host(db, quiz.id, sid):
-                logger.warning("Non-host attempted kick_player  sid=%s  room=%s", sid, room)
-                return
-            if quiz.status != "waiting":
-                return
-            player = db.query(models.Player).filter(
-                models.Player.quiz_id == quiz.id,
-                models.Player.name == target_name,
-                models.Player.is_host == False
-            ).first()
-            if player:
-                kicked_sid = player.sid
-                db.delete(player)
-                db.commit()
-                logger.info("Player kicked  name=%s  room=%s  by_host_sid=%s", target_name, room, sid)
-                if kicked_sid:
-                    await sio_manager.emit('player_kicked', {}, room=kicked_sid)
-                    await sio_manager.leave_room(kicked_sid, room)
-                await sio_manager.emit('update_players', get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on('join_room')
+            participant = (
+                db.query(models.Player)
+                .filter(
+                    models.Player.quiz_id == quiz.id,
+                    models.Player.name == target_name,
+                    models.Player.role == "player",
+                    models.Player.status != "kicked",
+                )
+                .first()
+            )
+            if participant is None:
+                return
+
+            participant.status = "kicked"
+            participant.kicked_at = models._utc_now()
+            target_sid = connection_registry.get_sid(participant.id)
+            if target_sid:
+                connection_registry.unbind_sid(target_sid)
+            pending_disconnect = _pending_disconnects.pop(participant.id, None)
+            if pending_disconnect:
+                pending_disconnect.cancel()
+            # После кика participant больше не должен всплывать в fallback-поиске по sid.
+            participant.sid = None
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=participant,
+                installation=participant.installation,
+                event_type="participant_kicked",
+                payload={"participant_name": participant.name},
+            )
+            db.commit()
+
+            if target_sid:
+                await sio_manager.emit("player_kicked", {}, room=target_sid)
+                await sio_manager.leave_room(target_sid, room)
+
+            await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
+
+    @sio_manager.on("join_room")
     async def handle_join(sid, data):
-        """Подключает игрока к комнате: реконнект, создание нового или переименование при конфликте."""
+        """Обрабатывает вход хоста/игрока в комнату и сценарии реконнекта."""
         if not rate_limiter.is_allowed(sid):
             logger.warning("Rate limit hit on join_room  sid=%s", sid)
             return
-        room = data.get('room')
+
+        room = data.get("room")
         if not validate_quiz_code(room):
             logger.warning("Invalid quiz code on join  room=%r  sid=%s", room, sid)
             return
-        raw_name = sanitize_text(str(data.get('name', 'Игрок'))[:15]).strip()
-        name = raw_name if validate_player_name(raw_name) else 'Игрок'
-        role = data.get('role')
-        is_host = (role == 'host')
-        preferred_emoji = data.get('emoji') if data.get('emoji') in PLAYER_EMOJIS else None
-        requested_user_id = data.get('user_id')
+
+        role = data.get("role")
+        is_host = role == "host"
+        requested_name = _normalized_name(str(data.get("name", "Игрок")))
+        preferred_emoji = data.get("emoji") if data.get("emoji") in PLAYER_EMOJIS else None
+        submitted_host_token = data.get("host_token")
+        submitted_participant_token = data.get("participant_token") or data.get("reconnect_token")
+
+        requested_user_id = data.get("user_id")
         try:
             requested_user_id = int(requested_user_id) if requested_user_id is not None else None
         except (TypeError, ValueError):
             requested_user_id = None
 
         with database.get_db_session() as db:
-            resolved_user_id = None
-            if requested_user_id is not None:
-                user = db.query(models.User).filter(models.User.id == requested_user_id).first()
-                if user:
-                    resolved_user_id = user.id
             quiz = get_quiz_by_code(db, room)
-            if quiz:
-                # Проверка: если хост уже подключён, блокируем дубликат
-                if is_host:
-                    existing_host = db.query(models.Player).filter(
-                        models.Player.quiz_id == quiz.id,
-                        models.Player.is_host == True,
-                        models.Player.sid != None
-                    ).first()
-                    if existing_host:
-                        await sio_manager.emit('host_already_connected', {}, room=sid)
-                        logger.info("Blocked duplicate host  room=%s  sid=%s", room, sid)
-                        return
+            if quiz is None:
+                return
 
-                await sio_manager.enter_room(sid, room)
+            resolved_user = None
+            if requested_user_id is not None:
+                resolved_user = db.query(models.User).filter(models.User.id == requested_user_id).first()
+            elif quiz.owner_id is not None and is_host:
+                # Если хост не прислал user_id, пробуем восстановить его из owner текущей сессии.
+                resolved_user = db.query(models.User).filter(models.User.id == quiz.owner_id).first()
 
-                player = db.query(models.Player).filter(
-                    models.Player.quiz_id == quiz.id,
-                    models.Player.name == name
-                ).first()
+            device = DevicePayload.from_socket(data)
+            installation = ensure_installation(db, user=resolved_user, device=device)
 
-                if player and player.sid is None:
-                    # Реконнект: игрок с таким именем отключился ранее
-                    player.sid = sid
-                    if resolved_user_id is not None and player.user_id is None:
-                        player.user_id = resolved_user_id
-                    # Отменяем отложенное уведомление об отключении
-                    old_task = _pending_disconnects.pop(player.id, None)
-                    if old_task:
-                        old_task.cancel()
-                    logger.info("Player reconnected  name=%s  room=%s  sid=%s", name, room, sid)
-                    # Уведомляем хоста только если игрок был реально отмечен как отключённый
-                    # (если old_task существовал — 5с ещё не прошли и хост не знает об отключении)
-                    if quiz.status == "playing" and not is_host and not old_task:
-                        await sio_manager.emit('player_reconnected', {
-                            'name': player.name,
-                            'emoji': player.emoji or '👤'
-                        }, room=room)
-                elif player:
-                    # Имя занято активным игроком — создаём нового с суффиксом
-                    if quiz.status != "waiting" and not is_host:
-                        await sio_manager.emit('game_already_started', {}, room=sid)
-                        logger.info("Blocked late join  name=%s  room=%s  status=%s", name, room, quiz.status)
-                        return
+            host_token_to_return = None
+            participant = None
+            name_assigned = None
 
-                    if not is_host:
-                        active_count = db.query(models.Player).filter(
-                            models.Player.quiz_id == quiz.id,
-                            models.Player.is_host == False
-                        ).count()
-                        if active_count >= 50:
-                            await sio_manager.emit('room_full', {}, room=sid)
-                            logger.info("Room full  room=%s  count=%d", room, active_count)
-                            return
+            if is_host:
+                if quiz.host_secret_hash and not verify_secret(submitted_host_token, quiz.host_secret_hash):
+                    await sio_manager.emit("host_auth_failed", {}, room=sid)
+                    return
 
-                    existing_names = {p.name for p in db.query(models.Player.name).filter(models.Player.quiz_id == quiz.id).all()}
-                    original_name = name
-                    counter = 1
-                    while name in existing_names:
-                        name = f"{original_name} ({counter})"
-                        counter += 1
-                    logger.info("Name conflict resolved  original=%s  assigned=%s  room=%s", original_name, name, room)
-                    await sio_manager.emit('name_assigned', {'name': name}, room=sid)
+                existing_host = next(
+                    (
+                        item
+                        for item in quiz.players
+                        if item.is_host and item.status != "kicked"
+                    ),
+                    None,
+                )
+                if existing_host and connection_registry.is_connected(existing_host.id):
+                    await sio_manager.emit("host_already_connected", {}, room=sid)
+                    return
 
-                    used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
-                    available_emojis = [e for e in PLAYER_EMOJIS if e not in used_emojis]
-                    assigned_emoji = preferred_emoji or random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
-                    player = models.Player(
-                        name=name, sid=sid, quiz_id=quiz.id,
-                        is_host=is_host, score=0, emoji=assigned_emoji,
-                        answers_history={},
-                        user_id=resolved_user_id,
-                        device=data.get('device'),
-                        browser=data.get('browser'),
-                        browser_version=data.get('browser_version'),
-                        device_model=data.get('device_model'),
+                if existing_host is None:
+                    # Первый вход хоста создаёт session_participant c role=host.
+                    if _is_placeholder_host_name(requested_name):
+                        # Старые клиенты могли прислать "HOST" вместо настоящего ника.
+                        requested_name = (
+                            _normalized_name(resolved_user.username)
+                            if resolved_user is not None
+                            else "Ведущий"
+                        )
+
+                    host_name = _ensure_unique_name(quiz, requested_name)
+                    participant = models.Player(
+                        name=host_name,
+                        role="host",
+                        emoji=preferred_emoji or _pick_emoji(quiz, None),
+                        quiz=quiz,
+                        user=resolved_user,
+                        installation=installation,
+                        device=device.device_family,
+                        browser=device.browser,
+                        browser_version=device.browser_version,
+                        device_model=device.device_model,
+                        status="joined",
+                        joined_at=models._utc_now(),
+                        last_seen_at=models._utc_now(),
                     )
-                    db.add(player)
+                    db.add(participant)
+                    if host_name != requested_name:
+                        name_assigned = host_name
                 else:
-                    # Новый игрок с уникальным именем
-                    if quiz.status != "waiting" and not is_host:
-                        await sio_manager.emit('game_already_started', {}, room=sid)
-                        logger.info("Blocked late join  name=%s  room=%s  status=%s", name, room, quiz.status)
+                    # При реконнекте хоста переиспользуем прежнюю participant-запись.
+                    # При reconnect сохраняем уже выбранное имя хоста для стабильного UX в рамках сессии.
+                    participant = existing_host
+                    if _is_placeholder_host_name(participant.name) and resolved_user is not None:
+                        repaired_host_name = _ensure_unique_name(quiz, _normalized_name(resolved_user.username))
+                        if repaired_host_name != participant.name:
+                            participant.name = repaired_host_name
+                            name_assigned = repaired_host_name
+                    participant.user = resolved_user or participant.user
+                    participant.installation = installation or participant.installation
+                    participant.device = device.device_family or participant.device
+                    participant.browser = device.browser or participant.browser
+                    participant.browser_version = device.browser_version or participant.browser_version
+                    participant.device_model = device.device_model or participant.device_model
+                    participant.status = "joined"
+                    participant.last_seen_at = models._utc_now()
+                    participant.disconnected_at = None
+
+                # Хост-токен ротируется на каждом успешном входе.
+                host_token_to_return = issue_secret()
+                quiz.host_secret_hash = hash_secret(host_token_to_return)
+                quiz.host_left_at = None
+            else:
+                kicked_participant = _find_kicked_participant(
+                    quiz,
+                    name=requested_name,
+                    resolved_user_id=resolved_user.id if resolved_user else None,
+                    installation_id=installation.id if installation else None,
+                    submitted_token=submitted_participant_token,
+                )
+                if kicked_participant is not None:
+                    log_session_event(
+                        db,
+                        quiz=quiz,
+                        participant=kicked_participant,
+                        installation=installation or kicked_participant.installation,
+                        event_type="kicked_rejoin_blocked",
+                        payload={"participant_name": kicked_participant.name},
+                    )
+                    db.commit()
+                    await sio_manager.emit("player_kicked", {}, room=sid)
+                    logger.info(
+                        "Blocked kicked player rejoin  name=%s  room=%s  sid=%s",
+                        requested_name,
+                        room,
+                        sid,
+                    )
+                    return
+
+                participant = _find_reconnect_candidate(
+                    quiz,
+                    name=requested_name,
+                    resolved_user_id=resolved_user.id if resolved_user else None,
+                    submitted_token=submitted_participant_token,
+                )
+
+                if participant is None and quiz.status != "waiting":
+                    await sio_manager.emit("game_already_started", {}, room=sid)
+                    logger.info("Blocked late join  name=%s  room=%s  status=%s", requested_name, room, quiz.status)
+                    return
+
+                if participant is None:
+                    # Новый игрок может войти только до старта игры и пока не переполнена комната.
+                    active_count = sum(
+                        1
+                        for item in quiz.players
+                        if not item.is_host and item.status != "kicked"
+                    )
+                    if active_count >= 50:
+                        await sio_manager.emit("room_full", {}, room=sid)
+                        logger.info("Room full  room=%s  count=%d", room, active_count)
                         return
 
-                    if not is_host:
-                        active_count = db.query(models.Player).filter(
-                            models.Player.quiz_id == quiz.id,
-                            models.Player.is_host == False
-                        ).count()
-                        if active_count >= 50:
-                            await sio_manager.emit('room_full', {}, room=sid)
-                            logger.info("Room full  room=%s  count=%d", room, active_count)
-                            return
-
-                    used_emojis = [p.emoji for p in db.query(models.Player.emoji).filter(models.Player.quiz_id == quiz.id).all()]
-                    available_emojis = [e for e in PLAYER_EMOJIS if e not in used_emojis]
-                    assigned_emoji = preferred_emoji or random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
-                    player = models.Player(
-                        name=name, sid=sid, quiz_id=quiz.id,
-                        is_host=is_host, score=0, emoji=assigned_emoji,
-                        answers_history={},
-                        user_id=resolved_user_id,
-                        device=data.get('device'),
-                        browser=data.get('browser'),
-                        browser_version=data.get('browser_version'),
-                        device_model=data.get('device_model'),
+                    assigned_name = _ensure_unique_name(quiz, requested_name)
+                    participant = models.Player(
+                        name=assigned_name,
+                        role="player",
+                        emoji=_pick_emoji(quiz, preferred_emoji),
+                        quiz=quiz,
+                        user=resolved_user,
+                        installation=installation,
+                        device=device.device_family,
+                        browser=device.browser,
+                        browser_version=device.browser_version,
+                        device_model=device.device_model,
+                        status="joined",
+                        joined_at=models._utc_now(),
+                        last_seen_at=models._utc_now(),
                     )
-                    db.add(player)
+                    db.add(participant)
+                    if assigned_name != requested_name:
+                        name_assigned = assigned_name
+                else:
+                    # Реконнект игрока обновляет device/install info, но не создаёт новую запись.
+                    participant.user = resolved_user or participant.user
+                    participant.installation = installation or participant.installation
+                    participant.device = device.device_family or participant.device
+                    participant.browser = device.browser or participant.browser
+                    participant.browser_version = device.browser_version or participant.browser_version
+                    participant.device_model = device.device_model or participant.device_model
+                    if preferred_emoji and participant.emoji is None:
+                        participant.emoji = preferred_emoji
+                    participant.status = "joined"
+                    participant.last_seen_at = models._utc_now()
+                    participant.disconnected_at = None
 
-                db.commit()
-                if player:
-                    rate_limiter.register_identity(sid, f"player:{player.id}")
-                logger.info("Player joined  name=%s  room=%s  host=%s  sid=%s", name, room, is_host, sid)
-                await sio_manager.emit('update_players', get_players_in_quiz(db, quiz.id), room=room)
+            # Participant token также ротируется на каждом успешном join/reconnect.
+            participant_token = issue_participant_token(participant)
+            if participant.emoji is None:
+                participant.emoji = _pick_emoji(quiz, preferred_emoji)
+            participant.sid = sid
+
+            old_task = _pending_disconnects.pop(participant.id, None)
+            if old_task:
+                old_task.cancel()
+
+            db.flush()
+            connection_registry.bind(sid, participant.id, quiz.id)
+            rate_limiter.register_identity(sid, f"participant:{participant.public_id}")
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=participant,
+                installation=participant.installation,
+                event_type="participant_joined" if participant.joined_at == participant.last_seen_at else "participant_reconnected",
+                payload={"participant_name": participant.name, "role": participant.role},
+            )
+            db.commit()
+
+            await sio_manager.enter_room(sid, room)
+            await _emit_credentials(
+                sio_manager,
+                sid,
+                participant=participant,
+                host_token=host_token_to_return,
+                participant_token=participant_token,
+            )
+            if name_assigned:
+                await sio_manager.emit("name_assigned", {"name": name_assigned}, room=sid)
+
+            await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
+
+            # Отдельное событие реконнекта шлём только если игрок вернулся уже в активную игру.
+            if quiz.status == "playing" and not participant.is_host and old_task is None and submitted_participant_token:
+                await sio_manager.emit(
+                    "player_reconnected",
+                    {"name": participant.name, "emoji": participant.emoji or "👤"},
+                    room=room,
+                )
+            logger.info("Participant joined  name=%s  room=%s  host=%s  sid=%s", participant.name, room, participant.is_host, sid)

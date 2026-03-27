@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.models import Base, Quiz, Player
+from backend.runtime_state import connection_registry
 
 # ── Мокаем init_db ДО импорта main (он вызывает init_db на уровне модуля) ──
 import backend.database as _db_module
@@ -59,6 +60,17 @@ def db_session(engine):
     yield session
 
     session.close()
+
+
+@pytest.fixture(autouse=True)
+def clear_runtime_registry():
+    connection_registry._sid_to_connection.clear()
+    connection_registry._participant_to_sid.clear()
+    connection_registry._quiz_to_participants.clear()
+    yield
+    connection_registry._sid_to_connection.clear()
+    connection_registry._participant_to_sid.clear()
+    connection_registry._quiz_to_participants.clear()
 
 
 # ── FastAPI TestClient с подменой БД ─────────────────────────────────
@@ -132,6 +144,7 @@ def sample_host(db_session, sample_quiz) -> Player:
     db_session.add(host)
     db_session.commit()
     db_session.refresh(host)
+    connection_registry.bind(host.sid, host.id, sample_quiz.id)
     return host
 
 
@@ -151,6 +164,7 @@ def sample_player(db_session, sample_quiz) -> Player:
     db_session.add(player)
     db_session.commit()
     db_session.refresh(player)
+    connection_registry.bind(player.sid, player.id, sample_quiz.id)
     return player
 
 
@@ -170,9 +184,9 @@ def finished_quiz(db_session, sample_quiz, sample_host, sample_player) -> Quiz:
     sample_player.answers_history = {"1": "Париж", "2": "4", "3": "Юпитер"}
     sample_player.scores_history = {"1": 1, "2": 1, "3": 1}
     sample_player.score = 3
+    sample_player.final_rank = 1
     sample_quiz.status = "finished"
     sample_quiz.current_question = 3
-    sample_quiz.winner_id = sample_player.id
     db_session.commit()
     db_session.refresh(sample_quiz)
     return sample_quiz

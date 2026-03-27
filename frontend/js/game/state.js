@@ -20,7 +20,7 @@ const storedUserProfile = window.QuizUserProfile?.getStoredUserProfile?.() || nu
 
 let playerName =
   role === "host"
-    ? "HOST"
+    ? storedUserProfile?.username || sessionStorage.getItem("quiz_player_name") || "Ведущий"
     : sessionStorage.getItem("quiz_player_name") || storedUserProfile?.username || "Игрок";
 
 if (role !== "host" && storedUserProfile?.avatar_emoji && !sessionStorage.getItem("quiz_player_emoji")) {

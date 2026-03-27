@@ -1,80 +1,93 @@
-"""
-Socket.IO обработчики завершения игры.
+"""Socket.IO обработчики завершения игры и выдачи итоговых результатов."""
 
-Фиксирует результаты, определяет победителя, отправляет итоги
-и отключает всех игроков для освобождения ресурсов.
-"""
+from __future__ import annotations
 
 import datetime
 import logging
 
-from .. import models, database
-from ..helpers import get_quiz_by_code, verify_host
+from .. import database
 from ..cache import invalidate_quiz
+from ..helpers import get_player_by_sid, get_quiz_by_code, verify_host
+from ..runtime_state import connection_registry
 from ..security import validate_quiz_code
+from ..services import (
+    assign_final_ranks,
+    build_results_payload,
+    log_session_event,
+    serialize_quiz_questions,
+    sort_result_players,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def register_results_handlers(sio_manager):
-    """Регистрирует события завершения игры на Socket.IO менеджере."""
+    """Регистрирует socket-события, отвечающие за финализацию игровой сессии."""
 
-    @sio_manager.on('finish_game_signal')
+    @sio_manager.on("finish_game_signal")
     async def handle_finish(sid, data):
-        """Завершает игру: сохраняет результаты, отправляет итоги, отключает игроков. Только для хоста."""
-        room = data.get('room')
+        """Завершает игру, фиксирует итоговые ранги и рассылает финальные результаты."""
+        room = data.get("room")
         if not validate_quiz_code(room):
             return
+
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if quiz:
-                if not verify_host(db, quiz.id, sid):
-                    logger.warning("Non-host attempted finish_game  sid=%s  room=%s", sid, room)
-                    return
-                quiz.status = "finished"
-                quiz.finished_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+            host = get_player_by_sid(db, sid)
+            if not quiz or not verify_host(db, quiz.id, sid):
+                return
 
-                players = db.query(models.Player).filter(
-                    models.Player.quiz_id == quiz.id,
-                    models.Player.is_host == False
-                ).order_by(models.Player.score.desc()).all()
+            quiz.status = "finished"
+            quiz.finished_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
-                # Сохраняем победителя (игрок с максимальным счётом)
-                if players:
-                    quiz.winner_id = players[0].id
+            # Итоговый leaderboard сортируем детерминированно, а победителей определяем
+            # только через final_rank, без отдельного winner_id в game_sessions.
+            players = sort_result_players(quiz.players)
+            assign_final_ranks(players)
 
-                db.commit()
-                invalidate_quiz(room)
+            for participant in quiz.players:
+                # Даже отключившиеся участники попадают в финальный frozen state,
+                # чтобы экран результатов можно было строить только из БД.
+                if participant.status != "kicked":
+                    participant.status = "finished"
+                    participant.last_seen_at = quiz.finished_at
+                elif participant.role != "host":
+                    participant.final_rank = None
 
-                if players:
-                    max_score = players[0].score
-                    winners = [p.name for p in players if p.score == max_score]
-                    winners_str = ", ".join(winners)
-                else:
-                    winners_str = "N/A"
-                logger.info(
-                    "Game finished  room=%s  quiz_id=%s  players=%d  winners=%s",
-                    room, quiz.id, len(players), winners_str,
-                )
+            results_payload = build_results_payload(players)
+            quiz.results_snapshot = {
+                "results": results_payload,
+                "questions": serialize_quiz_questions(quiz, include_correct=True),
+            }
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=host,
+                installation=host.installation if host else None,
+                event_type="game_finished",
+                payload={
+                    "winner_ids": [participant.id for participant in players if participant.final_rank == 1],
+                },
+            )
+            db.commit()
+            invalidate_quiz(room)
 
-                results = [{
-                    "name": p.name,
-                    "score": p.score,
-                    "emoji": p.emoji,
-                    "answers": p.answers_history
-                } for p in players]
+            logger.info(
+                "Game finished  room=%s  quiz_id=%s  players=%d",
+                room,
+                quiz.id,
+                len(players),
+            )
+            await sio_manager.emit(
+                "show_results",
+                {
+                    "results": results_payload,
+                    "questions": serialize_quiz_questions(quiz, include_correct=True),
+                },
+                room=room,
+            )
 
-                await sio_manager.emit('show_results', {
-                    "results": results,
-                    "questions": quiz.questions_data
-                }, room=room)
-
-                # Results page is static — disconnect everyone to free resources
-                all_players = db.query(models.Player).filter(
-                    models.Player.quiz_id == quiz.id
-                ).all()
-                for p in all_players:
-                    if p.sid:
-                        await sio_manager.disconnect(p.sid)
-                        p.sid = None
-                db.commit()
+            # После публикации итогов закрываем активные сокеты, чтобы клиенты
+            # перешли в read-only режим и больше не держали игровое соединение.
+            for target_sid in connection_registry.get_connected_sids(quiz.id):
+                await sio_manager.disconnect(target_sid)

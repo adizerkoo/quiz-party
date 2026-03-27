@@ -51,8 +51,11 @@ async function init() {
     displayCodeEl.innerText = roomCode;
   }
 
-  const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
-
+  let currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+  const installationPublicId =
+    currentProfile?.installation_public_id ||
+    window.QuizUserProfile?.getOrCreateInstallationPublicId?.() ||
+    null;
   if (role !== "host") {
     if (!currentProfile) {
       window.location.href = `index.html?room=${encodeURIComponent(roomCode)}`;
@@ -75,10 +78,34 @@ async function init() {
     const data = await response.json();
     quizTitle = data.title;
     currentQuestions = data.questions_data;
+    let lastJoinedSocketId = null;
 
     renderQuizTitle();
     renderProgress();
     initializeSocketHandlers(socket);
+
+    socket.on("session_credentials", (payload) => {
+      const resolvedInstallationPublicId =
+        payload?.installation_public_id ||
+        currentProfile?.installation_public_id ||
+        installationPublicId;
+
+      window.QuizUserProfile?.saveStoredSessionCredentials?.({
+        roomCode,
+        role,
+        participant_id: payload?.participant_id || null,
+        participant_token: payload?.participant_token || null,
+        host_token: payload?.host_token || null,
+        installation_public_id: resolvedInstallationPublicId,
+      });
+
+      if (resolvedInstallationPublicId) {
+        currentProfile =
+          window.QuizUserProfile?.mergeStoredUserProfileIdentity?.({
+            installation_public_id: resolvedInstallationPublicId,
+          }) || currentProfile;
+      }
+    });
 
     socket.on("name_assigned", (data) => {
       playerName = data.name;
@@ -86,16 +113,46 @@ async function init() {
       console.log("Player name adjusted:", playerName);
     });
 
-    const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
-    socket.emit("join_room", {
-      room: roomCode,
-      name: playerName,
-      role: role,
-      emoji: currentProfile?.avatar_emoji,
-      user_id: currentProfile?.id,
-      ...deviceInfo,
+    function emitJoinPayload() {
+      if (socket.id && lastJoinedSocketId === socket.id) {
+        return;
+      }
+
+      lastJoinedSocketId = socket.id || lastJoinedSocketId;
+      const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
+      const latestCredentials =
+        window.QuizUserProfile?.getStoredSessionCredentials?.({
+          roomCode,
+          role,
+          installation_public_id:
+            currentProfile?.installation_public_id ||
+            installationPublicId,
+        }) || null;
+
+      socket.emit("join_room", {
+        room: roomCode,
+        name: playerName,
+        role: role,
+        emoji: currentProfile?.avatar_emoji,
+        user_id: currentProfile?.id,
+        host_token: role === "host" ? latestCredentials?.host_token : undefined,
+        participant_token: role !== "host" ? latestCredentials?.participant_token : undefined,
+        installation_public_id:
+          currentProfile?.installation_public_id ||
+          installationPublicId,
+        ...deviceInfo,
+      });
+      socket.emit("request_sync", { room: roomCode, name: playerName });
+    }
+
+    socket.on("connect", () => {
+      lastJoinedSocketId = null;
+      emitJoinPayload();
     });
-    socket.emit("request_sync", { room: roomCode, name: playerName });
+
+    if (socket.connected) {
+      emitJoinPayload();
+    }
 
     const screenId = role === "host" ? "host-screen" : "player-screen";
     const screenEl = document.getElementById(screenId);

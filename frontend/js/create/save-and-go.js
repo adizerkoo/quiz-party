@@ -65,6 +65,11 @@ async function saveAndGo() {
     // --- Создаём комнату и отправляем на сервер ---
     try {
         const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+        const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
+        const installationPublicId =
+            currentProfile?.installation_public_id ||
+            window.QuizUserProfile?.getOrCreateInstallationPublicId?.() ||
+            null;
         let ownerId = currentProfile?.id ?? null;
 
         if (ownerId && window.QuizUserProfile) {
@@ -72,7 +77,11 @@ async function saveAndGo() {
                 const touchResponse = await fetch(`/api/v1/users/${ownerId}/touch`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({
+                        device_platform: deviceInfo.device_platform || null,
+                        device_brand: deviceInfo.device_brand || null,
+                        installation_public_id: installationPublicId,
+                    }),
                 });
 
                 if (touchResponse.ok) {
@@ -100,6 +109,12 @@ async function saveAndGo() {
         if (response.ok) {
             const data = await response.json();
             const roomCode = data.code;
+            window.QuizUserProfile?.saveStoredSessionCredentials?.({
+                roomCode,
+                role: 'host',
+                host_token: data.host_token || null,
+                installation_public_id: installationPublicId,
+            });
             localStorage.removeItem('quizQuestions');
             localStorage.removeItem('quizTitle');
             localStorage.removeItem('quizDraft');

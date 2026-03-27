@@ -1,260 +1,313 @@
-"""
-Socket.IO обработчики игрового процесса.
+"""Socket.IO обработчики игрового процесса."""
 
-Старт игры, приём ответов, переход к следующему вопросу,
-корректировка баллов, проверка ответов перед переходом.
-"""
+from __future__ import annotations
 
 import datetime
 import logging
-from .. import models, database
-from ..helpers import get_players_in_quiz, get_quiz_by_code, verify_host
-from ..security import rate_limiter, validate_quiz_code, validate_answer, sanitize_text
+
+from .. import database, models
+from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
+from ..runtime_state import connection_registry
+from ..security import rate_limiter, sanitize_text, validate_answer, validate_quiz_code
+from ..services import (
+    apply_score_override,
+    get_question_by_position,
+    log_session_event,
+    upsert_answer,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def register_game_handlers(sio_manager):
-    """Регистрирует игровые события на Socket.IO менеджере."""
-
-    @sio_manager.on('start_game_signal')
+    """Регистрирует socket-события, связанные с ходом игры и оценкой ответов."""
+    @sio_manager.on("start_game_signal")
     async def handle_start(sid, data):
-        """Запускает игру: устанавливает статус 'playing' и оповещает всех. Только для хоста."""
-        room = data.get('room')
+        """Переводит сессию из лобби в состояние активной игры."""
+        room = data.get("room")
         if not validate_quiz_code(room):
             return
+
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if quiz:
-                if not verify_host(db, quiz.id, sid):
-                    logger.warning("Non-host attempted start_game  sid=%s  room=%s", sid, room)
-                    return
-                quiz.current_question = 1
-                quiz.status = "playing"
-                quiz.started_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
-                db.commit()
-                players = get_players_in_quiz(db, quiz.id)
-                logger.info("Game started  room=%s  quiz_id=%s  players=%d", room, quiz.id, len(players))
-                await sio_manager.emit('game_started', players, room=room)
+            if not quiz or not verify_host(db, quiz.id, sid):
+                return
+            if quiz.status != "waiting" or quiz.total_questions <= 0:
+                return
 
-    @sio_manager.on('send_answer')
+            # Первый вопрос включается явно, чтобы реконнект мог восстановить состояние.
+            quiz.current_question = 1
+            quiz.status = "playing"
+            quiz.started_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+            host = get_player_by_sid(db, sid)
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=host,
+                installation=host.installation if host else None,
+                event_type="game_started",
+                payload={"current_question": 1},
+            )
+            db.commit()
+            players = get_players_in_quiz(db, quiz.id)
+            logger.info("Game started  room=%s  quiz_id=%s  players=%d", room, quiz.id, len(players))
+            await sio_manager.emit("game_started", players, room=room)
+
+    @sio_manager.on("send_answer")
     async def handle_answer(sid, data):
-        """Принимает ответ игрока, проверяет правильность и обновляет счёт."""
+        """Принимает и сохраняет ответ игрока на текущий вопрос."""
         if not rate_limiter.is_allowed(sid):
             logger.warning("Rate limit hit on send_answer  sid=%s", sid)
             return
-        room = data.get('room')
+
+        room = data.get("room")
         if not validate_quiz_code(room):
             return
-        raw_answer = data.get('answer', '')
-        answer = sanitize_text(str(raw_answer)[:50]) if raw_answer else ""
+
+        raw_answer = data.get("answer", "")
+        answer = sanitize_text(str(raw_answer)[:500]) if raw_answer else ""
         if not validate_answer(answer):
             logger.warning("Invalid answer rejected  sid=%s  room=%s", sid, room)
             return
-        raw_q_idx = data.get('questionIndex')
+
+        raw_q_idx = data.get("questionIndex")
         try:
-            idx = int(raw_q_idx)
+            question_index = int(raw_q_idx)
         except (TypeError, ValueError):
             logger.warning("Invalid questionIndex  sid=%s  room=%s  value=%r", sid, room, raw_q_idx)
             return
-        q_idx = str(idx)
+
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if not quiz:
+            participant = get_player_by_sid(db, sid)
+            if not quiz or not participant or participant.quiz_id != quiz.id or participant.is_host:
                 return
-            player = db.query(models.Player).filter(
-                models.Player.quiz_id == quiz.id,
-                models.Player.sid == sid
-            ).with_for_update().first()
-            if player:
-                # Reject duplicate answer for this question
-                if q_idx in (player.answers_history or {}):
-                    db.commit()
-                    logger.debug("Duplicate answer rejected  name=%s  q=%s  room=%s", player.name, q_idx, room)
-                    return
-                new_history = dict(player.answers_history or {})
-                new_history[q_idx] = answer
-                player.answers_history = new_history
-                if idx < 1 or idx > len(quiz.questions_data):
-                    db.commit()
-                    logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", player.name, q_idx, room)
-                    return
-                question = quiz.questions_data[idx - 1]
-                correct = question["correct"].lower().strip()
-                is_correct = answer.lower().strip() == correct
-                score_history = dict(player.scores_history or {})
-                score_history[q_idx] = 1 if is_correct else 0
-                player.scores_history = score_history
-                player.score = sum(score_history.values())
 
-                # Store answer time
-                raw_time = data.get('answerTime')
-                if raw_time is not None:
-                    try:
-                        t = round(float(raw_time), 1)
-                        if 0 < t < 3600:
-                            new_times = dict(player.answer_times or {})
-                            new_times[q_idx] = t
-                            player.answer_times = new_times
-                    except (TypeError, ValueError):
-                        pass
+            question = get_question_by_position(quiz, question_index)
+            if question is None:
+                logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", participant.name, question_index, room)
+                return
 
-                db.commit()
-                answer_t = (player.answer_times or {}).get(q_idx)
-                logger.info(
-                    "Answer received  name=%s  room=%s  q=%s  answer=%r  correct=%s  score=%d  time=%s",
-                    player.name, room, q_idx, answer, is_correct, player.score, f"{answer_t}s" if answer_t else "N/A",
-                )
-                players_data = get_players_in_quiz(db, player.quiz_id)
-                await sio_manager.emit('update_answers', players_data, room=room)
+            # Повторный ответ на тот же вопрос запрещаем на уровне бизнес-логики.
+            if any(existing.question_id == question.id for existing in participant.answers):
+                logger.debug("Duplicate answer rejected  name=%s  q=%s  room=%s", participant.name, question_index, room)
+                return
 
-    @sio_manager.on('next_question_signal')
+            raw_time = data.get("answerTime")
+            answer_time_seconds = None
+            if raw_time is not None:
+                try:
+                    parsed = round(float(raw_time), 1)
+                    if 0 < parsed < 3600:
+                        answer_time_seconds = parsed
+                except (TypeError, ValueError):
+                    answer_time_seconds = None
+
+            stored_answer, _ = upsert_answer(
+                participant=participant,
+                quiz=quiz,
+                question=question,
+                answer_text=answer,
+                answer_time_seconds=answer_time_seconds,
+            )
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=participant,
+                installation=participant.installation,
+                question=question,
+                event_type="answer_submitted",
+                payload={
+                    "question_index": question.position,
+                    "is_correct": bool(stored_answer.is_correct),
+                },
+            )
+            db.commit()
+            logger.info(
+                "Answer received  name=%s  room=%s  q=%s  correct=%s  score=%d",
+                participant.name,
+                room,
+                question.position,
+                stored_answer.is_correct,
+                participant.score,
+            )
+            await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
+
+    @sio_manager.on("next_question_signal")
     async def handle_next_question(sid, data):
-        """Переходит к следующему вопросу с защитой от повторного нажатия. Только для хоста."""
-        room = data.get('room')
+        """Переключает игру на следующий вопрос по команде хоста."""
+        room = data.get("room")
         if not validate_quiz_code(room):
             return
-        expected_question = data.get('expectedQuestion')
+
+        expected_question = data.get("expectedQuestion")
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
+            host = get_player_by_sid(db, sid)
+            if not quiz or not verify_host(db, quiz.id, sid):
+                return
 
-            if quiz:
-                if not verify_host(db, quiz.id, sid):
-                    logger.warning("Non-host attempted next_question  sid=%s  room=%s", sid, room)
-                    return
-                if expected_question is not None and quiz.current_question != expected_question:
-                    logger.debug("next_question stale  expected=%s  actual=%s  room=%s", expected_question, quiz.current_question, room)
-                    await sio_manager.emit(
-                        'move_to_next',
-                        {"question": quiz.current_question},
-                        room=room
-                    )
-                    return
+            # Защита от гонки: если host UI устарел, возвращаем фактический current_question.
+            if expected_question is not None and quiz.current_question != expected_question:
+                await sio_manager.emit("move_to_next", {"question": quiz.current_question}, room=room)
+                return
 
-                next_q = quiz.current_question + 1
-                if next_q > len(quiz.questions_data):
-                    return
-                quiz.current_question = next_q
-                db.commit()
-                logger.info("Next question  room=%s  question=%d/%d", room, next_q, len(quiz.questions_data))
+            next_question = quiz.current_question + 1
+            if next_question > quiz.total_questions:
+                return
 
-                players = get_players_in_quiz(db, quiz.id)
-                await sio_manager.emit(
-                    'move_to_next',
-                    {"question": quiz.current_question},
-                    room=room
-                )
-                await sio_manager.emit(
-                    'update_answers',
-                    players,
-                    room=room
-                )
+            quiz.current_question = next_question
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=host,
+                installation=host.installation if host else None,
+                event_type="question_advanced",
+                payload={"question": next_question},
+            )
+            db.commit()
+            logger.info("Next question  room=%s  question=%d/%d", room, next_question, quiz.total_questions)
+            await sio_manager.emit("move_to_next", {"question": quiz.current_question}, room=room)
+            await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on('move_to_step')
+    @sio_manager.on("move_to_step")
     async def handle_move_step(sid, data):
-        """Переход к конкретному вопросу из прогресс-бара. Только для хоста."""
-        room = data.get('room')
+        """Позволяет хосту прыгнуть к произвольному вопросу в пределах диапазона."""
+        room = data.get("room")
         if not validate_quiz_code(room):
             return
-        raw_step = data.get('question')
+        raw_step = data.get("question")
         try:
             step = int(raw_step)
         except (TypeError, ValueError):
             return
+
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if not quiz:
+            host = get_player_by_sid(db, sid)
+            if not quiz or not verify_host(db, quiz.id, sid):
                 return
-            if not verify_host(db, quiz.id, sid):
-                logger.warning("Non-host attempted move_to_step  sid=%s  room=%s", sid, room)
+            if step < 1 or step > quiz.total_questions:
                 return
-            if step < 1 or step > len(quiz.questions_data):
-                logger.warning("move_to_step out of range  step=%d  total=%d  room=%s", step, len(quiz.questions_data), room)
-                return
-            players = get_players_in_quiz(db, quiz.id)
-            await sio_manager.emit(
-                "update_answers",
-                players,
-                room=room
+
+            quiz.current_question = step
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=host,
+                installation=host.installation if host else None,
+                event_type="question_jumped",
+                payload={"question": step},
             )
+            db.commit()
+            await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on('override_score')
+    @sio_manager.on("override_score")
     async def handle_override(sid, data):
-        """Корректирует балл игрока за конкретный вопрос (хост может засчитать/отклонить). Только для хоста."""
+        """Ручная корректировка очков игрока со стороны хоста."""
         if not rate_limiter.is_allowed(sid):
             return
-        room = data.get('room')
-        if not validate_quiz_code(room):
-            return
-        player_name = data.get('playerName')
-        points = data.get('points')
-        q_idx = str(data.get('questionIndex'))
-        with database.get_db_session() as db:
-            quiz = get_quiz_by_code(db, room)
-            if not quiz:
-                return
-            if not verify_host(db, quiz.id, sid):
-                logger.warning("Non-host attempted override_score  sid=%s  room=%s", sid, room)
-                return
-            player = db.query(models.Player).filter(
-                models.Player.quiz_id == quiz.id,
-                models.Player.name == player_name
-            ).with_for_update().first()
 
-            if player:
-                history = dict(player.scores_history or {})
-                if points == 1:
-                    history[q_idx] = 1
-                elif points == -1:
-                    history[q_idx] = 0
-                player.scores_history = history
-                player.score = sum(history.values())
-                db.commit()
-                logger.info(
-                    "Score overridden  player=%s  room=%s  q=%s  points=%s  total=%d",
-                    player_name, room, q_idx, points, player.score,
-                )
-                await sio_manager.emit(
-                    'update_answers',
-                    get_players_in_quiz(db, player.quiz_id),
-                    room=room
-                )
-
-    @sio_manager.on("check_answers_before_next")
-    async def check_answers(sid, data):
-        """Проверяет, все ли игроки ответили на текущий вопрос. Только для хоста."""
-        if not rate_limiter.is_allowed(sid):
-            return
         room = data.get("room")
         if not validate_quiz_code(room):
             return
-        question = str(data.get("question"))
+        player_name = data.get("playerName")
+        requested_points = data.get("points")
+        question_index = data.get("questionIndex")
+        try:
+            question_index = int(question_index)
+        except (TypeError, ValueError):
+            return
+
+        # Наружу сейчас поддерживаем только два состояния: 1 очко или 0.
+        desired_points = 1 if requested_points == 1 else 0
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if not quiz:
-                return
-            if not verify_host(db, quiz.id, sid):
+            host = get_player_by_sid(db, sid)
+            if not quiz or not verify_host(db, quiz.id, sid):
                 return
 
-            players = db.query(models.Player).filter(
-                models.Player.quiz_id == quiz.id,
-                models.Player.is_host == False
-            ).all()
+            participant = (
+                db.query(models.Player)
+                .filter(
+                    models.Player.quiz_id == quiz.id,
+                    models.Player.name == player_name,
+                    models.Player.role == "player",
+                    models.Player.status != "kicked",
+                )
+                .first()
+            )
+            question = get_question_by_position(quiz, question_index)
+            if participant is None or question is None:
+                return
 
+            adjustment = apply_score_override(
+                quiz=quiz,
+                participant=participant,
+                question=question,
+                desired_points=desired_points,
+                created_by=host,
+            )
+            if adjustment is None:
+                return
+
+            db.add(adjustment)
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=participant,
+                installation=participant.installation,
+                question=question,
+                event_type="score_overridden",
+                payload={
+                    "player_name": participant.name,
+                    "question": question.position,
+                    "points_delta": adjustment.points_delta,
+                },
+            )
+            db.commit()
+            logger.info(
+                "Score overridden  player=%s  room=%s  q=%s  delta=%s  total=%d",
+                player_name,
+                room,
+                question.position,
+                adjustment.points_delta,
+                participant.score,
+            )
+            await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
+
+    @sio_manager.on("check_answers_before_next")
+    async def check_answers(sid, data):
+        """Проверяет, ответили ли все онлайн-игроки перед следующим вопросом."""
+        if not rate_limiter.is_allowed(sid):
+            return
+
+        room = data.get("room")
+        if not validate_quiz_code(room):
+            return
+        try:
+            question_index = int(data.get("question"))
+        except (TypeError, ValueError):
+            return
+
+        with database.get_db_session() as db:
+            quiz = get_quiz_by_code(db, room)
+            if not quiz or not verify_host(db, quiz.id, sid):
+                return
+
+            players = [
+                participant
+                for participant in quiz.players
+                if not participant.is_host and participant.status != "kicked"
+            ]
             all_answered = True
-
-            for p in players:
-                # Пропускаем отключённых игроков
-                if p.sid is None:
+            for participant in players:
+                # Оффлайн-игроков здесь не блокируем, иначе host не сможет продолжить игру.
+                if not connection_registry.is_connected(participant.id):
                     continue
-                hist = p.answers_history or {}
-                if question not in hist:
+                if not any(answer.question_position == question_index for answer in participant.answers):
                     all_answered = False
                     break
 
-            await sio_manager.emit(
-                "answers_check_result",
-                {"allAnswered": all_answered},
-                room=sid
-            )
-            logger.debug("Check answers  room=%s  q=%s  all_answered=%s", room, question, all_answered)
+            await sio_manager.emit("answers_check_result", {"allAnswered": all_answered}, room=sid)
+            logger.debug("Check answers  room=%s  q=%s  all_answered=%s", room, question_index, all_answered)

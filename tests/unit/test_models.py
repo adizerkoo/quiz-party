@@ -32,7 +32,6 @@ class TestQuizModel:
             assert quiz.status == "waiting"
             assert quiz.current_question == 0
             assert quiz.total_questions == 0
-            assert quiz.winner_id is None
             assert quiz.started_at is None
             assert quiz.finished_at is None
 

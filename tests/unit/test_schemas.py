@@ -222,7 +222,6 @@ class TestQuizResponse:
             created_at = None
             started_at = None
             finished_at = None
-            winner_id = None
 
         with allure.step("Создаём QuizResponse из ORM-объекта"):
             resp = QuizResponse.model_validate(FakeQuiz())
@@ -238,7 +237,6 @@ class TestQuizResponse:
             id=1, code="PARTY-X", title="T", status="playing",
         )
         assert resp.created_at is None
-        assert resp.winner_id is None
 
 
 @allure.feature("Schemas")

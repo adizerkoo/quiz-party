@@ -32,6 +32,20 @@ class TestUsersApi:
         assert data["device_brand"] == "Samsung"
         assert data["created_at"] is not None
         assert data["last_login_at"] is not None
+        assert data["public_id"]
+
+    @allure.title("Create user returns installation public id when provided")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_returns_installation_public_id(self, client):
+        installation_public_id = "install-test-0001"
+        resp = client.post(
+            "/api/v1/users",
+            json={**VALID_USER_PAYLOAD, "installation_public_id": installation_public_id},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["installation_public_id"] == installation_public_id
 
     @allure.title("Users meta returns available avatars")
     @allure.severity(allure.severity_level.NORMAL)
@@ -85,6 +99,7 @@ class TestUsersApi:
         data = resp.json()
         assert data["device_platform"] == "ios"
         assert data["device_brand"] == "Apple"
+        assert data["installation_public_id"] is not None
 
     @allure.title("User update changes the same row")
     @allure.severity(allure.severity_level.CRITICAL)

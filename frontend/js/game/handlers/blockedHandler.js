@@ -1,6 +1,6 @@
 /**
  * @file blockedHandler.js
- * @description Обработчик событий блокировки — показывает экран блокировки
+ * @description Обработчик событий блокировки для игрового экрана.
  */
 
 function _showBlockedScreen(icon, title, subtitle) {
@@ -8,6 +8,7 @@ function _showBlockedScreen(icon, title, subtitle) {
     const el = document.getElementById(id);
     if (el) el.style.display = "none";
   });
+
   const blocked = document.getElementById("blocked-screen");
   if (blocked) {
     const content = blocked.querySelector(".blocked-content");
@@ -20,12 +21,19 @@ function _showBlockedScreen(icon, title, subtitle) {
   }
 }
 
+function _clearActiveSessionCredentials() {
+  window.QuizUserProfile?.clearStoredSessionCredentials?.({
+    roomCode,
+    role,
+  });
+}
+
 function registerBlockedHandler(socket) {
   socket.on("room_full", () => {
     _showBlockedScreen(
       "😱",
       "Комната переполнена",
-      "В этой комнате уже максимум игроков (50). Попробуй позже или создай свою игру!"
+      "В этой комнате уже максимальное число игроков. Попробуй подключиться позже или создай свою игру.",
     );
     socket.disconnect();
   });
@@ -33,26 +41,37 @@ function registerBlockedHandler(socket) {
   socket.on("game_already_started", () => {
     _showBlockedScreen(
       "🚫",
-      "Игра уже идёт",
-      "К сожалению, эта комната уже в разгаре. Попробуй присоединиться к другой игре!"
+      "Игра уже началась",
+      "Комната уже в процессе игры. Попробуй присоединиться к другой комнате.",
     );
     socket.disconnect();
   });
 
   socket.on("host_already_connected", () => {
     _showBlockedScreen(
-      "👑",
+      "🧑‍🏫",
       "Хост уже подключён",
-      "Другой ведущий уже управляет этой игрой. Если это вы — закройте предыдущую вкладку и попробуйте снова."
+      "Другой ведущий уже управляет этой игрой. Если это ты, закрой предыдущую вкладку и попробуй снова.",
     );
     socket.disconnect();
   });
 
   socket.on("player_kicked", () => {
+    _clearActiveSessionCredentials();
     _showBlockedScreen(
-      "😿",
-      "Вас исключили",
-      "Организатор убрал вас из комнаты. Попробуй присоединиться к другой игре!"
+      "⛔",
+      "Вас исключили из комнаты",
+      "Организатор удалил вас из этой игры. Вернитесь в меню и выберите другую комнату.",
+    );
+    socket.disconnect();
+  });
+
+  socket.on("host_auth_failed", () => {
+    _clearActiveSessionCredentials();
+    _showBlockedScreen(
+      "🔒",
+      "Не удалось подтвердить доступ хоста",
+      "Токен ведущего устарел или был потерян. Вернитесь в меню и откройте комнату заново.",
     );
     socket.disconnect();
   });

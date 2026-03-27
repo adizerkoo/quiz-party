@@ -7,7 +7,13 @@ import { io, Socket } from 'socket.io-client';
 
 import { saveCreateDraft } from '@/features/create/services/create-storage';
 import { createEmptyQuestionDraft } from '@/features/create/utils/create-validation';
-import { getMenuSessionProfile } from '@/features/menu/store/menu-profile-session';
+import { clearGameSessionCredentials, getGameSessionCredentials, saveGameSessionCredentials } from '@/features/game/store/game-session-credentials';
+import {
+  getMenuSessionProfile,
+  getOrCreateMenuInstallationPublicId,
+  hydrateMenuSessionProfile,
+  mergeMenuSessionProfileIdentity,
+} from '@/features/menu/store/menu-profile-session';
 import { fetchGameQuiz, buildGameShareUrl } from '@/features/game/services/game-api';
 import {
   GameBlockedState,
@@ -32,10 +38,10 @@ function makeToastId() {
 
 export function useNativeGameController({ role, roomCode }: UseNativeGameControllerParams) {
   const router = useRouter();
-  const profile = getMenuSessionProfile();
+  const initialProfile = getMenuSessionProfile();
   const socketRef = useRef<Socket | null>(null);
   const questionShownAtRef = useRef<number | null>(null);
-  const playerNameRef = useRef(role === 'host' ? 'HOST' : profile?.name ?? 'Игрок');
+  const playerNameRef = useRef(initialProfile?.name ?? (role === 'host' ? 'Ведущий' : 'Игрок'));
   const realGameQuestionRef = useRef(0);
   const currentQuestionRef = useRef(0);
   const questionsCountRef = useRef(0);
@@ -54,7 +60,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
   const [playerViewQuestion, setPlayerViewQuestion] = useState(0);
   const [myAnswersHistory, setMyAnswersHistory] = useState<Record<string, string>>({});
   const [playerName, setPlayerName] = useState(playerNameRef.current);
-  const [myEmoji, setMyEmoji] = useState(profile?.emoji ?? '👤');
+  const [myEmoji, setMyEmoji] = useState(initialProfile?.emoji ?? '👤');
   const [resultsPayload, setResultsPayload] = useState<GameResultsPayload | null>(null);
   const [startIntroPlayers, setStartIntroPlayers] = useState<GameLobbyPlayer[] | null>(null);
   const [winnerIntroPlayers, setWinnerIntroPlayers] = useState(resultsPayload?.results ? getResultWinners(resultsPayload.results) : null);
@@ -327,15 +333,29 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     let cancelled = false;
 
     async function bootstrap() {
+      const activeProfile = await hydrateMenuSessionProfile();
+      const installationPublicId =
+        activeProfile?.installationPublicId ??
+        getOrCreateMenuInstallationPublicId();
+      const currentCredentials = getGameSessionCredentials(roomCode, role);
+
       if (!roomCode) {
         showBlocked(buildBlockedState('missing_room'));
         return;
       }
 
-      if (role === 'player' && !profile) {
+      if (role === 'player' && !activeProfile) {
         showBlocked(buildBlockedState('missing_profile'));
         return;
       }
+
+      // После холодного старта профиль восстанавливается асинхронно из локального файла.
+      // Сразу синхронизируем ref/state, чтобы join_room ушёл с корректным именем и emoji.
+      // Имя хоста в БД должно быть реальным nickname, а не техническим placeholder.
+      const resolvedPlayerName = activeProfile?.name ?? (role === 'host' ? 'Ведущий' : 'Игрок');
+      playerNameRef.current = resolvedPlayerName;
+      setPlayerName(resolvedPlayerName);
+      setMyEmoji(activeProfile?.emoji ?? '👤');
 
       setIsBootstrapping(true);
       setBlockedState(null);
@@ -361,13 +381,22 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
 
         socket.on('connect', () => {
           setIsConnected(true);
+          const latestProfile = getMenuSessionProfile();
+          const latestCredentials = getGameSessionCredentials(roomCode, role);
+          const latestInstallationPublicId =
+            latestProfile?.installationPublicId ??
+            latestCredentials?.installationPublicId ??
+            getOrCreateMenuInstallationPublicId();
 
           socket.emit('join_room', {
             room: roomCode,
-            name: role === 'host' ? 'HOST' : playerNameRef.current,
+            name: playerNameRef.current,
             role,
-            emoji: role === 'player' ? profile?.emoji : undefined,
-            user_id: profile?.id ?? undefined,
+            emoji: role === 'player' ? latestProfile?.emoji : undefined,
+            user_id: latestProfile?.id ?? undefined,
+            installation_public_id: latestInstallationPublicId,
+            host_token: role === 'host' ? latestCredentials?.hostToken ?? undefined : undefined,
+            participant_token: role === 'player' ? latestCredentials?.participantToken ?? undefined : undefined,
             device: Platform.OS,
             browser: 'expo-native',
             browser_version: '1',
@@ -382,6 +411,35 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
 
         socket.on('disconnect', () => {
           setIsConnected(false);
+        });
+
+        socket.on('session_credentials', (data: {
+          participant_id?: string | null;
+          participant_token?: string | null;
+          host_token?: string | null;
+          installation_public_id?: string | null;
+        }) => {
+          const latestCredentials = getGameSessionCredentials(roomCode, role);
+          const resolvedInstallationPublicId =
+            data.installation_public_id ??
+            latestCredentials?.installationPublicId ??
+            activeProfile?.installationPublicId ??
+            installationPublicId;
+
+          saveGameSessionCredentials({
+            roomCode,
+            role,
+            participantId: data.participant_id ?? null,
+            participantToken: data.participant_token ?? null,
+            hostToken: data.host_token ?? null,
+            installationPublicId: resolvedInstallationPublicId,
+          });
+
+          void mergeMenuSessionProfileIdentity({
+            id: activeProfile?.id ?? null,
+            publicId: activeProfile?.publicId ?? null,
+            installationPublicId: resolvedInstallationPublicId,
+          });
         });
 
         socket.on('name_assigned', (data: { name?: string }) => {
@@ -516,7 +574,14 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         socket.on('room_full', () => showBlocked(buildBlockedState('room_full')));
         socket.on('game_already_started', () => showBlocked(buildBlockedState('game_started')));
         socket.on('host_already_connected', () => showBlocked(buildBlockedState('host_connected')));
-        socket.on('player_kicked', () => showBlocked(buildBlockedState('player_kicked')));
+        socket.on('player_kicked', () => {
+          clearGameSessionCredentials(roomCode, 'player');
+          showBlocked(buildBlockedState('player_kicked'));
+        });
+        socket.on('host_auth_failed', () => {
+          clearGameSessionCredentials(roomCode, 'host');
+          showBlocked(buildBlockedState('host_auth_failed'));
+        });
 
         setIsBootstrapping(false);
       } catch (error) {
@@ -540,7 +605,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
       cancelled = true;
       disconnectSocket();
     };
-  }, [profile, role, roomCode]);
+  }, [role, roomCode]);
 
   const disconnectedNamesSet = useMemo(() => new Set(disconnectedNames), [disconnectedNames]);
   const currentPlayerQuestionData = questions[playerViewQuestion - 1];

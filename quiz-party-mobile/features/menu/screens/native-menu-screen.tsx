@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { Href, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,7 +12,11 @@ import { MenuLogo } from '@/features/menu/components/menu-logo';
 import { ProfileBanner } from '@/features/menu/components/profile-banner';
 import { ProfileModal } from '@/features/menu/components/profile-modal';
 import { MENU_AVATARS } from '@/features/menu/data/avatar-options';
-import { getMenuSessionProfile, setMenuSessionProfile } from '@/features/menu/store/menu-profile-session';
+import {
+  hydrateAndSyncMenuProfileOnAppEntry,
+  saveMenuProfileAndSync,
+} from '@/features/menu/services/menu-profile-api';
+import { getMenuSessionProfile } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 import { MenuProfile, ProfileModalMode } from '@/features/menu/types';
 
@@ -21,7 +25,7 @@ export function NativeMenuScreen() {
   const initialProfile = getMenuSessionProfile();
 
   const [profile, setProfile] = useState<MenuProfile | null>(initialProfile);
-  const [profileModalVisible, setProfileModalVisible] = useState(!initialProfile);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [profileModalMode, setProfileModalMode] = useState<ProfileModalMode>('create');
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [gameInfoVisible, setGameInfoVisible] = useState(false);
@@ -33,6 +37,26 @@ export function NativeMenuScreen() {
     () => [styles.content, hasProfile ? styles.contentWithProfile : styles.contentCentered],
     [hasProfile],
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function hydrateProfile() {
+      const hydratedProfile = await hydrateAndSyncMenuProfileOnAppEntry();
+      if (!mounted) {
+        return;
+      }
+
+      setProfile(hydratedProfile);
+      setProfileModalVisible(!hydratedProfile);
+    }
+
+    void hydrateProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   function openCreateProfileModal() {
     setProfileModalMode('create');
@@ -49,9 +73,24 @@ export function NativeMenuScreen() {
     setProfileModalVisible(true);
   }
 
-  function handleProfileSubmit(nextProfile: MenuProfile) {
-    setProfile(nextProfile);
-    setMenuSessionProfile(nextProfile);
+  async function handleProfileSubmit(nextProfile: MenuProfile) {
+    const mergedProfile: MenuProfile = {
+      id: nextProfile.id ?? profile?.id ?? null,
+      publicId: nextProfile.publicId ?? profile?.publicId ?? null,
+      installationPublicId: nextProfile.installationPublicId ?? profile?.installationPublicId ?? null,
+      name: nextProfile.name,
+      emoji: nextProfile.emoji,
+    };
+
+    try {
+      const savedProfile = await saveMenuProfileAndSync(mergedProfile);
+      setProfile(savedProfile);
+    } catch (error) {
+      // Даже если сервер сейчас недоступен, локальный профиль уже сохранён
+      // и будет досинхронизирован при следующем онлайн-действии.
+      setProfile(getMenuSessionProfile() ?? mergedProfile);
+    }
+
     setProfileModalVisible(false);
   }
 

@@ -227,6 +227,9 @@ async function touchStoredProfile(profile) {
     if (!profile || !window.QuizUserProfile) return;
 
     const deviceInfo = window.QuizUserProfile.detectClientDeviceInfo();
+    const installationPublicId =
+        profile.installation_public_id ||
+        window.QuizUserProfile.getOrCreateInstallationPublicId();
     try {
         const response = await fetch(`/api/v1/users/${profile.id}/touch`, {
             method: 'POST',
@@ -236,6 +239,7 @@ async function touchStoredProfile(profile) {
             body: JSON.stringify({
                 device_platform: deviceInfo.device_platform,
                 device_brand: deviceInfo.device_brand,
+                installation_public_id: installationPublicId,
             }),
         });
 
@@ -279,6 +283,10 @@ async function submitProfileRegistration() {
 
     const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
     const storedProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+    const installationPublicId =
+        storedProfile?.installation_public_id ||
+        window.QuizUserProfile?.getOrCreateInstallationPublicId?.() ||
+        null;
     const isUpdate = profileModalMode === 'edit' && Boolean(storedProfile?.id);
     const url = isUpdate ? `/api/v1/users/${storedProfile.id}` : '/api/v1/users';
     const method = isUpdate ? 'PUT' : 'POST';
@@ -294,6 +302,7 @@ async function submitProfileRegistration() {
                 avatar_emoji: selectedProfileAvatar,
                 device_platform: deviceInfo.device_platform || null,
                 device_brand: deviceInfo.device_brand || null,
+                installation_public_id: installationPublicId,
             }),
         });
 

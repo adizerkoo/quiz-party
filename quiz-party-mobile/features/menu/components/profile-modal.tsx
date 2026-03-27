@@ -50,6 +50,9 @@ export function ProfileModal({
 
     setNameError(null);
     onSubmit({
+      id: initialProfile?.id ?? null,
+      publicId: initialProfile?.publicId ?? null,
+      installationPublicId: initialProfile?.installationPublicId ?? null,
       name: normalizedName,
       emoji: selectedEmoji,
     });

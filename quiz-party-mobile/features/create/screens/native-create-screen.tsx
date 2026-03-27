@@ -45,7 +45,8 @@ import {
   validateQuestionDraft,
   validateQuizBeforeLaunch,
 } from '@/features/create/utils/create-validation';
-import { getMenuSessionProfile } from '@/features/menu/store/menu-profile-session';
+import { saveGameSessionCredentials } from '@/features/game/store/game-session-credentials';
+import { getMenuSessionProfile, getOrCreateMenuInstallationPublicId } from '@/features/menu/store/menu-profile-session';
 
 // Полноценный native-экран создания квиза.
 // Здесь повторяются и визуальная структура create.html, и ключевая логика web-страницы:
@@ -401,6 +402,12 @@ export function NativeCreateScreen() {
         title: title.trim(),
         questions,
         ownerId: ownerProfile?.id ?? null,
+      });
+      saveGameSessionCredentials({
+        roomCode: createdQuiz.code,
+        role: 'host',
+        hostToken: createdQuiz.host_token ?? null,
+        installationPublicId: ownerProfile?.installationPublicId ?? getOrCreateMenuInstallationPublicId(),
       });
 
       await clearCreateDraft();
