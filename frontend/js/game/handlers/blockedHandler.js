@@ -28,6 +28,63 @@ function _clearActiveSessionCredentials() {
   });
 }
 
+function _showResumeUnavailable(reason) {
+  if (reason === "participant_left") {
+    _clearActiveSessionCredentials();
+    _showBlockedScreen(
+      "👋",
+      "Вы вышли из игры",
+      "Вы уже покинули эту игру добровольно, поэтому вернуться в неё больше нельзя.",
+    );
+    return;
+  }
+
+  if (reason === "resume_window_expired") {
+    _clearActiveSessionCredentials();
+    _showBlockedScreen(
+      "⏳",
+      "Вернуться уже нельзя",
+      "В этой игре слишком давно не было активности. Для неё больше не показывается возврат.",
+    );
+    return;
+  }
+
+  if (reason === "already_connected") {
+    _showBlockedScreen(
+      "📱",
+      "Игра уже открыта",
+      "Эта сессия уже активна в другом окне или на другом устройстве.",
+    );
+    return;
+  }
+
+  _clearActiveSessionCredentials();
+  _showBlockedScreen(
+    "🚫",
+    "Вернуться не получилось",
+    "Для этой игры сохранённые данные больше не подходят. Открой другую комнату из меню.",
+  );
+}
+
+function _showCancelledGame(data) {
+  _clearActiveSessionCredentials();
+
+  if (data?.reason === "host_timeout") {
+    _showBlockedScreen(
+      "🛑",
+      "Игра отменена",
+      "Хост не вернулся вовремя, поэтому игра была автоматически отменена.",
+    );
+    return;
+  }
+
+  _showBlockedScreen(
+    "🧊",
+    "Игра отменена",
+    "В игре слишком долго не было активности, поэтому она была автоматически закрыта.",
+  );
+}
+
 function registerBlockedHandler(socket) {
   socket.on("room_full", () => {
     _showBlockedScreen(
@@ -74,6 +131,21 @@ function registerBlockedHandler(socket) {
       "Токен ведущего устарел или был потерян. Вернитесь в меню и откройте комнату заново.",
     );
     socket.disconnect();
+  });
+  socket.on("resume_unavailable", (data) => {
+    _showResumeUnavailable(data?.reason);
+    socket.disconnect();
+  });
+
+  socket.on("game_cancelled", (data) => {
+    _showCancelledGame(data);
+    socket.disconnect();
+  });
+
+  socket.on("leave_confirmed", () => {
+    _clearActiveSessionCredentials();
+    socket.disconnect();
+    window.location.href = "index.html";
   });
 }
 

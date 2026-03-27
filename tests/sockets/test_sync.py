@@ -4,11 +4,15 @@
 Тестирует request_sync и get_update — отправку состояния при реконнекте.
 """
 
+from datetime import timedelta
+
 import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from backend import models
 from backend.models import Player
+from backend.runtime_state import connection_registry
 from backend.sockets.sync import register_sync_handlers
 from backend.cache import _quiz_cache
 
@@ -50,7 +54,6 @@ def _patch_db(db_session):
     ctx.return_value.__enter__ = MagicMock(return_value=db_session)
     ctx.return_value.__exit__ = MagicMock(return_value=False)
     return mock
-
 
 @allure.feature("Socket.IO")
 @allure.story("Request Sync")
@@ -191,6 +194,28 @@ class TestRequestSync:
         """Пустой room → emit не вызывается."""
         await sio.call("request_sync", "sid-x", {"room": ""})
         sio.emit.assert_not_called()
+
+    @allure.title("Sync lazy-cancels game after host timeout")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_sync_cancels_game_after_host_timeout(self, sio, db_session, playing_quiz, sample_host, sample_player):
+        sample_host.sid = None
+        playing_quiz.host_left_at = models._utc_now() - timedelta(minutes=16)
+        connection_registry.unbind_sid("host-sid-001")
+        db_session.commit()
+
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("request_sync", "player-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
+
+        db_session.refresh(playing_quiz)
+        assert playing_quiz.status == "cancelled"
+        assert playing_quiz.cancel_reason == "host_timeout"
+
+        events = [c.args[0] for c in sio.emit.call_args_list]
+        assert "game_cancelled" in events
 
 
 @allure.feature("Socket.IO")

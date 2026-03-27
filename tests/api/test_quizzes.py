@@ -175,7 +175,8 @@ class TestGetQuiz:
                 "id", "code", "title", "questions_data",
                 "total_questions", "current_question",
                 "status", "created_at", "started_at",
-                "finished_at",
+                "finished_at", "last_activity_at",
+                "cancelled_at", "cancel_reason",
             }
             assert set(data.keys()) == expected_fields
 

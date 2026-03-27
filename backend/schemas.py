@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -64,6 +64,46 @@ class QuizResponse(BaseModel):
     host_token: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ResumeSessionCandidate(BaseModel):
+    """Одна локально сохранённая игровая сессия для серверной resume-проверки."""
+
+    room_code: str = Field(..., min_length=1, max_length=20)
+    role: Literal["host", "player"]
+    participant_id: Optional[str] = Field(default=None, max_length=36)
+    participant_token: Optional[str] = Field(default=None, max_length=128)
+    host_token: Optional[str] = Field(default=None, max_length=128)
+    installation_public_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class ResumeCheckRequest(BaseModel):
+    """Пакет локальных credentials, которые клиент хочет проверить на валидность."""
+
+    sessions: List[ResumeSessionCandidate] = Field(..., min_length=1, max_length=10)
+    user_id: Optional[int] = None
+    installation_public_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class ResumeSessionStatus(BaseModel):
+    """Результат серверной проверки одной сохранённой сессии."""
+
+    room_code: str
+    role: Literal["host", "player"]
+    title: Optional[str] = None
+    status: Optional[str] = None
+    can_resume: bool
+    reason: Optional[str] = None
+    cancel_reason: Optional[str] = None
+    clear_credentials: bool = False
+
+
+class ResumeCheckResponse(BaseModel):
+    """Ответ API c лучшим resume-кандидатом и причинами отказа по остальным."""
+
+    has_resume_game: bool
+    resume_game: Optional[ResumeSessionStatus] = None
+    sessions: List[ResumeSessionStatus]
 
 
 class UserCreate(BaseModel):

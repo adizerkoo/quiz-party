@@ -3,13 +3,13 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { LobbyPlayerEmoji } from '@/features/game/components/lobby-player-emoji';
 import { gameTheme } from '@/features/game/theme/game-theme';
 import { GameLobbyPlayer, GameQuestion, GameStatus } from '@/features/game/types';
-import { rgbaColor } from 'react-native-reanimated/lib/typescript/Colors';
 
 type GamePlayerScreenProps = {
   answerDraft: string;
   answerInputError: boolean;
   currentQuestionData?: GameQuestion;
   gameStatus: GameStatus;
+  leaveDisabled: boolean;
   myAnswersHistory: Record<string, string>;
   myEmoji: string;
   playerName: string;
@@ -20,6 +20,7 @@ type GamePlayerScreenProps = {
   realGameQuestion: number;
   onAnswerDraftChange: (value: string) => void;
   onGoToCurrentQuestion: () => void;
+  onLeaveGame: () => void;
   onPlayerNavBack: () => void;
   onPlayerNavForward: () => void;
   onSendOptionAnswer: (option: string) => void;
@@ -51,10 +52,12 @@ export function GamePlayerScreen({
   answerInputError,
   currentQuestionData,
   gameStatus,
+  leaveDisabled,
   myAnswersHistory,
   myEmoji,
   onAnswerDraftChange,
   onGoToCurrentQuestion,
+  onLeaveGame,
   onPlayerNavBack,
   onPlayerNavForward,
   onSendOptionAnswer,
@@ -217,6 +220,17 @@ export function GamePlayerScreen({
                 </View>
               </View>
             )}
+
+            <Pressable
+              disabled={leaveDisabled}
+              onPress={onLeaveGame}
+              style={({ pressed }) => [
+                styles.leaveButton,
+                leaveDisabled && styles.leaveButtonDisabled,
+                pressed && !leaveDisabled && styles.leaveButtonPressed,
+              ]}>
+              <Text style={styles.leaveButtonText}>Выйти</Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -427,4 +441,26 @@ const styles = StyleSheet.create({
   sendButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: gameTheme.colors.purple },
   sendButtonPressed: { opacity: 0.92 },
   sendButtonText: { color: gameTheme.colors.white, fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  leaveButton: {
+    minHeight: 50,
+    marginTop: 20,
+    borderRadius: gameTheme.radius.control,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 118, 117, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(214, 48, 49, 0.18)',
+  },
+  leaveButtonDisabled: {
+    opacity: 0.55,
+  },
+  leaveButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
+  leaveButtonText: {
+    color: gameTheme.colors.danger,
+    fontSize: 15,
+    fontWeight: '800',
+  },
 });

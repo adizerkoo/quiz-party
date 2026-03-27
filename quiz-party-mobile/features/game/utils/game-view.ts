@@ -145,6 +145,61 @@ export function buildBlockedState(
   }
 }
 
+export function buildBlockedStateFromResumeReason(reason: string | null | undefined): GameBlockedState {
+  switch (reason) {
+    case 'participant_left':
+      return {
+        icon: '👋',
+        title: 'Вы вышли из игры',
+        subtitle: 'Вы уже покинули эту игру добровольно, поэтому вернуться в неё больше нельзя.',
+      };
+    case 'resume_window_expired':
+      return {
+        icon: '⏳',
+        title: 'Вернуться уже нельзя',
+        subtitle: 'В этой игре слишком давно не было активности. Для неё больше не показывается возврат.',
+      };
+    case 'already_connected':
+      return {
+        icon: '📱',
+        title: 'Игра уже открыта',
+        subtitle: 'Эта сессия уже активна на другом устройстве или в другом окне.',
+      };
+    case 'participant_kicked':
+      return buildBlockedState('player_kicked');
+    case 'host_auth_failed':
+      return buildBlockedState('host_auth_failed');
+    case 'finished':
+      return {
+        icon: '🏁',
+        title: 'Игра уже завершена',
+        subtitle: 'Эта игра больше не участвует в resume flow. Вернитесь в меню и откройте другую комнату.',
+      };
+    default:
+      return {
+        icon: '🚫',
+        title: 'Вернуться не получилось',
+        subtitle: 'Для этой игры сохранённые данные больше не подходят. Откройте другую комнату из меню.',
+      };
+  }
+}
+
+export function buildBlockedStateFromCancelReason(reason: string | null | undefined): GameBlockedState {
+  if (reason === 'host_timeout') {
+    return {
+      icon: '🛑',
+      title: 'Игра отменена',
+      subtitle: 'Хост не вернулся вовремя, поэтому игра была автоматически отменена.',
+    };
+  }
+
+  return {
+    icon: '🧊',
+    title: 'Игра отменена',
+    subtitle: 'В игре слишком долго не было активности, поэтому она была автоматически закрыта.',
+  };
+}
+
 export function getHostAnswerCardState(params: {
   player: GameLobbyPlayer;
   question: GameQuestion | undefined;

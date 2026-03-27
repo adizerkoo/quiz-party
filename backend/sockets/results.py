@@ -13,8 +13,11 @@ from ..runtime_state import connection_registry
 from ..security import validate_quiz_code
 from ..services import (
     assign_final_ranks,
+    build_game_cancelled_payload,
     build_results_payload,
+    evaluate_quiz_state,
     log_session_event,
+    mark_quiz_activity,
     serialize_quiz_questions,
     sort_result_players,
 )
@@ -25,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 def register_results_handlers(sio_manager):
     """Registers Socket.IO handlers that close a game and publish results."""
+
+    async def _emit_game_cancelled(room: str, quiz):
+        await sio_manager.emit("game_cancelled", build_game_cancelled_payload(quiz), room=room)
 
     @logged_socket_handler(sio_manager, "finish_game_signal", logger)
     async def handle_finish(sid, data):
@@ -54,6 +60,12 @@ def register_results_handlers(sio_manager):
                     sid=sid,
                 )
                 return
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(room, quiz)
+                return
             if not verify_host(db, quiz.id, sid):
                 log_event(
                     logger,
@@ -66,12 +78,13 @@ def register_results_handlers(sio_manager):
 
             quiz.status = "finished"
             quiz.finished_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+            mark_quiz_activity(quiz, occurred_at=quiz.finished_at)
 
             players = sort_result_players(quiz.players)
             assign_final_ranks(players)
 
             for participant in quiz.players:
-                if participant.status != "kicked":
+                if participant.status not in {"kicked", "left"}:
                     participant.status = "finished"
                     participant.last_seen_at = quiz.finished_at
                 elif participant.role != "host":

@@ -198,6 +198,33 @@ function validateAndSend() {
 }
 
 
+function openLeaveGameConfirm() {
+  const overlay = document.getElementById("leave-game-overlay");
+  if (overlay) {
+    overlay.style.display = "flex";
+  }
+}
+
+
+function closeLeaveGameConfirm() {
+  const overlay = document.getElementById("leave-game-overlay");
+  if (overlay) {
+    overlay.style.display = "none";
+  }
+}
+
+
+function confirmLeaveGame() {
+  closeLeaveGameConfirm();
+  const leaveButton = document.getElementById("player-leave-btn");
+  if (leaveButton) {
+    leaveButton.disabled = true;
+    leaveButton.textContent = "Выходим...";
+  }
+  socket.emit("leave_game", { room: roomCode });
+}
+
+
 // Анимация аватара при клике в лобби
 function handleEmojiClick(element) {
   const emoji = element.querySelector(".avatar-emoji");

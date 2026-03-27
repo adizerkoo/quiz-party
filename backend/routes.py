@@ -26,6 +26,8 @@ from .services import (
     build_results_payload,
     create_quiz_session,
     ensure_installation,
+    evaluate_quiz_state,
+    evaluate_resume_eligibility,
     load_quiz_graph,
     serialize_quiz_questions,
     sort_result_players,
@@ -308,6 +310,11 @@ def register_routes(app):
             )
             raise HTTPException(status_code=404, detail="The quiz was not found")
 
+        state = evaluate_quiz_state(db, quiz=quiz)
+        if state.just_cancelled:
+            db.commit()
+            db.refresh(quiz)
+
         questions = serialize_quiz_questions(quiz, include_correct=(role == "host"))
         return {
             "id": quiz.id,
@@ -320,6 +327,9 @@ def register_routes(app):
             "created_at": quiz.created_at,
             "started_at": quiz.started_at,
             "finished_at": quiz.finished_at,
+            "last_activity_at": quiz.last_activity_at,
+            "cancelled_at": quiz.cancelled_at,
+            "cancel_reason": quiz.cancel_reason,
         }
 
     @app.get("/api/v1/quizzes/{code}/results")
@@ -332,6 +342,10 @@ def register_routes(app):
         )
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
+        state = evaluate_quiz_state(db, quiz=quiz)
+        if state.just_cancelled:
+            db.commit()
+            db.refresh(quiz)
         if quiz.status != "finished":
             raise HTTPException(status_code=400, detail="Quiz is not finished yet")
 
@@ -346,3 +360,44 @@ def register_routes(app):
             "questions": serialize_quiz_questions(quiz, include_correct=True),
             "results": build_results_payload(players),
         }
+
+    @app.post("/api/v1/resume/check", response_model=schemas.ResumeCheckResponse)
+    def check_resume(payload: schemas.ResumeCheckRequest, db: Session = Depends(database.get_db)):
+        """Validates saved local session credentials and returns at most one resumable game."""
+        sessions: list[schemas.ResumeSessionStatus] = []
+
+        for candidate in payload.sessions:
+            normalized_room_code = candidate.room_code.strip().upper()
+            quiz = get_quiz_by_code(db, normalized_room_code)
+            eligibility = evaluate_resume_eligibility(
+                db,
+                quiz=quiz,
+                role=candidate.role,
+                host_token=candidate.host_token,
+                participant_public_id=candidate.participant_id,
+                participant_token=candidate.participant_token,
+                user_id=payload.user_id,
+                installation_public_id=candidate.installation_public_id or payload.installation_public_id,
+            )
+            room_code = eligibility.room_code or normalized_room_code
+            sessions.append(
+                schemas.ResumeSessionStatus(
+                    room_code=room_code,
+                    role=candidate.role,
+                    title=eligibility.title,
+                    status=eligibility.status,
+                    can_resume=eligibility.can_resume,
+                    reason=eligibility.reason,
+                    cancel_reason=eligibility.cancel_reason,
+                    clear_credentials=eligibility.clear_credentials,
+                )
+            )
+
+        db.commit()
+
+        resume_game = next((item for item in sessions if item.can_resume), None)
+        return schemas.ResumeCheckResponse(
+            has_resume_game=resume_game is not None,
+            resume_game=resume_game,
+            sessions=sessions,
+        )

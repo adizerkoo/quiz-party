@@ -77,7 +77,7 @@ def get_players_in_quiz(db: Session, quiz_id: int):
         db.query(models.Player)
         .filter(
             models.Player.quiz_id == quiz_id,
-            models.Player.status != "kicked",
+            models.Player.status.notin_(("kicked", "left")),
         )
         .order_by(models.Player.joined_at.asc(), models.Player.id.asc())
         .all()

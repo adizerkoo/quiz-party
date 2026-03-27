@@ -40,6 +40,63 @@ function refreshUI() {
 }
 
 
+async function checkResumeAccess(latestCredentials, currentProfile, installationPublicId) {
+  if (!latestCredentials) {
+    return { canProceed: true };
+  }
+
+  const response = await fetch("/api/v1/resume/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessions: [
+        {
+          room_code: roomCode,
+          role,
+          participant_id: latestCredentials.participant_id || null,
+          participant_token: latestCredentials.participant_token || null,
+          host_token: latestCredentials.host_token || null,
+          installation_public_id: latestCredentials.installation_public_id || null,
+        },
+      ],
+      user_id: currentProfile?.id || null,
+      installation_public_id:
+        currentProfile?.installation_public_id ||
+        installationPublicId ||
+        null,
+    }),
+  });
+
+  if (!response.ok) {
+    return { canProceed: true };
+  }
+
+  const data = await response.json();
+  const session = Array.isArray(data?.sessions) ? data.sessions[0] : null;
+  if (!session) {
+    return { canProceed: true };
+  }
+
+  if (session.clear_credentials) {
+    if (latestCredentials.storageKey) {
+      window.QuizUserProfile?.clearStoredSessionCredentialsByKey?.(latestCredentials.storageKey);
+    } else {
+      window.QuizUserProfile?.clearStoredSessionCredentials?.({ roomCode, role });
+    }
+  }
+
+  if (session.can_resume) {
+    return { canProceed: true };
+  }
+
+  return {
+    canProceed: false,
+    reason: session.reason || null,
+    cancelReason: session.cancel_reason || null,
+  };
+}
+
+
 async function init() {
   if (!roomCode) {
     window.location.href = "index.html";
@@ -56,6 +113,14 @@ async function init() {
     currentProfile?.installation_public_id ||
     window.QuizUserProfile?.getOrCreateInstallationPublicId?.() ||
     null;
+  const latestCredentials =
+    window.QuizUserProfile?.getStoredSessionCredentials?.({
+      roomCode,
+      role,
+      installation_public_id:
+        currentProfile?.installation_public_id ||
+        installationPublicId,
+    }) || null;
   if (role !== "host") {
     if (!currentProfile) {
       window.location.href = `index.html?room=${encodeURIComponent(roomCode)}`;
@@ -76,6 +141,26 @@ async function init() {
     }
 
     const data = await response.json();
+    if (data.status === "cancelled") {
+      window.QuizUserProfile?.clearStoredSessionCredentials?.({ roomCode, role });
+      _showCancelledGame({ reason: data.cancel_reason });
+      return;
+    }
+
+    const resumeAccess = await checkResumeAccess(
+      latestCredentials,
+      currentProfile,
+      installationPublicId,
+    );
+    if (!resumeAccess.canProceed) {
+      if (resumeAccess.cancelReason) {
+        _showCancelledGame({ reason: resumeAccess.cancelReason });
+      } else {
+        _showResumeUnavailable(resumeAccess.reason);
+      }
+      return;
+    }
+
     quizTitle = data.title;
     currentQuestions = data.questions_data;
     let lastJoinedSocketId = null;
@@ -120,7 +205,7 @@ async function init() {
 
       lastJoinedSocketId = socket.id || lastJoinedSocketId;
       const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
-      const latestCredentials =
+      const currentCredentials =
         window.QuizUserProfile?.getStoredSessionCredentials?.({
           roomCode,
           role,
@@ -135,8 +220,8 @@ async function init() {
         role: role,
         emoji: currentProfile?.avatar_emoji,
         user_id: currentProfile?.id,
-        host_token: role === "host" ? latestCredentials?.host_token : undefined,
-        participant_token: role !== "host" ? latestCredentials?.participant_token : undefined,
+        host_token: role === "host" ? currentCredentials?.host_token : undefined,
+        participant_token: role !== "host" ? currentCredentials?.participant_token : undefined,
         installation_public_id:
           currentProfile?.installation_public_id ||
           installationPublicId,

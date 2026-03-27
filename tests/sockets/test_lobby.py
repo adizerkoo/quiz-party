@@ -462,3 +462,57 @@ class TestKickPlayer:
         with allure.step("Проверяем, что P2 остался в БД"):
             still_there = db_session.query(Player).filter(Player.name == "P2").first()
             assert still_there is not None
+
+
+@allure.feature("Socket.IO")
+@allure.story("Leave Game")
+class TestLeaveGame:
+    @allure.title("Player voluntary leave marks status left and blocks reconnect")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_player_leave_marks_left_and_blocks_rejoin(self, sio, db_session, sample_quiz, sample_host, sample_player):
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("leave_game", "player-sid-001", {
+                "room": sample_quiz.code,
+            })
+
+        db_session.refresh(sample_player)
+        assert sample_player.status == "left"
+        assert sample_player.left_at is not None
+        assert sample_player.sid is None
+        assert sample_player.reconnect_token_hash is None
+
+        events = [call.args[0] for call in sio.emit.call_args_list]
+        assert "leave_confirmed" in events
+        sio.leave_room.assert_called_with("player-sid-001", sample_quiz.code)
+        sio.disconnect.assert_called_with("player-sid-001")
+
+        sio.emit.reset_mock()
+        sio.enter_room.reset_mock()
+
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "player-return", {
+                "room": sample_quiz.code,
+                "name": sample_player.name,
+                "role": "player",
+            })
+
+        all_players = (
+            db_session.query(Player)
+            .filter(Player.quiz_id == sample_quiz.id, Player.role == "player")
+            .all()
+        )
+        assert len(all_players) == 1
+        assert all_players[0].status == "left"
+
+        events = [call.args[0] for call in sio.emit.call_args_list]
+        assert "resume_unavailable" in events
+        payload = _get_emitted_payload(sio, "resume_unavailable")
+        assert payload["reason"] == "participant_left"
+        sio.enter_room.assert_not_called()

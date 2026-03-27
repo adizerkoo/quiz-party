@@ -7,14 +7,19 @@ import { io, Socket } from 'socket.io-client';
 
 import { saveCreateDraft } from '@/features/create/services/create-storage';
 import { createEmptyQuestionDraft } from '@/features/create/utils/create-validation';
-import { clearGameSessionCredentials, getGameSessionCredentials, saveGameSessionCredentials } from '@/features/game/store/game-session-credentials';
+import {
+  clearGameSessionCredentials,
+  getGameSessionCredentials,
+  hydrateGameSessionCredentials,
+  saveGameSessionCredentials,
+} from '@/features/game/store/game-session-credentials';
 import {
   getMenuSessionProfile,
   getOrCreateMenuInstallationPublicId,
   hydrateMenuSessionProfile,
   mergeMenuSessionProfileIdentity,
 } from '@/features/menu/store/menu-profile-session';
-import { fetchGameQuiz, buildGameShareUrl } from '@/features/game/services/game-api';
+import { buildGameShareUrl, checkStoredGameResume, fetchGameQuiz } from '@/features/game/services/game-api';
 import {
   GameBlockedState,
   GameLobbyPlayer,
@@ -24,7 +29,12 @@ import {
   GameStatus,
   GameToastItem,
 } from '@/features/game/types';
-import { buildBlockedState, getResultWinners } from '@/features/game/utils/game-view';
+import {
+  buildBlockedState,
+  buildBlockedStateFromCancelReason,
+  buildBlockedStateFromResumeReason,
+  getResultWinners,
+} from '@/features/game/utils/game-view';
 import { WEB_APP_ORIGIN } from '@/features/web/config/web-app';
 
 type UseNativeGameControllerParams = {
@@ -66,6 +76,8 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
   const [winnerIntroPlayers, setWinnerIntroPlayers] = useState(resultsPayload?.results ? getResultWinners(resultsPayload.results) : null);
   const [nextLocked, setNextLocked] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
+  const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
+  const [leavePending, setLeavePending] = useState(false);
   const [toasts, setToasts] = useState<GameToastItem[]>([]);
   const [hostNoPlayersWarningVisible, setHostNoPlayersWarningVisible] = useState(false);
   const [reviewExpanded, setReviewExpanded] = useState(false);
@@ -122,9 +134,16 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     }
   }
 
+  function clearCurrentSessionCredentials() {
+    clearGameSessionCredentials(roomCode, role);
+  }
+
   function showBlocked(nextState: GameBlockedState) {
     disconnectSocket();
     setIsConnected(false);
+    setConfirmVisible(false);
+    setLeaveConfirmVisible(false);
+    setLeavePending(false);
     setBlockedState(nextState);
     setIsBootstrapping(false);
   }
@@ -170,6 +189,8 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
 
   function handleBackToMenu() {
     disconnectSocket();
+    setLeaveConfirmVisible(false);
+    setLeavePending(false);
     router.replace('/' as Href);
   }
 
@@ -288,6 +309,32 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     }
   }
 
+  function handleLeaveGame() {
+    if (leavePending) {
+      return;
+    }
+
+    setLeaveConfirmVisible(true);
+  }
+
+  function handleCancelLeaveGame() {
+    if (leavePending) {
+      return;
+    }
+
+    setLeaveConfirmVisible(false);
+  }
+
+  function handleConfirmLeaveGame() {
+    if (leavePending) {
+      return;
+    }
+
+    setLeavePending(true);
+    setLeaveConfirmVisible(false);
+    socketRef.current?.emit('leave_game', { room: roomCode });
+  }
+
   function sendAnswer(answerValue: string) {
     setMyAnswersHistory((current) => ({
       ...current,
@@ -329,20 +376,73 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     sendAnswer(option);
   }
 
+  async function validateCurrentResumeEligibility(params: {
+    participantId?: string | null;
+    participantToken?: string | null;
+    hostToken?: string | null;
+    installationPublicId?: string | null;
+    userId?: number | null;
+  }) {
+    if (!params.participantId && !params.participantToken && !params.hostToken) {
+      return { canProceed: true };
+    }
+
+    try {
+      const response = await checkStoredGameResume({
+        sessions: [
+          {
+            roomCode,
+            role,
+            participantId: params.participantId ?? null,
+            participantToken: params.participantToken ?? null,
+            hostToken: params.hostToken ?? null,
+            installationPublicId: params.installationPublicId ?? null,
+          },
+        ],
+        userId: params.userId ?? null,
+        installationPublicId: params.installationPublicId ?? null,
+      });
+
+      const session = Array.isArray(response.sessions) ? response.sessions[0] : null;
+      if (!session) {
+        return { canProceed: true };
+      }
+
+      if (session.clear_credentials) {
+        clearCurrentSessionCredentials();
+      }
+
+      if (session.can_resume) {
+        return { canProceed: true };
+      }
+
+      return {
+        canProceed: false,
+        reason: session.reason ?? null,
+        cancelReason: session.cancel_reason ?? null,
+      };
+    } catch (error) {
+      return { canProceed: true };
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
-      const activeProfile = await hydrateMenuSessionProfile();
-      const installationPublicId =
-        activeProfile?.installationPublicId ??
-        getOrCreateMenuInstallationPublicId();
-      const currentCredentials = getGameSessionCredentials(roomCode, role);
-
       if (!roomCode) {
         showBlocked(buildBlockedState('missing_room'));
         return;
       }
+
+      const [activeProfile] = await Promise.all([
+        hydrateMenuSessionProfile(),
+        hydrateGameSessionCredentials(),
+      ]);
+      const installationPublicId =
+        activeProfile?.installationPublicId ??
+        getOrCreateMenuInstallationPublicId();
+      const currentCredentials = getGameSessionCredentials(roomCode, role);
 
       if (role === 'player' && !activeProfile) {
         showBlocked(buildBlockedState('missing_profile'));
@@ -364,6 +464,37 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         const quiz = await fetchGameQuiz(roomCode, role);
 
         if (cancelled) {
+          return;
+        }
+
+        if (quiz.status === 'cancelled') {
+          clearCurrentSessionCredentials();
+          showBlocked(buildBlockedStateFromCancelReason(quiz.cancel_reason));
+          return;
+        }
+
+        const resumeAccess = await validateCurrentResumeEligibility({
+          participantId: currentCredentials?.participantId ?? null,
+          participantToken: currentCredentials?.participantToken ?? null,
+          hostToken: currentCredentials?.hostToken ?? null,
+          installationPublicId:
+            currentCredentials?.installationPublicId ??
+            activeProfile?.installationPublicId ??
+            installationPublicId,
+          userId: activeProfile?.id ?? null,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!resumeAccess.canProceed) {
+          if (resumeAccess.cancelReason) {
+            showBlocked(buildBlockedStateFromCancelReason(resumeAccess.cancelReason));
+            return;
+          }
+
+          showBlocked(buildBlockedStateFromResumeReason(resumeAccess.reason));
           return;
         }
 
@@ -558,6 +689,8 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         });
 
         socket.on('show_results', (data: GameResultsPayload) => {
+          clearCurrentSessionCredentials();
+
           startTransition(() => {
             setResultsPayload(data);
             syncQuestions(data.questions);
@@ -581,6 +714,23 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         socket.on('host_auth_failed', () => {
           clearGameSessionCredentials(roomCode, 'host');
           showBlocked(buildBlockedState('host_auth_failed'));
+        });
+        socket.on('resume_unavailable', (data: { reason?: string | null }) => {
+          if (data?.reason !== 'already_connected') {
+            clearCurrentSessionCredentials();
+          }
+
+          showBlocked(buildBlockedStateFromResumeReason(data?.reason));
+        });
+        socket.on('game_cancelled', (data: { reason?: string | null }) => {
+          clearCurrentSessionCredentials();
+          showBlocked(buildBlockedStateFromCancelReason(data?.reason));
+        });
+        socket.on('leave_confirmed', () => {
+          clearCurrentSessionCredentials();
+          disconnectSocket();
+          setLeavePending(false);
+          router.replace('/' as Href);
         });
 
         setIsBootstrapping(false);
@@ -627,12 +777,15 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     handleBackToCreate,
     handleBackToMenu,
     handleCancelProceed,
+    handleCancelLeaveGame,
     handleChangeScore,
     handleConfirmProceed,
+    handleConfirmLeaveGame,
     handleCopyRoom,
     handleGoToCurrentQuestion,
     handleJumpToQuestion,
     handleKickPlayer,
+    handleLeaveGame,
     handleNextQuestion,
     handlePlayerNavBack,
     handlePlayerNavForward,
@@ -645,6 +798,8 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     hostNoPlayersWarningVisible,
     isBootstrapping,
     isConnected,
+    leaveConfirmVisible,
+    leavePending,
     maxReachedQuestion,
     myAnswersHistory,
     myEmoji,

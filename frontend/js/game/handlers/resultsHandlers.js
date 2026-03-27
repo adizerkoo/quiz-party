@@ -33,6 +33,10 @@ function registerResultsHandler(socket) {
    * @param {Array<Object>} data.questions - Массив всех вопросов с правильными ответами
    */
   socket.on("show_results", (data) => {
+    window.QuizUserProfile?.clearStoredSessionCredentials?.({
+      roomCode,
+      role,
+    });
     // Переключение экранов
     document.getElementById("host-screen").style.display = "none";
     document.getElementById("player-screen").style.display = "none";

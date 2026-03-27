@@ -211,6 +211,7 @@ class Quiz(Base):
         Index("ix_game_sessions_public_id", "public_id", unique=True),
         Index("ix_game_sessions_code", "code", unique=True),
         Index("ix_game_sessions_owner_created", "owner_id", "created_at"),
+        Index("ix_game_sessions_status_activity", "status", "last_activity_at"),
         CheckConstraint("current_question >= 0", name="ck_game_sessions_current_question_non_negative"),
         CheckConstraint("total_questions >= 0", name="ck_game_sessions_total_questions_non_negative"),
         CheckConstraint(
@@ -230,9 +231,12 @@ class Quiz(Base):
     current_question = Column(Integer, nullable=False, default=0)
     host_secret_hash = Column(String(128), nullable=True)
     host_left_at = Column(DateTime, nullable=True)
+    last_activity_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utc_now)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    cancel_reason = Column(String(40), nullable=True)
     updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
     session_metadata = Column(JSON, nullable=False, default=dict)
     results_snapshot = Column(JSON, nullable=True)
@@ -350,7 +354,7 @@ class Player(Base):
             name="ck_session_participants_role",
         ),
         CheckConstraint(
-            "status IN ('joined', 'disconnected', 'kicked', 'finished')",
+            "status IN ('joined', 'disconnected', 'kicked', 'left', 'finished')",
             name="ck_session_participants_status",
         ),
     )
@@ -367,6 +371,7 @@ class Player(Base):
     last_seen_at = Column(DateTime, nullable=True)
     disconnected_at = Column(DateTime, nullable=True)
     kicked_at = Column(DateTime, nullable=True)
+    left_at = Column(DateTime, nullable=True)
     reconnect_token_hash = Column(String(128), nullable=True)
     device = Column(String(20), nullable=True)
     browser = Column(String(40), nullable=True)

@@ -97,6 +97,11 @@
             <div class="quiz-sub">QUIZ PARTY</div>
             <div id="quiz-title-player" class="quiz-title"></div>
         </div>
+        <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+            <button id="player-leave-btn" class="btn-back-to-editor" onclick="openLeaveGameConfirm()">
+                Выйти
+            </button>
+        </div>
         <div id="player-wait">
             <div class="lobby-main-card">
                 <div class="lobby-header-section">
@@ -167,6 +172,23 @@
             </button>
             <button id="confirm-proceed-btn" class="btn-party-main">
                 ДА, ДАЛЬШЕ
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="leave-game-overlay" class="modern-confirm-overlay" style="display:none;">
+    <div class="party-card modern-confirm-box">
+        <h2 style="color:var(--party-pink)">Выйти из игры?</h2>
+        <p>Если вы выйдете, вернуться в эту игру уже не получится.</p>
+        <div style="display:flex;gap:10px;">
+            <button onclick="closeLeaveGameConfirm()"
+                    class="btn-party-main"
+                    style="background:#b2bec3">
+                Остаться
+            </button>
+            <button onclick="confirmLeaveGame()" class="btn-party-main" style="background:var(--party-pink)">
+                Выйти
             </button>
         </div>
     </div>

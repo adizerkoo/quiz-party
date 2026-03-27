@@ -107,9 +107,26 @@
         </div>
     </div>
 
+    <div id="resume-modal" class="modal">
+        <div class="modal-content light-glass-card">
+            <div class="modal-header">
+                <span class="modal-hero-icon">🎯</span>
+                <h3>Незавершённая игра</h3>
+                <p id="resume-modal-subtitle">Можно быстро вернуться туда, где ты остановился.</p>
+            </div>
+
+            <button onclick="resumeStoredGame()" class="btn-modern-join">
+                <span>Вернуться в игру 🚀</span>
+            </button>
+
+            <button onclick="closeResumeModal()" class="btn-cancel-link">Пока не надо</button>
+        </div>
+    </div>
+
     <script src="js/shared/user-profile.js"></script>
     <script src="js/menu/modal.js"></script>
     <script src="js/menu/join.js"></script>
+    <script src="js/menu/resume.js"></script>
     <script src="js/menu/init.js"></script>
     <script src="js/menu/profile.js"></script>
 </body>

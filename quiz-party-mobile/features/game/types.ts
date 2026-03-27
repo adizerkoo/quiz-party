@@ -1,6 +1,6 @@
 export type GameRole = 'host' | 'player';
 
-export type GameStatus = 'waiting' | 'playing' | 'finished';
+export type GameStatus = 'waiting' | 'playing' | 'finished' | 'cancelled';
 
 export type GameQuestionType = 'text' | 'options';
 
@@ -28,6 +28,9 @@ export type GameQuizResponse = {
   created_at?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
+  last_activity_at?: string | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
 };
 
 export type GameLobbyPlayer = {
@@ -58,6 +61,23 @@ export type GameBlockedState = {
   icon: string;
   title: string;
   subtitle: string;
+};
+
+export type GameResumeSessionStatus = {
+  room_code: string;
+  role: GameRole;
+  title?: string | null;
+  status?: GameStatus | null;
+  can_resume: boolean;
+  reason?: string | null;
+  cancel_reason?: string | null;
+  clear_credentials?: boolean;
+};
+
+export type GameResumeCheckResponse = {
+  has_resume_game: boolean;
+  resume_game?: GameResumeSessionStatus | null;
+  sessions: GameResumeSessionStatus[];
 };
 
 export type GameToastItem = {

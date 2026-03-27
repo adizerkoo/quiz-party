@@ -141,6 +141,11 @@ def _repair_schema_after_fallback():
             participant_columns = {
                 column["name"] for column in inspector.get_columns("session_participants")
             }
+            participant_checks = {
+                constraint["name"]
+                for constraint in inspector.get_check_constraints("session_participants")
+                if constraint.get("name")
+            }
             missing_participant_columns = []
 
             if "device" not in participant_columns:
@@ -178,6 +183,11 @@ def _repair_schema_after_fallback():
                     text("ALTER TABLE session_participants ADD COLUMN final_rank INTEGER")
                 )
                 missing_participant_columns.append("final_rank")
+            if "left_at" not in participant_columns:
+                connection.execute(
+                    text("ALTER TABLE session_participants ADD COLUMN left_at TIMESTAMP WITHOUT TIME ZONE")
+                )
+                missing_participant_columns.append("left_at")
 
             if missing_participant_columns:
                 repaired_columns["session_participants"] = missing_participant_columns
@@ -199,9 +209,70 @@ def _repair_schema_after_fallback():
                     """
                 )
             )
+            if "ck_session_participants_status" in participant_checks:
+                connection.execute(
+                    text("ALTER TABLE session_participants DROP CONSTRAINT ck_session_participants_status")
+                )
+            connection.execute(
+                text(
+                    """
+                    ALTER TABLE session_participants
+                    ADD CONSTRAINT ck_session_participants_status
+                    CHECK (status IN ('joined', 'disconnected', 'kicked', 'left', 'finished'))
+                    """
+                )
+            )
 
         if inspector.has_table("game_sessions"):
             session_columns = {column["name"] for column in inspector.get_columns("game_sessions")}
+            missing_session_columns = []
+
+            if "last_activity_at" not in session_columns:
+                connection.execute(
+                    text("ALTER TABLE game_sessions ADD COLUMN last_activity_at TIMESTAMP WITHOUT TIME ZONE")
+                )
+                missing_session_columns.append("last_activity_at")
+            if "cancelled_at" not in session_columns:
+                connection.execute(
+                    text("ALTER TABLE game_sessions ADD COLUMN cancelled_at TIMESTAMP WITHOUT TIME ZONE")
+                )
+                missing_session_columns.append("cancelled_at")
+            if "cancel_reason" not in session_columns:
+                connection.execute(
+                    text("ALTER TABLE game_sessions ADD COLUMN cancel_reason VARCHAR(40)")
+                )
+                missing_session_columns.append("cancel_reason")
+
+            if missing_session_columns:
+                repaired_columns.setdefault("game_sessions", []).extend(missing_session_columns)
+
+            connection.execute(
+                text(
+                    """
+                    UPDATE game_sessions
+                    SET last_activity_at = COALESCE(last_activity_at, updated_at, started_at, created_at)
+                    WHERE last_activity_at IS NULL
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    UPDATE game_sessions
+                    SET cancelled_at = COALESCE(cancelled_at, updated_at, finished_at, started_at, created_at)
+                    WHERE status = 'cancelled' AND cancelled_at IS NULL
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_game_sessions_status_activity
+                    ON game_sessions (status, last_activity_at)
+                    """
+                )
+            )
+
             if "winner_id" in session_columns:
                 connection.execute(
                     text("ALTER TABLE game_sessions DROP CONSTRAINT IF EXISTS fk_game_sessions_winner_id")

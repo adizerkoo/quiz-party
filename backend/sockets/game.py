@@ -12,8 +12,11 @@ from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_answer, validate_quiz_code
 from ..services import (
     apply_score_override,
+    build_game_cancelled_payload,
+    evaluate_quiz_state,
     get_question_by_position,
     log_session_event,
+    mark_quiz_activity,
     upsert_answer,
 )
 
@@ -23,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 def register_game_handlers(sio_manager):
     """Registers Socket.IO handlers related to the game lifecycle."""
+
+    async def _emit_game_cancelled(room: str, quiz: models.Quiz):
+        await sio_manager.emit("game_cancelled", build_game_cancelled_payload(quiz), room=room)
 
     @logged_socket_handler(sio_manager, "start_game_signal", logger)
     async def handle_start(sid, data):
@@ -51,6 +57,12 @@ def register_game_handlers(sio_manager):
                     sid=sid,
                 )
                 return
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(room, quiz)
+                return
             if not verify_host(db, quiz.id, sid):
                 log_event(
                     logger,
@@ -75,6 +87,7 @@ def register_game_handlers(sio_manager):
             quiz.current_question = 1
             quiz.status = "playing"
             quiz.started_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+            mark_quiz_activity(quiz, occurred_at=quiz.started_at)
             host = get_player_by_sid(db, sid)
             log_session_event(
                 db,
@@ -152,7 +165,20 @@ def register_game_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             participant = get_player_by_sid(db, sid)
-            if not quiz or not participant or participant.quiz_id != quiz.id or participant.is_host:
+            if quiz is not None:
+                state = evaluate_quiz_state(db, quiz=quiz)
+                if state.cancelled:
+                    if state.just_cancelled:
+                        db.commit()
+                    await _emit_game_cancelled(room, quiz)
+                    return
+            if (
+                not quiz
+                or not participant
+                or participant.quiz_id != quiz.id
+                or participant.is_host
+                or participant.status in {"kicked", "left"}
+            ):
                 log_event(
                     logger,
                     logging.INFO,
@@ -201,6 +227,7 @@ def register_game_handlers(sio_manager):
                 answer_text=answer,
                 answer_time_seconds=answer_time_seconds,
             )
+            mark_quiz_activity(quiz, occurred_at=stored_answer.submitted_at)
             log_session_event(
                 db,
                 quiz=quiz,
@@ -256,6 +283,12 @@ def register_game_handlers(sio_manager):
                     sid=sid,
                 )
                 return
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(room, quiz)
+                return
             if not verify_host(db, quiz.id, sid):
                 log_event(
                     logger,
@@ -291,6 +324,7 @@ def register_game_handlers(sio_manager):
                 return
 
             quiz.current_question = next_question
+            mark_quiz_activity(quiz)
             log_session_event(
                 db,
                 quiz=quiz,
@@ -326,12 +360,20 @@ def register_game_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             host = get_player_by_sid(db, sid)
+            if quiz is not None:
+                state = evaluate_quiz_state(db, quiz=quiz)
+                if state.cancelled:
+                    if state.just_cancelled:
+                        db.commit()
+                    await _emit_game_cancelled(room, quiz)
+                    return
             if not quiz or not verify_host(db, quiz.id, sid):
                 return
             if step < 1 or step > quiz.total_questions:
                 return
 
             quiz.current_question = step
+            mark_quiz_activity(quiz)
             log_session_event(
                 db,
                 quiz=quiz,
@@ -379,6 +421,13 @@ def register_game_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             host = get_player_by_sid(db, sid)
+            if quiz is not None:
+                state = evaluate_quiz_state(db, quiz=quiz)
+                if state.cancelled:
+                    if state.just_cancelled:
+                        db.commit()
+                    await _emit_game_cancelled(room, quiz)
+                    return
             if not quiz or not verify_host(db, quiz.id, sid):
                 return
 
@@ -388,7 +437,7 @@ def register_game_handlers(sio_manager):
                     models.Player.quiz_id == quiz.id,
                     models.Player.name == player_name,
                     models.Player.role == "player",
-                    models.Player.status != "kicked",
+                    models.Player.status.notin_(("kicked", "left")),
                 )
                 .first()
             )
@@ -407,6 +456,7 @@ def register_game_handlers(sio_manager):
                 return
 
             db.add(adjustment)
+            mark_quiz_activity(quiz)
             log_session_event(
                 db,
                 quiz=quiz,
@@ -456,13 +506,20 @@ def register_game_handlers(sio_manager):
 
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
+            if quiz is not None:
+                state = evaluate_quiz_state(db, quiz=quiz)
+                if state.cancelled:
+                    if state.just_cancelled:
+                        db.commit()
+                    await _emit_game_cancelled(room, quiz)
+                    return
             if not quiz or not verify_host(db, quiz.id, sid):
                 return
 
             players = [
                 participant
                 for participant in quiz.players
-                if not participant.is_host and participant.status != "kicked"
+                if not participant.is_host and participant.status not in {"kicked", "left"}
             ]
             all_answered = True
             for participant in players:

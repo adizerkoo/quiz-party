@@ -9,7 +9,13 @@ from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code
 from ..logging_config import build_log_extra, log_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, validate_quiz_code
-from ..services import build_results_payload, serialize_quiz_questions, sort_result_players
+from ..services import (
+    build_game_cancelled_payload,
+    build_results_payload,
+    evaluate_quiz_state,
+    serialize_quiz_questions,
+    sort_result_players,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -17,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 def register_sync_handlers(sio_manager):
     """Registers Socket.IO handlers that resynchronise client state."""
+
+    async def _emit_game_cancelled(target_sid: str, quiz):
+        await sio_manager.emit("game_cancelled", build_game_cancelled_payload(quiz), room=target_sid)
 
     @logged_socket_handler(sio_manager, "request_sync", logger)
     async def handle_sync(sid, data):
@@ -47,6 +56,12 @@ def register_sync_handlers(sio_manager):
                     sid=sid,
                 )
                 return
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(sid, quiz)
+                return
 
             participant = get_player_by_sid(db, sid)
             if participant is None or participant.quiz_id != quiz.id:
@@ -68,6 +83,9 @@ def register_sync_handlers(sio_manager):
                     "request_sync blocked because participant is kicked",
                     **build_log_extra(quiz=quiz, participant=participant, sid=sid),
                 )
+                return
+            if participant.status == "left":
+                await sio_manager.emit("resume_unavailable", {"reason": "participant_left"}, room=sid)
                 return
 
             is_finished = quiz.status == "finished"
@@ -114,7 +132,7 @@ def register_sync_handlers(sio_manager):
                     item.name
                     for item in quiz.players
                     if not item.is_host
-                    and item.status != "kicked"
+                    and item.status not in {"kicked", "left"}
                     and not connection_registry.is_connected(item.id)
                 ]
                 await sio_manager.emit("init_disconnected", {"players": disconnected_names}, room=sid)
@@ -138,6 +156,12 @@ def register_sync_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if quiz:
+                state = evaluate_quiz_state(db, quiz=quiz)
+                if state.cancelled:
+                    if state.just_cancelled:
+                        db.commit()
+                    await _emit_game_cancelled(sid, quiz)
+                    return
                 players = get_players_in_quiz(db, quiz.id)
                 log_event(
                     logger,

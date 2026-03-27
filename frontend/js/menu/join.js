@@ -39,6 +39,12 @@ async function startJoining() {
             return;
         }
 
+        const quiz = await response.json();
+        if (quiz.status === 'cancelled') {
+            showFieldError(fieldCode, hintCode, 'Эта игра уже отменена 🛑');
+            return;
+        }
+
         window.QuizUserProfile?.setPlayerSessionFromProfile?.(profile);
         window.location.href = `game.html?room=${encodeURIComponent(code)}&role=player`;
     } catch (error) {

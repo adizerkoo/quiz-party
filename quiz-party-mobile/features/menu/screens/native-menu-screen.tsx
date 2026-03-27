@@ -7,10 +7,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { JoinModal } from '@/features/menu/components/join-modal';
 import { MenuActionCard } from '@/features/menu/components/menu-action-card';
 import { MenuBackground } from '@/features/menu/components/menu-background';
+import { MenuButton } from '@/features/menu/components/menu-button';
 import { MenuInfoModal } from '@/features/menu/components/menu-info-modal';
 import { MenuLogo } from '@/features/menu/components/menu-logo';
+import { MenuModalShell } from '@/features/menu/components/menu-modal-shell';
 import { ProfileBanner } from '@/features/menu/components/profile-banner';
 import { ProfileModal } from '@/features/menu/components/profile-modal';
+import { checkStoredGameResume } from '@/features/game/services/game-api';
+import {
+  clearGameSessionCredentialsByKey,
+  hydrateGameSessionCredentials,
+  listGameSessionCredentials,
+} from '@/features/game/store/game-session-credentials';
+import { GameResumeSessionStatus } from '@/features/game/types';
 import { MENU_AVATARS } from '@/features/menu/data/avatar-options';
 import {
   hydrateAndSyncMenuProfileOnAppEntry,
@@ -29,6 +38,7 @@ export function NativeMenuScreen() {
   const [profileModalMode, setProfileModalMode] = useState<ProfileModalMode>('create');
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [gameInfoVisible, setGameInfoVisible] = useState(false);
+  const [resumeSession, setResumeSession] = useState<GameResumeSessionStatus | null>(null);
 
   const hasProfile = Boolean(profile);
   const joinDescription = hasProfile ? 'Войти в игру только по коду' : 'Войти в комнату';
@@ -43,12 +53,71 @@ export function NativeMenuScreen() {
 
     async function hydrateProfile() {
       const hydratedProfile = await hydrateAndSyncMenuProfileOnAppEntry();
+      await hydrateGameSessionCredentials();
       if (!mounted) {
         return;
       }
 
       setProfile(hydratedProfile);
-      setProfileModalVisible(!hydratedProfile);
+
+      const installationPublicId =
+        hydratedProfile?.installationPublicId ??
+        getMenuSessionProfile()?.installationPublicId ??
+        null;
+
+      const storedSessions = listGameSessionCredentials()
+        .filter((session) => {
+          if (!session?.roomCode || !session?.role) {
+            return false;
+          }
+
+          if (session.role === 'player' && !hydratedProfile) {
+            return false;
+          }
+
+          return true;
+        });
+
+      let nextResumeSession: GameResumeSessionStatus | null = null;
+
+      if (storedSessions.length) {
+        try {
+          const response = await checkStoredGameResume({
+            sessions: storedSessions.map((session) => ({
+              roomCode: session.roomCode,
+              role: session.role,
+              participantId: session.participantId ?? null,
+              participantToken: session.participantToken ?? null,
+              hostToken: session.hostToken ?? null,
+              installationPublicId: session.installationPublicId ?? null,
+            })),
+            userId: hydratedProfile?.id ?? null,
+            installationPublicId,
+          });
+
+          if (!mounted) {
+            return;
+          }
+
+          response.sessions.forEach((sessionResult, index) => {
+            const localSession = storedSessions[index];
+            if (sessionResult.clear_credentials && localSession?.storageKey) {
+              clearGameSessionCredentialsByKey(localSession.storageKey);
+            }
+          });
+
+          nextResumeSession = response.resume_game?.can_resume ? response.resume_game : null;
+        } catch (error) {
+          nextResumeSession = null;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setResumeSession(nextResumeSession);
+      setProfileModalVisible(!hydratedProfile && !nextResumeSession);
     }
 
     void hydrateProfile();
@@ -115,6 +184,33 @@ export function NativeMenuScreen() {
   function handleGameInfoPress() {
     setGameInfoVisible(true);
   }
+
+  function handleResumeClose() {
+    setResumeSession(null);
+    if (!profile) {
+      setProfileModalVisible(true);
+    }
+  }
+
+  function handleResumeConfirm() {
+    if (!resumeSession) {
+      return;
+    }
+
+    const pathname = resumeSession.role === 'host' ? '/host-game' : '/player-game';
+    const roomCode = resumeSession.room_code?.trim().toUpperCase();
+    setResumeSession(null);
+
+    router.push({
+      pathname: pathname as Href,
+      params: { room: roomCode },
+    } as Href);
+  }
+
+  const resumeRoleLabel = resumeSession?.role === 'host' ? 'как ведущий' : 'как игрок';
+  const resumeTitleLabel = resumeSession?.title
+    ? `«${resumeSession.title}»`
+    : (resumeSession?.room_code ? `комнату ${resumeSession.room_code}` : 'эту игру');
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -190,6 +286,20 @@ export function NativeMenuScreen() {
           onClose={() => setGameInfoVisible(false)}
           visible={gameInfoVisible}
         />
+
+        <MenuModalShell
+          cardOffsetY={-60}
+          icon="⏳"
+          iconPosition="left"
+          onRequestClose={handleResumeClose}
+          subtitle={`Можно вернуться в ${resumeTitleLabel} ${resumeRoleLabel}.`}
+          title="Продолжить игру?"
+          visible={Boolean(resumeSession)}>
+          <View style={styles.resumeActions}>
+            <MenuButton label="Вернуться в игру" onPress={handleResumeConfirm} />
+            <MenuButton label="Не сейчас" onPress={handleResumeClose} variant="ghost" />
+          </View>
+        </MenuModalShell>
       </View>
     </SafeAreaView>
   );
@@ -253,5 +363,9 @@ const styles = StyleSheet.create({
     opacity: 0.4,
     color: menuTheme.colors.text,
     textAlign: 'center',
+  },
+  resumeActions: {
+    gap: 10,
+    marginTop: 4,
   },
 });

@@ -13,18 +13,24 @@ from ..logging_config import build_log_extra, log_event, log_game_event, logged_
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_player_name, validate_quiz_code
 from ..services import (
+    HOST_TIMEOUT,
+    build_game_cancelled_payload,
+    evaluate_quiz_state,
     DevicePayload,
     ensure_installation,
     hash_secret,
     issue_participant_token,
     issue_secret,
     log_session_event,
+    mark_participant_left,
+    mark_quiz_activity,
     verify_secret,
 )
 
 logger = logging.getLogger(__name__)
 
 _pending_disconnects: dict[int, asyncio.Task] = {}
+_pending_host_timeouts: dict[int, asyncio.Task] = {}
 
 
 def _normalized_name(raw_name: str) -> str:
@@ -44,7 +50,7 @@ def _ensure_unique_name(quiz: models.Quiz, requested_name: str) -> str:
     existing_names = {
         participant.name
         for participant in quiz.players
-        if participant.status != "kicked"
+        if participant.status not in {"kicked", "left"}
     }
     name = requested_name
     if name not in existing_names:
@@ -63,7 +69,7 @@ def _pick_emoji(quiz: models.Quiz, preferred_emoji: str | None) -> str:
     used_emojis = {
         participant.emoji
         for participant in quiz.players
-        if participant.status != "kicked" and participant.emoji
+        if participant.status not in {"kicked", "left"} and participant.emoji
     }
     available_emojis = [emoji for emoji in PLAYER_EMOJIS if emoji not in used_emojis]
     return preferred_emoji or random.choice(available_emojis if available_emojis else PLAYER_EMOJIS)
@@ -77,7 +83,7 @@ def _find_disconnected_participant_by_token(
     if not submitted_token:
         return None
     for participant in quiz.players:
-        if participant.is_host or participant.status == "kicked":
+        if participant.is_host or participant.status in {"kicked", "left"}:
             continue
         if connection_registry.is_connected(participant.id):
             continue
@@ -99,7 +105,7 @@ def _find_reconnect_candidate(
         return by_token
 
     for participant in quiz.players:
-        if participant.is_host or participant.status == "kicked":
+        if participant.is_host or participant.status in {"kicked", "left"}:
             continue
         if connection_registry.is_connected(participant.id):
             continue
@@ -151,6 +157,46 @@ def _find_kicked_participant(
     return None
 
 
+def _find_left_participant(
+    quiz: models.Quiz,
+    *,
+    name: str,
+    resolved_user_id: int | None,
+    installation_id: int | None,
+    submitted_token: str | None,
+) -> models.Player | None:
+    """Ищет участника, который уже покинул игру добровольно."""
+    left_players = [
+        participant
+        for participant in quiz.players
+        if not participant.is_host and participant.status == "left"
+    ]
+    if not left_players:
+        return None
+
+    if submitted_token:
+        for participant in left_players:
+            if verify_secret(submitted_token, participant.reconnect_token_hash):
+                return participant
+
+    if resolved_user_id is not None:
+        for participant in left_players:
+            if participant.user_id == resolved_user_id:
+                return participant
+
+    if installation_id is not None:
+        for participant in left_players:
+            if participant.installation_id == installation_id:
+                return participant
+
+    if submitted_token is None and resolved_user_id is None and installation_id is None:
+        for participant in left_players:
+            if participant.name == name:
+                return participant
+
+    return None
+
+
 async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player, host_token: str | None, participant_token: str) -> None:
     """Отправляет клиенту актуальные reconnect/host credentials после join."""
     await sio_manager.emit(
@@ -167,6 +213,31 @@ async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player
 
 def register_lobby_handlers(sio_manager):
     """Регистрирует socket-события лобби: join, disconnect и kick."""
+    async def _emit_game_cancelled(room: str, quiz: models.Quiz, *, target_sid: str | None = None):
+        await sio_manager.emit("game_cancelled", build_game_cancelled_payload(quiz), room=target_sid or room)
+
+    async def _emit_resume_unavailable(target_sid: str, *, reason: str):
+        await sio_manager.emit("resume_unavailable", {"reason": reason}, room=target_sid)
+
+    async def _schedule_host_timeout(quiz_id: int, quiz_code: str, expected_host_left_at):
+        await asyncio.sleep(HOST_TIMEOUT.total_seconds())
+        try:
+            with database.get_db_session() as db:
+                quiz = get_quiz_by_code(db, quiz_code)
+                if quiz is None or quiz.id != quiz_id:
+                    return
+                if quiz.host_left_at != expected_host_left_at:
+                    return
+
+                state = evaluate_quiz_state(db, quiz=quiz)
+                if not state.cancelled or state.cancel_reason != "host_timeout":
+                    return
+
+                db.commit()
+                await _emit_game_cancelled(quiz.code, quiz)
+        finally:
+            _pending_host_timeouts.pop(quiz_id, None)
+
     async def _delayed_disconnect_notify(participant_id: int, participant_name: str, participant_emoji: str, quiz_code: str):
         """Отложенно подтверждает отключение игрока, если реконнекта не произошло."""
         await asyncio.sleep(5)
@@ -224,6 +295,10 @@ def register_lobby_handlers(sio_manager):
                 db.commit()
                 return
 
+            if participant.status == "left":
+                db.commit()
+                return
+
             participant.status = "disconnected"
             participant.disconnected_at = models._utc_now()
             if participant.is_host:
@@ -245,6 +320,14 @@ def register_lobby_handlers(sio_manager):
                 **build_log_extra(quiz=quiz, participant=participant, sid=sid),
                 status=quiz.status,
             )
+
+            if quiz.status in ("waiting", "playing") and participant.is_host:
+                previous_timeout_task = _pending_host_timeouts.pop(quiz.id, None)
+                if previous_timeout_task:
+                    previous_timeout_task.cancel()
+                _pending_host_timeouts[quiz.id] = asyncio.create_task(
+                    _schedule_host_timeout(quiz.id, quiz.code, quiz.host_left_at)
+                )
 
             if quiz.status in ("waiting", "playing") and not participant.is_host:
                 # Даём игроку короткое окно на реконнект, чтобы не шуметь лишними событиями.
@@ -289,7 +372,15 @@ def register_lobby_handlers(sio_manager):
 
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if not quiz or not verify_host(db, quiz.id, sid) or quiz.status != "waiting":
+            if not quiz:
+                return
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(room, quiz)
+                return
+            if not verify_host(db, quiz.id, sid) or quiz.status != "waiting":
                 return
 
             participant = (
@@ -298,7 +389,7 @@ def register_lobby_handlers(sio_manager):
                     models.Player.quiz_id == quiz.id,
                     models.Player.name == target_name,
                     models.Player.role == "player",
-                    models.Player.status != "kicked",
+                    models.Player.status.notin_(("kicked", "left")),
                 )
                 .first()
             )
@@ -337,6 +428,51 @@ def register_lobby_handlers(sio_manager):
                 await sio_manager.leave_room(target_sid, room)
 
             await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
+
+    @logged_socket_handler(sio_manager, "leave_game", logger)
+    async def handle_leave_game(sid, data):
+        """Позволяет игроку добровольно покинуть игру без права на reconnect."""
+        room = data.get("room")
+        if not validate_quiz_code(room):
+            return
+
+        with database.get_db_session() as db:
+            quiz = get_quiz_by_code(db, room)
+            participant = get_player_by_sid(db, sid)
+            if quiz is None or participant is None or participant.quiz_id != quiz.id or participant.is_host:
+                return
+            if participant.status in {"kicked", "left"}:
+                await _emit_resume_unavailable(sid, reason="participant_left")
+                return
+
+            left_at = models._utc_now()
+            mark_participant_left(participant, left_at=left_at)
+            pending_disconnect = _pending_disconnects.pop(participant.id, None)
+            if pending_disconnect:
+                pending_disconnect.cancel()
+            log_session_event(
+                db,
+                quiz=quiz,
+                participant=participant,
+                installation=participant.installation,
+                event_type="participant_left",
+                payload={
+                    "participant_name": participant.name,
+                    "left_at": left_at.isoformat(),
+                },
+            )
+            db.commit()
+
+            await sio_manager.emit(
+                "leave_confirmed",
+                {"left_at": left_at.isoformat()},
+                room=sid,
+            )
+            await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
+            if quiz.status == "playing":
+                await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
+            await sio_manager.leave_room(sid, room)
+            await sio_manager.disconnect(sid)
 
     @logged_socket_handler(sio_manager, "join_room", logger)
     async def handle_join(sid, data):
@@ -389,6 +525,13 @@ def register_lobby_handlers(sio_manager):
                 )
                 return
 
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(room, quiz, target_sid=sid)
+                return
+
             resolved_user = None
             if requested_user_id is not None:
                 resolved_user = db.query(models.User).filter(models.User.id == requested_user_id).first()
@@ -435,6 +578,18 @@ def register_lobby_handlers(sio_manager):
                         room=room,
                         sid=sid,
                     )
+                    return
+                if state.resume_window_expired:
+                    log_session_event(
+                        db,
+                        quiz=quiz,
+                        participant=existing_host,
+                        installation=installation or (existing_host.installation if existing_host else None),
+                        event_type="resume_offer_suppressed",
+                        payload={"role": "host", "reason": "resume_window_expired"},
+                    )
+                    db.commit()
+                    await _emit_resume_unavailable(sid, reason="resume_window_expired")
                     return
 
                 if existing_host is None:
@@ -520,12 +675,45 @@ def register_lobby_handlers(sio_manager):
                     )
                     return
 
+                left_participant = _find_left_participant(
+                    quiz,
+                    name=requested_name,
+                    resolved_user_id=resolved_user.id if resolved_user else None,
+                    installation_id=installation.id if installation else None,
+                    submitted_token=submitted_participant_token,
+                )
+                if left_participant is not None:
+                    log_session_event(
+                        db,
+                        quiz=quiz,
+                        participant=left_participant,
+                        installation=installation or left_participant.installation,
+                        event_type="resume_offer_suppressed",
+                        payload={"role": "player", "reason": "participant_left"},
+                    )
+                    db.commit()
+                    await _emit_resume_unavailable(sid, reason="participant_left")
+                    return
+
                 participant = _find_reconnect_candidate(
                     quiz,
                     name=requested_name,
                     resolved_user_id=resolved_user.id if resolved_user else None,
                     submitted_token=submitted_participant_token,
                 )
+
+                if participant is not None and state.resume_window_expired:
+                    log_session_event(
+                        db,
+                        quiz=quiz,
+                        participant=participant,
+                        installation=installation or participant.installation,
+                        event_type="resume_offer_suppressed",
+                        payload={"role": "player", "reason": "resume_window_expired"},
+                    )
+                    db.commit()
+                    await _emit_resume_unavailable(sid, reason="resume_window_expired")
+                    return
 
                 if participant is None and quiz.status != "waiting":
                     await sio_manager.emit("game_already_started", {}, room=sid)
@@ -546,7 +734,7 @@ def register_lobby_handlers(sio_manager):
                     active_count = sum(
                         1
                         for item in quiz.players
-                        if not item.is_host and item.status != "kicked"
+                        if not item.is_host and item.status not in {"kicked", "left"}
                     )
                     if active_count >= 50:
                         await sio_manager.emit("room_full", {}, room=sid)
@@ -596,6 +784,7 @@ def register_lobby_handlers(sio_manager):
                     participant.disconnected_at = None
 
             # Participant token также ротируется на каждом успешном join/reconnect.
+            mark_quiz_activity(quiz)
             participant_token = issue_participant_token(participant)
             if participant.emoji is None:
                 participant.emoji = _pick_emoji(quiz, preferred_emoji)
@@ -604,6 +793,10 @@ def register_lobby_handlers(sio_manager):
             old_task = _pending_disconnects.pop(participant.id, None)
             if old_task:
                 old_task.cancel()
+            if participant.is_host:
+                pending_host_timeout = _pending_host_timeouts.pop(quiz.id, None)
+                if pending_host_timeout:
+                    pending_host_timeout.cancel()
 
             db.flush()
             connection_registry.bind(sid, participant.id, quiz.id)

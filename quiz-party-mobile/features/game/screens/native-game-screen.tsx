@@ -77,10 +77,12 @@ export function NativeGameScreen({ role, roomCode }: NativeGameScreenProps) {
             answerInputError={controller.answerInputError}
             currentQuestionData={controller.currentPlayerQuestionData}
             gameStatus={controller.gameStatus}
+            leaveDisabled={controller.leavePending}
             myAnswersHistory={controller.myAnswersHistory}
             myEmoji={controller.myEmoji}
             onAnswerDraftChange={controller.handleAnswerDraftChange}
             onGoToCurrentQuestion={controller.handleGoToCurrentQuestion}
+            onLeaveGame={controller.handleLeaveGame}
             onPlayerNavBack={controller.handlePlayerNavBack}
             onPlayerNavForward={controller.handlePlayerNavForward}
             onSendOptionAnswer={controller.handleSendOptionAnswer}
@@ -110,6 +112,16 @@ export function NativeGameScreen({ role, roomCode }: NativeGameScreenProps) {
           onConfirm={() => controller.setHostNoPlayersWarningVisible(false)}
           title="Тут пока пусто!"
           visible={controller.hostNoPlayersWarningVisible}
+        />
+
+        <GameDialog
+          cancelLabel="Остаться"
+          confirmLabel="Выйти"
+          description="Если вы выйдете, вернуться в эту игру уже не получится."
+          onCancel={controller.handleCancelLeaveGame}
+          onConfirm={controller.handleConfirmLeaveGame}
+          title="Выйти из игры?"
+          visible={controller.leaveConfirmVisible}
         />
 
         <GameStartIntroOverlay onFinish={() => controller.setStartIntroPlayers(null)} players={controller.startIntroPlayers} />

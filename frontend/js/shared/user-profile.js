@@ -227,6 +227,24 @@
         }
     }
 
+    function listStoredSessionCredentials() {
+        const store = _readSessionCredentialsStore();
+        return Object.entries(store).map(([storageKey, value]) => ({
+            storageKey,
+            ...(value || {}),
+        }));
+    }
+
+    function clearStoredSessionCredentialsByKey(storageKey) {
+        if (!storageKey) return;
+
+        const store = _readSessionCredentialsStore();
+        if (!store[storageKey]) return;
+
+        delete store[storageKey];
+        _writeSessionCredentialsStore(store);
+    }
+
     function detectClientDeviceInfo() {
         const ua = navigator.userAgent || '';
         let device = 'desktop';
@@ -331,6 +349,8 @@
         getStoredSessionCredentials,
         saveStoredSessionCredentials,
         clearStoredSessionCredentials,
+        listStoredSessionCredentials,
+        clearStoredSessionCredentialsByKey,
         detectClientDeviceInfo,
         fetchAvailableAvatars,
         setPlayerSessionFromProfile,
