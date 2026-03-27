@@ -1,10 +1,10 @@
-"""Настройка SQLAlchemy engine, сессий и первичной инициализации схемы."""
+"""SQLAlchemy engine, sessions and schema initialisation for Quiz Party."""
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import logging
 import os
-from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,7 +12,9 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
+from .logging_config import log_event, mask_database_url
 from .models import Base
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,16 @@ if DATABASE_URL.startswith("postgres://"):
 if not DATABASE_URL.startswith("postgresql://"):
     raise RuntimeError(f"Only PostgreSQL is supported. Got: {DATABASE_URL}")
 
-logger.info("Database engine created  pool_size=5 max_overflow=10")
+log_event(
+    logger,
+    logging.INFO,
+    "db.engine.created",
+    "Database engine configured",
+    database=mask_database_url(DATABASE_URL),
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,
+)
 
 engine = create_engine(
     DATABASE_URL,
@@ -50,15 +61,32 @@ SessionLocal = sessionmaker(
 )
 
 
-def _repair_schema_after_fallback():
-    """Доводит существующую PostgreSQL-схему до состояния, нужного текущему ORM.
+def _verify_database_connection() -> None:
+    """Runs a lightweight connectivity check before migrations and traffic."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        log_event(
+            logger,
+            logging.INFO,
+            "db.connection.ready",
+            "Database connection verified",
+            database=mask_database_url(DATABASE_URL),
+        )
+    except Exception:
+        log_event(
+            logger,
+            logging.ERROR,
+            "db.connection.failed",
+            "Database connection check failed",
+            database=mask_database_url(DATABASE_URL),
+            exc_info=True,
+        )
+        raise
 
-    Эта функция нужна только как аварийный мост для локальной разработки, когда
-    Alembic недоступен и приложение было вынуждено уйти в `create_all()`.
-    Она добавляет только отсутствующие колонки и заполняет безопасные значения,
-    не помечая миграцию как выполненную. Благодаря этому полноценный Alembic
-    backfill можно будет запустить позже без потери данных.
-    """
+
+def _repair_schema_after_fallback():
+    """Repairs the PostgreSQL schema when local fallback had to use create_all()."""
     with engine.begin() as connection:
         inspector = inspect(connection)
         repaired_columns: dict[str, list[str]] = {}
@@ -71,7 +99,9 @@ def _repair_schema_after_fallback():
                 connection.execute(text("ALTER TABLE users ADD COLUMN public_id VARCHAR(36)"))
                 missing_user_columns.append("public_id")
             if "updated_at" not in user_columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP WITHOUT TIME ZONE"))
+                connection.execute(
+                    text("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP WITHOUT TIME ZONE")
+                )
                 missing_user_columns.append("updated_at")
             if "profile_metadata" not in user_columns:
                 connection.execute(
@@ -173,7 +203,6 @@ def _repair_schema_after_fallback():
         if inspector.has_table("game_sessions"):
             session_columns = {column["name"] for column in inspector.get_columns("game_sessions")}
             if "winner_id" in session_columns:
-                # winner_id больше не используется: победители определяются через session_participants.final_rank.
                 connection.execute(
                     text("ALTER TABLE game_sessions DROP CONSTRAINT IF EXISTS fk_game_sessions_winner_id")
                 )
@@ -181,23 +210,35 @@ def _repair_schema_after_fallback():
                 repaired_columns.setdefault("game_sessions", []).append("winner_id(dropped)")
 
         for table_name, columns in repaired_columns.items():
-            logger.warning(
-                "Schema fallback repaired missing columns  table=%s  columns=%s",
-                table_name,
-                ", ".join(columns),
+            log_event(
+                logger,
+                logging.WARNING,
+                "db.schema.repaired",
+                "Database schema repaired via fallback",
+                table=table_name,
+                columns=columns,
             )
 
 
 def init_db():
-    """Применяет миграции при старте приложения.
-
-    В штатном сценарии используется Alembic. Резервный `create_all` оставлен
-    только как безопасный локальный fallback, чтобы разработчик не оставался
-    без схемы БД в пустом окружении.
-    """
+    """Applies migrations when the application starts."""
     if os.getenv("QUIZPARTY_SKIP_DB_INIT") == "1":
-        logger.info("Database init skipped by QUIZPARTY_SKIP_DB_INIT")
+        log_event(
+            logger,
+            logging.INFO,
+            "db.init.skipped",
+            "Database initialisation skipped by environment flag",
+        )
         return
+
+    log_event(
+        logger,
+        logging.INFO,
+        "db.init.started",
+        "Database initialisation started",
+        database=mask_database_url(DATABASE_URL),
+    )
+    _verify_database_connection()
 
     alembic_ini = Path(__file__).with_name("alembic.ini")
     if alembic_ini.exists():
@@ -207,21 +248,43 @@ def init_db():
 
             config = Config(str(alembic_ini))
             config.set_main_option("sqlalchemy.url", DATABASE_URL)
+            log_event(
+                logger,
+                logging.INFO,
+                "db.migrations.started",
+                "Applying Alembic migrations",
+            )
             command.upgrade(config, "head")
-            logger.info("Alembic migrations applied successfully")
+            log_event(
+                logger,
+                logging.INFO,
+                "db.migrations.completed",
+                "Alembic migrations applied successfully",
+            )
             return
         except Exception as exc:  # pragma: no cover - exercised in real env
-            # Если Alembic временно недоступен, не роняем локальную разработку.
-            logger.warning("Alembic upgrade failed, falling back to create_all: %s", exc)
+            log_event(
+                logger,
+                logging.WARNING,
+                "db.migrations.failed",
+                "Alembic upgrade failed, falling back to create_all",
+                error=str(exc),
+                exc_info=True,
+            )
 
     Base.metadata.create_all(bind=engine)
     _repair_schema_after_fallback()
-    logger.warning("Database schema created/repaired via create_all fallback")
+    log_event(
+        logger,
+        logging.WARNING,
+        "db.fallback.completed",
+        "Database schema created or repaired via create_all fallback",
+    )
 
 
 @contextmanager
 def get_db_session():
-    """Открывает короткоживущую SQLAlchemy-сессию для внутреннего кода backend."""
+    """Opens a short-lived SQLAlchemy session for internal backend code."""
     db = SessionLocal()
     try:
         yield db
@@ -230,7 +293,7 @@ def get_db_session():
 
 
 def get_db():
-    """FastAPI dependency, отдающая сессию БД на время одного HTTP-запроса."""
+    """FastAPI dependency that yields a DB session for the current request."""
     db = SessionLocal()
     try:
         yield db

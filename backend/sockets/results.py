@@ -1,4 +1,4 @@
-"""Socket.IO обработчики завершения игры и выдачи итоговых результатов."""
+"""Socket.IO handlers for game finalisation and result delivery."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import logging
 from .. import database
 from ..cache import invalidate_quiz
 from ..helpers import get_player_by_sid, get_quiz_by_code, verify_host
+from ..logging_config import build_log_extra, log_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import validate_quiz_code
 from ..services import (
@@ -18,36 +19,58 @@ from ..services import (
     sort_result_players,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
 def register_results_handlers(sio_manager):
-    """Регистрирует socket-события, отвечающие за финализацию игровой сессии."""
+    """Registers Socket.IO handlers that close a game and publish results."""
 
-    @sio_manager.on("finish_game_signal")
+    @logged_socket_handler(sio_manager, "finish_game_signal", logger)
     async def handle_finish(sid, data):
-        """Завершает игру, фиксирует итоговые ранги и рассылает финальные результаты."""
+        """Finishes a game, freezes final ranks and broadcasts results."""
         room = data.get("room")
         if not validate_quiz_code(room):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.finish_game_signal.invalid_room",
+                "finish_game_signal ignored because room code is invalid",
+                sid=sid,
+                room=room,
+            )
             return
 
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             host = get_player_by_sid(db, sid)
-            if not quiz or not verify_host(db, quiz.id, sid):
+            if not quiz:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.finish_game_signal.quiz_missing",
+                    "finish_game_signal ignored because the quiz does not exist",
+                    room=room,
+                    sid=sid,
+                )
+                return
+            if not verify_host(db, quiz.id, sid):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.finish_game_signal.host_required",
+                    "finish_game_signal ignored because sender is not the host",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                )
                 return
 
             quiz.status = "finished"
             quiz.finished_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
 
-            # Итоговый leaderboard сортируем детерминированно, а победителей определяем
-            # только через final_rank, без отдельного winner_id в game_sessions.
             players = sort_result_players(quiz.players)
             assign_final_ranks(players)
 
             for participant in quiz.players:
-                # Даже отключившиеся участники попадают в финальный frozen state,
-                # чтобы экран результатов можно было строить только из БД.
                 if participant.status != "kicked":
                     participant.status = "finished"
                     participant.last_seen_at = quiz.finished_at
@@ -66,17 +89,25 @@ def register_results_handlers(sio_manager):
                 installation=host.installation if host else None,
                 event_type="game_finished",
                 payload={
-                    "winner_ids": [participant.id for participant in players if participant.final_rank == 1],
+                    "winner_ids": [
+                        participant.id for participant in players if participant.final_rank == 1
+                    ],
                 },
             )
             db.commit()
             invalidate_quiz(room)
 
-            logger.info(
-                "Game finished  room=%s  quiz_id=%s  players=%d",
-                room,
-                quiz.id,
-                len(players),
+            winner_names = [
+                participant.name for participant in players if participant.final_rank == 1
+            ]
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.finish_game_signal.completed",
+                "Game finished and final results were published",
+                **build_log_extra(quiz=quiz, participant=host, sid=sid),
+                players=len(players),
+                winners=winner_names,
             )
             await sio_manager.emit(
                 "show_results",
@@ -87,7 +118,5 @@ def register_results_handlers(sio_manager):
                 room=room,
             )
 
-            # После публикации итогов закрываем активные сокеты, чтобы клиенты
-            # перешли в read-only режим и больше не держали игровое соединение.
             for target_sid in connection_registry.get_connected_sids(quiz.id):
                 await sio_manager.disconnect(target_sid)

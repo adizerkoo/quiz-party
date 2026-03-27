@@ -1,72 +1,376 @@
-"""Централизованная настройка логирования backend-приложения."""
+"""Central logging configuration and helpers for the Quiz Party backend."""
 
+from __future__ import annotations
+
+from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import wraps
+import json
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import sys
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-LOG_FORMAT = os.getenv(
-    "LOG_FORMAT",
-    "%(asctime)s | %(levelname)-7s | %(name)-28s | %(message)s",
+
+_LOG_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
+    "quizparty_log_context",
+    default={},
 )
-LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+_LOGGING_CONFIGURED = False
+_QUIZPARTY_HANDLER_FLAG = "_quizparty_handler"
+_STANDARD_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__.keys()) | {
+    "message",
+    "asctime",
+}
+_EXTRA_KEY_ORDER = (
+    "event",
+    "request_id",
+    "method",
+    "path",
+    "status_code",
+    "duration_ms",
+    "client",
+    "room",
+    "quiz_id",
+    "player",
+    "role",
+    "question",
+    "sid",
+    "database",
+)
 
-_DEFAULT_LOG_DIR = Path(__file__).parent.parent / "logs"
-LOG_FILE = os.getenv("LOG_FILE", str(_DEFAULT_LOG_DIR / "quiz-party.log"))
-LOG_FILE_MAX = int(os.getenv("LOG_FILE_MAX", str(5 * 1024 * 1024)))
-LOG_FILE_COUNT = int(os.getenv("LOG_FILE_COUNT", "5"))
+
+def _is_meaningful(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value != ""
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+class QuizPartyFormatter(logging.Formatter):
+    """Formatter that appends contextual key=value pairs to every log record."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        record.message = record.getMessage()
+        record.asctime = self.formatTime(record, self.datefmt)
+
+        line = (
+            f"{record.asctime} | {record.levelname:<8} | "
+            f"{record.name:<28} | {record.message}"
+        )
+
+        extras = self._collect_extras(record)
+        if extras:
+            line = f"{line} | {extras}"
+
+        if record.exc_info and not record.exc_text:
+            record.exc_text = self.formatException(record.exc_info)
+        if record.exc_text:
+            line = f"{line}\n{record.exc_text}"
+        if record.stack_info:
+            line = f"{line}\n{self.formatStack(record.stack_info)}"
+
+        return line
+
+    def _collect_extras(self, record: logging.LogRecord) -> str:
+        merged = dict(_LOG_CONTEXT.get())
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_RECORD_KEYS or key.startswith("_"):
+                continue
+            merged[key] = value
+
+        ordered_keys: list[str] = []
+        seen: set[str] = set()
+
+        for key in _EXTRA_KEY_ORDER:
+            if key in merged and _is_meaningful(merged[key]):
+                ordered_keys.append(key)
+                seen.add(key)
+
+        for key in sorted(merged):
+            if key in seen or not _is_meaningful(merged[key]):
+                continue
+            ordered_keys.append(key)
+
+        return " ".join(
+            f"{key}={self._serialize_value(merged[key])}"
+            for key in ordered_keys
+        )
+
+    @staticmethod
+    def _serialize_value(value: Any) -> str:
+        if isinstance(value, str):
+            if any(char.isspace() for char in value) or any(
+                char in value for char in ('"', "=", "|")
+            ):
+                return json.dumps(value, ensure_ascii=False)
+            return value
+        if isinstance(value, (dict, list, tuple, set)):
+            return json.dumps(value, ensure_ascii=False, default=str)
+        return str(value)
+
+
+def _resolve_level(value: str | None, default: str) -> str:
+    candidate = (value or default).upper()
+    if candidate not in logging._nameToLevel:  # type: ignore[attr-defined]
+        return default
+    return candidate
+
+
+def _level_number(level_name: str) -> int:
+    return int(logging._nameToLevel[level_name])  # type: ignore[attr-defined]
+
+
+def _default_log_file() -> Path:
+    return Path(__file__).resolve().parent.parent / "logs" / "quiz-party.log"
+
+
+def generate_request_id(value: str | None = None) -> str:
+    """Returns a stable request id or generates a new one."""
+    if value:
+        normalized = str(value).strip()
+        if normalized:
+            return normalized[:64]
+    return uuid4().hex[:12]
+
+
+def mask_database_url(database_url: str | None) -> str | None:
+    """Masks database credentials before writing the URL to logs."""
+    if not database_url:
+        return None
+
+    parsed = urlsplit(database_url)
+    hostname = parsed.hostname or ""
+    if parsed.port:
+        hostname = f"{hostname}:{parsed.port}"
+
+    auth_prefix = ""
+    if parsed.username:
+        auth_prefix = f"{parsed.username}:***@"
+
+    masked_netloc = f"{auth_prefix}{hostname}" if hostname else auth_prefix.rstrip("@")
+    return urlunsplit(
+        (
+            parsed.scheme,
+            masked_netloc,
+            parsed.path,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
+
+
+@contextmanager
+def bind_log_context(**context: Any):
+    """Temporarily merges contextual values into the current logging scope."""
+    current = dict(_LOG_CONTEXT.get())
+    merged = current.copy()
+    merged.update({key: value for key, value in context.items() if _is_meaningful(value)})
+    token = _LOG_CONTEXT.set(merged)
+    try:
+        yield merged
+    finally:
+        _LOG_CONTEXT.reset(token)
+
+
+def build_log_extra(
+    *,
+    room: str | None = None,
+    quiz: Any | None = None,
+    quiz_id: Any | None = None,
+    participant: Any | None = None,
+    player: str | None = None,
+    role: str | None = None,
+    question: Any | None = None,
+    sid: str | None = None,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Builds consistent logging extras from Quiz Party domain objects."""
+    if quiz is not None:
+        room = room or getattr(quiz, "code", None)
+        quiz_id = quiz_id or getattr(quiz, "id", None)
+
+    if participant is not None:
+        player = player or getattr(participant, "name", None)
+        role = role or (
+            "host"
+            if bool(getattr(participant, "is_host", False))
+            else getattr(participant, "role", None)
+        )
+
+    if question is not None and not isinstance(question, (int, str)):
+        question = getattr(question, "position", question)
+
+    payload = {
+        "room": room,
+        "quiz_id": quiz_id,
+        "player": player,
+        "role": role,
+        "question": question,
+        "sid": sid,
+    }
+    payload.update(extra)
+    return {key: value for key, value in payload.items() if _is_meaningful(value)}
+
+
+def log_event(
+    logger: logging.Logger,
+    level: int,
+    event: str,
+    message: str | None = None,
+    *,
+    exc_info: Any = False,
+    stack_info: bool = False,
+    **context: Any,
+) -> None:
+    """Writes a log record with the unified event field and contextual extras."""
+    extra = {"event": event}
+    extra.update({key: value for key, value in context.items() if _is_meaningful(value)})
+    logger.log(
+        level,
+        message or event,
+        extra=extra,
+        exc_info=exc_info,
+        stack_info=stack_info,
+    )
+
+
+def _extract_socket_context(sid: str, payload: Any) -> dict[str, Any]:
+    context: dict[str, Any] = {"sid": sid}
+
+    if isinstance(payload, Mapping):
+        room = payload.get("room")
+        if _is_meaningful(room):
+            context["room"] = room
+
+        player = payload.get("name") or payload.get("playerName")
+        if _is_meaningful(player):
+            context["player"] = player
+
+        role = payload.get("role")
+        if _is_meaningful(role):
+            context["role"] = role
+
+        question = (
+            payload.get("questionIndex")
+            if "questionIndex" in payload
+            else payload.get("question")
+        )
+        if question is None:
+            question = payload.get("expectedQuestion")
+        if _is_meaningful(question):
+            context["question"] = question
+
+    elif isinstance(payload, str) and payload:
+        context["room"] = payload
+
+    return context
+
+
+def logged_socket_handler(sio_manager, event_name: str, logger: logging.Logger):
+    """Registers a socket handler wrapped with contextual logging and crash logs."""
+
+    def decorator(func):
+        @sio_manager.on(event_name)
+        @wraps(func)
+        async def wrapper(sid, *args, **kwargs):
+            payload = args[0] if args else None
+            with bind_log_context(**_extract_socket_context(sid, payload)):
+                log_event(
+                    logger,
+                    logging.DEBUG,
+                    f"socket.{event_name}.received",
+                    "Socket event received",
+                )
+                try:
+                    return await func(sid, *args, **kwargs)
+                except Exception:
+                    log_event(
+                        logger,
+                        logging.ERROR,
+                        f"socket.{event_name}.failed",
+                        "Socket event failed with unexpected exception",
+                        exc_info=True,
+                    )
+                    raise
+
+        return wrapper
+
+    return decorator
 
 
 def setup_logging() -> None:
-    """Инициализирует консольное и файловое логирование для backend.
-
-    Функция безопасна к повторному вызову: если обработчики уже добавлены,
-    она просто ничего не делает.
-    """
-    root = logging.getLogger()
-
-    if root.handlers:
+    """Configures console and rotating file logging for the backend."""
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
         return
 
-    root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
-    formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+    console_level_name = _resolve_level(
+        os.getenv("LOG_CONSOLE_LEVEL") or os.getenv("LOG_LEVEL"),
+        "INFO",
+    )
+    file_level_name = _resolve_level(os.getenv("LOG_FILE_LEVEL"), "DEBUG")
+    sqlalchemy_level_name = _resolve_level(
+        os.getenv("LOG_SQLALCHEMY_LEVEL"),
+        "INFO" if file_level_name == "DEBUG" else "WARNING",
+    )
+    log_file = Path(os.getenv("LOG_FILE", str(_default_log_file())))
+    rotation_bytes = int(
+        os.getenv("LOG_ROTATION_BYTES", os.getenv("LOG_FILE_MAX", str(5 * 1024 * 1024)))
+    )
+    backup_count = int(os.getenv("LOG_BACKUP_COUNT", os.getenv("LOG_FILE_COUNT", "5")))
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
-    console.setFormatter(formatter)
-    root.addHandler(console)
+    formatter = QuizPartyFormatter(datefmt="%Y-%m-%d %H:%M:%S")
+    root = logging.getLogger()
+    root.setLevel(min(_level_number(console_level_name), _level_number(file_level_name)))
+
+    if not any(getattr(handler, _QUIZPARTY_HANDLER_FLAG, "") == "console" for handler in root.handlers):
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(_level_number(console_level_name))
+        console_handler.setFormatter(formatter)
+        setattr(console_handler, _QUIZPARTY_HANDLER_FLAG, "console")
+        root.addHandler(console_handler)
 
     try:
-        log_path = Path(LOG_FILE)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
+        if not any(getattr(handler, _QUIZPARTY_HANDLER_FLAG, "") == "file" for handler in root.handlers):
+            file_handler = RotatingFileHandler(
+                filename=str(log_file),
+                maxBytes=rotation_bytes,
+                backupCount=backup_count,
+                encoding="utf-8",
+            )
+            file_handler.setLevel(_level_number(file_level_name))
+            file_handler.setFormatter(formatter)
+            setattr(file_handler, _QUIZPARTY_HANDLER_FLAG, "file")
+            root.addHandler(file_handler)
+    except Exception:
+        root.warning("Failed to enable rotating file logging", exc_info=True)
 
-        file_handler = RotatingFileHandler(
-            filename=str(log_path),
-            maxBytes=LOG_FILE_MAX,
-            backupCount=LOG_FILE_COUNT,
-            encoding="utf-8",
-        )
-        # В файл пишем максимум деталей, даже если консоль работает на INFO.
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(formatter)
-        root.addHandler(file_handler)
-    except Exception as exc:  # noqa: BLE001
-        # Ошибка файлового логирования не должна ломать старт приложения.
-        root.warning("Could not set up file logging: %s", exc)
-
+    logging.captureWarnings(True)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(
-        logging.DEBUG if LOG_LEVEL == "DEBUG" else logging.WARNING
-    )
+    logging.getLogger("sqlalchemy.engine").setLevel(_level_number(sqlalchemy_level_name))
+    logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
     logging.getLogger("engineio").setLevel(logging.WARNING)
     logging.getLogger("socketio").setLevel(logging.WARNING)
 
-    root.info(
-        "Logging initialised  level=%s  file=%s  max=%dKB  backups=%d",
-        LOG_LEVEL,
-        LOG_FILE,
-        LOG_FILE_MAX // 1024,
-        LOG_FILE_COUNT,
+    _LOGGING_CONFIGURED = True
+    log_event(
+        logging.getLogger(__name__),
+        logging.INFO,
+        "logging.configured",
+        "Logging configured",
+        log_file=str(log_file),
+        console_level=console_level_name,
+        file_level=file_level_name,
+        rotation_bytes=rotation_bytes,
+        backups=backup_count,
     )

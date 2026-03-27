@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Утилита ручной инициализации схемы через тот же путь, что и у приложения."""
+"""Manual database initialisation entrypoint that uses the app logging stack."""
+
+from __future__ import annotations
 
 import logging
 import os
@@ -14,18 +16,36 @@ env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 from backend.database import init_db
-from backend.logging_config import setup_logging
+from backend.logging_config import log_event, mask_database_url, setup_logging
+
 
 setup_logging()
 
 logger = logging.getLogger(__name__)
 
-logger.info("Initialising database…")
-logger.info("DATABASE_URL: %s", os.getenv("DATABASE_URL"))
+log_event(
+    logger,
+    logging.INFO,
+    "db.init_cli.started",
+    "Manual database initialisation started",
+    database=mask_database_url(os.getenv("DATABASE_URL")),
+)
 
 try:
     init_db()
-    logger.info("Database initialised via Alembic or compatibility fallback")
+    log_event(
+        logger,
+        logging.INFO,
+        "db.init_cli.completed",
+        "Manual database initialisation completed",
+    )
 except Exception as exc:
-    logger.error("Database initialisation failed: %s", exc, exc_info=True)
+    log_event(
+        logger,
+        logging.ERROR,
+        "db.init_cli.failed",
+        "Manual database initialisation failed",
+        error=str(exc),
+        exc_info=True,
+    )
     raise SystemExit(1) from exc

@@ -1,4 +1,4 @@
-"""HTTP-маршруты FastAPI для Quiz Party."""
+"""HTTP routes for the Quiz Party backend."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from . import database, models, schemas
 from .cache import cache_quiz
 from .config import DATA_PATH, FRONTEND_PATH, PLAYER_EMOJIS
 from .helpers import get_quiz_by_code
+from .logging_config import build_log_extra, log_event
 from .security import sanitize_text, validate_player_name
 from .services import (
     DevicePayload,
@@ -30,13 +31,16 @@ from .services import (
     sort_result_players,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
 def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
-    """Генерирует уникальный код комнаты формата `PARTY-XXXXX`."""
+    """Generates a unique room code in the PARTY-XXXXX format."""
     for _ in range(max_attempts):
-        suffix = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+        suffix = "".join(
+            secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5)
+        )
         code = f"PARTY-{suffix}"
         exists = db.query(models.Quiz.id).filter(models.Quiz.code == code).first()
         if not exists:
@@ -45,12 +49,12 @@ def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
 
 
 def _utc_now():
-    """Возвращает текущее UTC-время без tzinfo для naive DateTime колонок."""
+    """Returns the current UTC time without tzinfo for naive DateTime columns."""
     return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _clean_username(username: str) -> str:
-    """Санитизирует и валидирует имя пользователя для профиля."""
+    """Sanitises and validates a username for the profile API."""
     cleaned = sanitize_text(username).strip()
     if not validate_player_name(cleaned):
         raise HTTPException(status_code=422, detail="Invalid username")
@@ -58,7 +62,7 @@ def _clean_username(username: str) -> str:
 
 
 def _clean_optional_text(value, max_length: int) -> str | None:
-    """Очищает опциональный текст и обрезает его до безопасной длины."""
+    """Sanitises optional free text and trims it to a safe max length."""
     if value is None:
         return None
     cleaned = sanitize_text(str(value)).strip()
@@ -68,20 +72,27 @@ def _clean_optional_text(value, max_length: int) -> str | None:
 
 
 def register_routes(app):
-    """Регистрирует все HTTP-маршруты backend-приложения."""
+    """Registers all HTTP routes for the backend application."""
+
     @app.get("/")
     async def read_index():
-        """Отдаёт главную HTML-страницу web-клиента."""
+        """Serves the main web client HTML page."""
         return FileResponse(Path(FRONTEND_PATH) / "index.html")
 
     @app.get("/api/health")
     async def health(db: Session = Depends(database.get_db)):
-        """Проверяет доступность backend и соединения с БД."""
+        """Checks backend liveness and database connectivity."""
         try:
             db.execute(text("SELECT 1"))
             return {"status": "ok"}
         except Exception:
-            logger.error("Health check failed — database unavailable", exc_info=True)
+            log_event(
+                logger,
+                logging.ERROR,
+                "http.health.failed",
+                "Health check failed because the database is unavailable",
+                exc_info=True,
+            )
             raise HTTPException(status_code=503, detail="Database unavailable")
 
     app.mount("/data", StaticFiles(directory=str(DATA_PATH)), name="data")
@@ -89,7 +100,7 @@ def register_routes(app):
 
     @app.post("/api/v1/quizzes", response_model=schemas.QuizResponse)
     def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(database.get_db)):
-        """Создаёт новый шаблон квиза и первую игровую сессию."""
+        """Creates a new quiz template and its first game session."""
         code = _generate_unique_code(db)
         owner = None
         if quiz_data.owner_id is not None:
@@ -97,9 +108,17 @@ def register_routes(app):
             if not owner:
                 raise HTTPException(status_code=422, detail="Invalid owner_id")
 
-        logger.info("Creating quiz  title=%r  code=%s  questions=%d", quiz_data.title, code, len(quiz_data.questions))
+        log_event(
+            logger,
+            logging.INFO,
+            "quiz.create.started",
+            "Quiz creation started",
+            room=code,
+            title=quiz_data.title,
+            questions=len(quiz_data.questions),
+            owner_id=quiz_data.owner_id,
+        )
         try:
-            # Внутри одной транзакции создаём и template, и game session.
             quiz, host_token = create_quiz_session(
                 db,
                 title=quiz_data.title,
@@ -109,9 +128,15 @@ def register_routes(app):
             )
             db.commit()
             db.refresh(quiz)
-            # Кэшируем только после успешного commit, чтобы не держать "фантомную" сессию.
             cache_quiz(code, quiz.id, quiz.questions_data, quiz.total_questions)
-            logger.info("Quiz created  id=%s  code=%s", quiz.id, code)
+            log_event(
+                logger,
+                logging.INFO,
+                "quiz.create.completed",
+                "Quiz created",
+                **build_log_extra(quiz=quiz),
+                template_public_id=quiz.template_public_id,
+            )
             return schemas.QuizResponse(
                 id=quiz.id,
                 public_id=quiz.public_id,
@@ -126,12 +151,20 @@ def register_routes(app):
             )
         except Exception:
             db.rollback()
-            logger.error("Failed to create quiz  code=%s", code, exc_info=True)
+            log_event(
+                logger,
+                logging.ERROR,
+                "quiz.create.failed",
+                "Quiz creation failed",
+                room=code,
+                title=quiz_data.title,
+                exc_info=True,
+            )
             raise
 
     @app.post("/api/v1/users", response_model=schemas.UserResponse)
     def create_user(user_data: schemas.UserCreate, db: Session = Depends(database.get_db)):
-        """Создаёт профиль пользователя и при наличии данных связывает installation."""
+        """Creates a user profile and optionally links an installation record."""
         username = _clean_username(user_data.username)
         user = models.User(
             username=username,
@@ -155,19 +188,33 @@ def register_routes(app):
             db.refresh(user)
         except IntegrityError as exc:
             db.rollback()
-            logger.warning("User profile create conflict  username=%s", username, exc_info=True)
+            log_event(
+                logger,
+                logging.WARNING,
+                "user.create.conflict",
+                "User profile creation hit a uniqueness conflict",
+                username=username,
+                exc_info=True,
+            )
             raise HTTPException(status_code=409, detail="User profile could not be saved") from exc
-        logger.info("User profile created  id=%s  username=%s", user.id, user.username)
+        log_event(
+            logger,
+            logging.INFO,
+            "user.create.completed",
+            "User profile created",
+            user_id=user.id,
+            username=user.username,
+        )
         return user
 
     @app.get("/api/v1/users/meta")
     def get_users_meta():
-        """Возвращает справочные данные для UI профиля пользователя."""
+        """Returns UI metadata for the user profile screen."""
         return {"avatar_emojis": PLAYER_EMOJIS}
 
     @app.get("/api/v1/users/{user_id}", response_model=schemas.UserResponse)
     def get_user(user_id: int, db: Session = Depends(database.get_db)):
-        """Возвращает профиль пользователя по внутреннему id."""
+        """Returns a user profile by internal id."""
         user = db.query(models.User).filter(models.User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -175,7 +222,7 @@ def register_routes(app):
 
     @app.put("/api/v1/users/{user_id}", response_model=schemas.UserResponse)
     def update_user(user_id: int, user_data: schemas.UserUpdate, db: Session = Depends(database.get_db)):
-        """Обновляет профиль пользователя без смены его identity."""
+        """Updates the user profile without changing its identity."""
         user = db.query(models.User).filter(models.User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -198,15 +245,30 @@ def register_routes(app):
             db.refresh(user)
         except IntegrityError as exc:
             db.rollback()
-            logger.warning("User profile update conflict  id=%s  username=%s", user_id, user.username, exc_info=True)
+            log_event(
+                logger,
+                logging.WARNING,
+                "user.update.conflict",
+                "User profile update hit a uniqueness conflict",
+                user_id=user_id,
+                username=user.username,
+                exc_info=True,
+            )
             raise HTTPException(status_code=409, detail="User profile could not be updated") from exc
 
-        logger.info("User profile updated  id=%s  username=%s", user.id, user.username)
+        log_event(
+            logger,
+            logging.INFO,
+            "user.update.completed",
+            "User profile updated",
+            user_id=user.id,
+            username=user.username,
+        )
         return user
 
     @app.post("/api/v1/users/{user_id}/touch", response_model=schemas.UserResponse)
     def touch_user(user_id: int, touch_data: schemas.UserTouch, db: Session = Depends(database.get_db)):
-        """Обновляет last_login_at и связывает текущую установку с профилем."""
+        """Updates last_login_at and binds the current installation to the user."""
         user = db.query(models.User).filter(models.User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -223,18 +285,29 @@ def register_routes(app):
         )
         db.commit()
         db.refresh(user)
-        logger.info("User profile touched  id=%s", user.id)
+        log_event(
+            logger,
+            logging.INFO,
+            "user.touch.completed",
+            "User profile touched",
+            user_id=user.id,
+        )
         return user
 
     @app.get("/api/v1/quizzes/{code}")
     def get_quiz(code: str, role: str = Query(default=None), db: Session = Depends(database.get_db)):
-        """Возвращает текущую игровую сессию в совместимом с клиентами формате."""
+        """Returns the current game session in a client-compatible format."""
         quiz = get_quiz_by_code(db, code)
         if not quiz:
-            logger.warning("Quiz not found  code=%s", code)
+            log_event(
+                logger,
+                logging.WARNING,
+                "quiz.fetch.not_found",
+                "Quiz was not found",
+                room=code,
+            )
             raise HTTPException(status_code=404, detail="The quiz was not found")
 
-        # Только хосту выдаём правильные ответы до завершения игры.
         questions = serialize_quiz_questions(quiz, include_correct=(role == "host"))
         return {
             "id": quiz.id,
@@ -251,7 +324,7 @@ def register_routes(app):
 
     @app.get("/api/v1/quizzes/{code}/results")
     def get_quiz_results(code: str, db: Session = Depends(database.get_db)):
-        """Возвращает финальные результаты завершённой игровой сессии."""
+        """Returns final results for a finished game session."""
         quiz = (
             load_quiz_graph(db.query(models.Quiz))
             .filter(models.Quiz.code == code)
@@ -262,9 +335,7 @@ def register_routes(app):
         if quiz.status != "finished":
             raise HTTPException(status_code=400, detail="Quiz is not finished yet")
 
-        # Сортировка фиксирует leaderboard: сначала score, затем время входа и id.
         players = sort_result_players(quiz.players)
-
         return {
             "code": quiz.code,
             "title": quiz.title,

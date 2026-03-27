@@ -9,6 +9,7 @@ import logging
 from .. import database, models
 from ..config import PLAYER_EMOJIS
 from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
+from ..logging_config import build_log_extra, log_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_player_name, validate_quiz_code
 from ..services import (
@@ -189,7 +190,7 @@ def register_lobby_handlers(sio_manager):
                     )
         _pending_disconnects.pop(participant_id, None)
 
-    @sio_manager.on("disconnect")
+    @logged_socket_handler(sio_manager, "disconnect", logger)
     async def handle_disconnect(sid, *_):
         """Переводит участника в disconnected/finished и планирует отложенное уведомление."""
         connection = connection_registry.unbind_sid(sid)
@@ -202,7 +203,13 @@ def register_lobby_handlers(sio_manager):
             if participant is not None:
                 participant.sid = None
             if participant is None:
-                logger.debug("Unknown sid disconnected  sid=%s", sid)
+                log_event(
+                    logger,
+                    logging.DEBUG,
+                    "socket.disconnect.unknown_sid",
+                    "disconnect ignored because sid is unknown",
+                    sid=sid,
+                )
                 return
 
             quiz = db.query(models.Quiz).filter(models.Quiz.id == participant.quiz_id).first()
@@ -230,6 +237,14 @@ def register_lobby_handlers(sio_manager):
                 payload={"participant_name": participant.name},
             )
             db.commit()
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.disconnect.completed",
+                "Participant disconnected",
+                **build_log_extra(quiz=quiz, participant=participant, sid=sid),
+                status=quiz.status,
+            )
 
             if quiz.status in ("waiting", "playing") and not participant.is_host:
                 # Даём игроку короткое окно на реконнект, чтобы не шуметь лишними событиями.
@@ -245,13 +260,28 @@ def register_lobby_handlers(sio_manager):
                     )
                 )
 
-    @sio_manager.on("kick_player")
+    @logged_socket_handler(sio_manager, "kick_player", logger)
     async def handle_kick_player(sid, data):
         """Исключает игрока из лобби по команде хоста."""
         if not rate_limiter.is_allowed(sid):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.kick_player.rate_limited",
+                "kick_player rejected by rate limiter",
+                sid=sid,
+            )
             return
         room = data.get("room")
         if not validate_quiz_code(room):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.kick_player.invalid_room",
+                "kick_player ignored because room code is invalid",
+                sid=sid,
+                room=room,
+            )
             return
         target_name = data.get("playerName")
         if not target_name:
@@ -294,6 +324,13 @@ def register_lobby_handlers(sio_manager):
                 payload={"participant_name": participant.name},
             )
             db.commit()
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.kick_player.completed",
+                "Player was kicked from the lobby",
+                **build_log_extra(quiz=quiz, participant=participant, sid=sid),
+            )
 
             if target_sid:
                 await sio_manager.emit("player_kicked", {}, room=target_sid)
@@ -301,16 +338,29 @@ def register_lobby_handlers(sio_manager):
 
             await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on("join_room")
+    @logged_socket_handler(sio_manager, "join_room", logger)
     async def handle_join(sid, data):
         """Обрабатывает вход хоста/игрока в комнату и сценарии реконнекта."""
         if not rate_limiter.is_allowed(sid):
-            logger.warning("Rate limit hit on join_room  sid=%s", sid)
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.join_room.rate_limited",
+                "join_room rejected by rate limiter",
+                sid=sid,
+            )
             return
 
         room = data.get("room")
         if not validate_quiz_code(room):
-            logger.warning("Invalid quiz code on join  room=%r  sid=%s", room, sid)
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.join_room.invalid_room",
+                "join_room ignored because room code is invalid",
+                sid=sid,
+                room=room,
+            )
             return
 
         role = data.get("role")
@@ -329,6 +379,14 @@ def register_lobby_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if quiz is None:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.join_room.quiz_missing",
+                    "join_room ignored because the quiz does not exist",
+                    sid=sid,
+                    room=room,
+                )
                 return
 
             resolved_user = None
@@ -348,6 +406,14 @@ def register_lobby_handlers(sio_manager):
             if is_host:
                 if quiz.host_secret_hash and not verify_secret(submitted_host_token, quiz.host_secret_hash):
                     await sio_manager.emit("host_auth_failed", {}, room=sid)
+                    log_event(
+                        logger,
+                        logging.WARNING,
+                        "socket.join_room.host_auth_failed",
+                        "Host authentication failed during join_room",
+                        room=room,
+                        sid=sid,
+                    )
                     return
 
                 existing_host = next(
@@ -360,6 +426,14 @@ def register_lobby_handlers(sio_manager):
                 )
                 if existing_host and connection_registry.is_connected(existing_host.id):
                     await sio_manager.emit("host_already_connected", {}, room=sid)
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "socket.join_room.host_already_connected",
+                        "join_room rejected because the host is already connected",
+                        room=room,
+                        sid=sid,
+                    )
                     return
 
                 if existing_host is None:
@@ -433,11 +507,14 @@ def register_lobby_handlers(sio_manager):
                     )
                     db.commit()
                     await sio_manager.emit("player_kicked", {}, room=sid)
-                    logger.info(
-                        "Blocked kicked player rejoin  name=%s  room=%s  sid=%s",
-                        requested_name,
-                        room,
-                        sid,
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "socket.join_room.kicked_rejoin_blocked",
+                        "Kicked player rejoin was blocked",
+                        room=room,
+                        sid=sid,
+                        player=requested_name,
                     )
                     return
 
@@ -450,7 +527,16 @@ def register_lobby_handlers(sio_manager):
 
                 if participant is None and quiz.status != "waiting":
                     await sio_manager.emit("game_already_started", {}, room=sid)
-                    logger.info("Blocked late join  name=%s  room=%s  status=%s", requested_name, room, quiz.status)
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "socket.join_room.game_already_started",
+                        "Late join was blocked because the game already started",
+                        room=room,
+                        sid=sid,
+                        player=requested_name,
+                        status=quiz.status,
+                    )
                     return
 
                 if participant is None:
@@ -462,7 +548,15 @@ def register_lobby_handlers(sio_manager):
                     )
                     if active_count >= 50:
                         await sio_manager.emit("room_full", {}, room=sid)
-                        logger.info("Room full  room=%s  count=%d", room, active_count)
+                        log_event(
+                            logger,
+                            logging.INFO,
+                            "socket.join_room.room_full",
+                            "join_room rejected because the room is full",
+                            room=room,
+                            sid=sid,
+                            players=active_count,
+                        )
                         return
 
                     assigned_name = _ensure_unique_name(quiz, requested_name)
@@ -541,4 +635,12 @@ def register_lobby_handlers(sio_manager):
                     {"name": participant.name, "emoji": participant.emoji or "👤"},
                     room=room,
                 )
-            logger.info("Participant joined  name=%s  room=%s  host=%s  sid=%s", participant.name, room, participant.is_host, sid)
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.join_room.completed",
+                "Participant joined room",
+                **build_log_extra(quiz=quiz, participant=participant, sid=sid),
+                reconnect=bool(submitted_participant_token or submitted_host_token),
+                assigned_name=name_assigned,
+            )

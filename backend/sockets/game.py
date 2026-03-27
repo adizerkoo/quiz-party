@@ -1,4 +1,4 @@
-"""Socket.IO обработчики игрового процесса."""
+"""Socket.IO handlers for the core gameplay flow."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import logging
 
 from .. import database, models
 from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
+from ..logging_config import build_log_extra, log_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_answer, validate_quiz_code
 from ..services import (
@@ -16,26 +17,61 @@ from ..services import (
     upsert_answer,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
 def register_game_handlers(sio_manager):
-    """Регистрирует socket-события, связанные с ходом игры и оценкой ответов."""
-    @sio_manager.on("start_game_signal")
+    """Registers Socket.IO handlers related to the game lifecycle."""
+
+    @logged_socket_handler(sio_manager, "start_game_signal", logger)
     async def handle_start(sid, data):
-        """Переводит сессию из лобби в состояние активной игры."""
+        """Moves a quiz session from lobby to active gameplay."""
         room = data.get("room")
         if not validate_quiz_code(room):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.start_game_signal.invalid_room",
+                "start_game_signal ignored because room code is invalid",
+                sid=sid,
+                room=room,
+            )
             return
 
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
-            if not quiz or not verify_host(db, quiz.id, sid):
+            if not quiz:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.start_game_signal.quiz_missing",
+                    "start_game_signal ignored because the quiz does not exist",
+                    room=room,
+                    sid=sid,
+                )
+                return
+            if not verify_host(db, quiz.id, sid):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.start_game_signal.host_required",
+                    "start_game_signal ignored because sender is not the host",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                )
                 return
             if quiz.status != "waiting" or quiz.total_questions <= 0:
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.start_game_signal.skipped",
+                    "start_game_signal ignored because the quiz cannot be started",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                    status=quiz.status,
+                    total_questions=quiz.total_questions,
+                )
                 return
 
-            # Первый вопрос включается явно, чтобы реконнект мог восстановить состояние.
             quiz.current_question = 1
             quiz.status = "playing"
             quiz.started_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
@@ -50,47 +86,102 @@ def register_game_handlers(sio_manager):
             )
             db.commit()
             players = get_players_in_quiz(db, quiz.id)
-            logger.info("Game started  room=%s  quiz_id=%s  players=%d", room, quiz.id, len(players))
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.start_game_signal.completed",
+                "Game started",
+                **build_log_extra(quiz=quiz, participant=host, sid=sid, question=1),
+                players=len(players),
+            )
             await sio_manager.emit("game_started", players, room=room)
 
-    @sio_manager.on("send_answer")
+    @logged_socket_handler(sio_manager, "send_answer", logger)
     async def handle_answer(sid, data):
-        """Принимает и сохраняет ответ игрока на текущий вопрос."""
+        """Stores a player's answer for the current question."""
         if not rate_limiter.is_allowed(sid):
-            logger.warning("Rate limit hit on send_answer  sid=%s", sid)
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.send_answer.rate_limited",
+                "send_answer rejected by rate limiter",
+                sid=sid,
+            )
             return
 
         room = data.get("room")
         if not validate_quiz_code(room):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.send_answer.invalid_room",
+                "send_answer ignored because room code is invalid",
+                sid=sid,
+                room=room,
+            )
             return
 
         raw_answer = data.get("answer", "")
         answer = sanitize_text(str(raw_answer)[:500]) if raw_answer else ""
         if not validate_answer(answer):
-            logger.warning("Invalid answer rejected  sid=%s  room=%s", sid, room)
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.send_answer.invalid_payload",
+                "send_answer rejected because answer payload is invalid",
+                sid=sid,
+                room=room,
+            )
             return
 
         raw_q_idx = data.get("questionIndex")
         try:
             question_index = int(raw_q_idx)
         except (TypeError, ValueError):
-            logger.warning("Invalid questionIndex  sid=%s  room=%s  value=%r", sid, room, raw_q_idx)
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.send_answer.invalid_question_index",
+                "send_answer rejected because questionIndex is invalid",
+                sid=sid,
+                room=room,
+                question=raw_q_idx,
+            )
             return
 
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             participant = get_player_by_sid(db, sid)
             if not quiz or not participant or participant.quiz_id != quiz.id or participant.is_host:
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.send_answer.ignored",
+                    "send_answer ignored because sender is not an active player in the room",
+                    room=room,
+                    sid=sid,
+                )
                 return
 
             question = get_question_by_position(quiz, question_index)
             if question is None:
-                logger.warning("Answer index out of range  name=%s  idx=%s  room=%s", participant.name, question_index, room)
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.send_answer.question_missing",
+                    "send_answer rejected because question index is out of range",
+                    **build_log_extra(quiz=quiz, participant=participant, sid=sid, question=question_index),
+                )
                 return
 
-            # Повторный ответ на тот же вопрос запрещаем на уровне бизнес-логики.
             if any(existing.question_id == question.id for existing in participant.answers):
-                logger.debug("Duplicate answer rejected  name=%s  q=%s  room=%s", participant.name, question_index, room)
+                log_event(
+                    logger,
+                    logging.DEBUG,
+                    "socket.send_answer.duplicate",
+                    "Duplicate answer rejected",
+                    **build_log_extra(quiz=quiz, participant=participant, sid=sid, question=question.position),
+                )
                 return
 
             raw_time = data.get("answerTime")
@@ -123,37 +214,79 @@ def register_game_handlers(sio_manager):
                 },
             )
             db.commit()
-            logger.info(
-                "Answer received  name=%s  room=%s  q=%s  correct=%s  score=%d",
-                participant.name,
-                room,
-                question.position,
-                stored_answer.is_correct,
-                participant.score,
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.send_answer.completed",
+                "Answer received",
+                **build_log_extra(quiz=quiz, participant=participant, sid=sid, question=question.position),
+                correct=bool(stored_answer.is_correct),
+                score=participant.score,
+                answer_time_seconds=answer_time_seconds,
             )
             await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on("next_question_signal")
+    @logged_socket_handler(sio_manager, "next_question_signal", logger)
     async def handle_next_question(sid, data):
-        """Переключает игру на следующий вопрос по команде хоста."""
+        """Advances the game to the next question on host command."""
         room = data.get("room")
         if not validate_quiz_code(room):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.next_question_signal.invalid_room",
+                "next_question_signal ignored because room code is invalid",
+                sid=sid,
+                room=room,
+            )
             return
 
         expected_question = data.get("expectedQuestion")
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             host = get_player_by_sid(db, sid)
-            if not quiz or not verify_host(db, quiz.id, sid):
+            if not quiz:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.next_question_signal.quiz_missing",
+                    "next_question_signal ignored because the quiz does not exist",
+                    room=room,
+                    sid=sid,
+                )
+                return
+            if not verify_host(db, quiz.id, sid):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.next_question_signal.host_required",
+                    "next_question_signal ignored because sender is not the host",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                )
                 return
 
-            # Защита от гонки: если host UI устарел, возвращаем фактический current_question.
             if expected_question is not None and quiz.current_question != expected_question:
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.next_question_signal.stale",
+                    "next_question_signal ignored because host state is stale",
+                    **build_log_extra(quiz=quiz, participant=host, sid=sid, question=quiz.current_question),
+                    expected_question=expected_question,
+                )
                 await sio_manager.emit("move_to_next", {"question": quiz.current_question}, room=room)
                 return
 
             next_question = quiz.current_question + 1
             if next_question > quiz.total_questions:
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.next_question_signal.completed_last_step",
+                    "next_question_signal ignored because the quiz is already at the last question",
+                    **build_log_extra(quiz=quiz, participant=host, sid=sid, question=quiz.current_question),
+                    total_questions=quiz.total_questions,
+                )
                 return
 
             quiz.current_question = next_question
@@ -166,13 +299,20 @@ def register_game_handlers(sio_manager):
                 payload={"question": next_question},
             )
             db.commit()
-            logger.info("Next question  room=%s  question=%d/%d", room, next_question, quiz.total_questions)
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.next_question_signal.completed",
+                "Moved to the next question",
+                **build_log_extra(quiz=quiz, participant=host, sid=sid, question=next_question),
+                total_questions=quiz.total_questions,
+            )
             await sio_manager.emit("move_to_next", {"question": quiz.current_question}, room=room)
             await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on("move_to_step")
+    @logged_socket_handler(sio_manager, "move_to_step", logger)
     async def handle_move_step(sid, data):
-        """Позволяет хосту прыгнуть к произвольному вопросу в пределах диапазона."""
+        """Lets the host jump directly to an arbitrary question."""
         room = data.get("room")
         if not validate_quiz_code(room):
             return
@@ -200,12 +340,27 @@ def register_game_handlers(sio_manager):
                 payload={"question": step},
             )
             db.commit()
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.move_to_step.completed",
+                "Host jumped to a specific question",
+                **build_log_extra(quiz=quiz, participant=host, sid=sid, question=step),
+                total_questions=quiz.total_questions,
+            )
             await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on("override_score")
+    @logged_socket_handler(sio_manager, "override_score", logger)
     async def handle_override(sid, data):
-        """Ручная корректировка очков игрока со стороны хоста."""
+        """Lets the host manually override a player's score for a question."""
         if not rate_limiter.is_allowed(sid):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.override_score.rate_limited",
+                "override_score rejected by rate limiter",
+                sid=sid,
+            )
             return
 
         room = data.get("room")
@@ -219,7 +374,6 @@ def register_game_handlers(sio_manager):
         except (TypeError, ValueError):
             return
 
-        # Наружу сейчас поддерживаем только два состояния: 1 очко или 0.
         desired_points = 1 if requested_points == 1 else 0
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
@@ -266,20 +420,29 @@ def register_game_handlers(sio_manager):
                 },
             )
             db.commit()
-            logger.info(
-                "Score overridden  player=%s  room=%s  q=%s  delta=%s  total=%d",
-                player_name,
-                room,
-                question.position,
-                adjustment.points_delta,
-                participant.score,
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.override_score.completed",
+                "Score overridden",
+                **build_log_extra(quiz=quiz, participant=participant, sid=sid, question=question.position),
+                points_delta=adjustment.points_delta,
+                score=participant.score,
+                requested_points=desired_points,
             )
             await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
-    @sio_manager.on("check_answers_before_next")
+    @logged_socket_handler(sio_manager, "check_answers_before_next", logger)
     async def check_answers(sid, data):
-        """Проверяет, ответили ли все онлайн-игроки перед следующим вопросом."""
+        """Checks whether all connected players answered before advancing."""
         if not rate_limiter.is_allowed(sid):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.check_answers_before_next.rate_limited",
+                "check_answers_before_next rejected by rate limiter",
+                sid=sid,
+            )
             return
 
         room = data.get("room")
@@ -302,7 +465,6 @@ def register_game_handlers(sio_manager):
             ]
             all_answered = True
             for participant in players:
-                # Оффлайн-игроков здесь не блокируем, иначе host не сможет продолжить игру.
                 if not connection_registry.is_connected(participant.id):
                     continue
                 if not any(answer.question_position == question_index for answer in participant.answers):
@@ -310,4 +472,12 @@ def register_game_handlers(sio_manager):
                     break
 
             await sio_manager.emit("answers_check_result", {"allAnswered": all_answered}, room=sid)
-            logger.debug("Check answers  room=%s  q=%s  all_answered=%s", room, question_index, all_answered)
+            log_event(
+                logger,
+                logging.DEBUG,
+                "socket.check_answers_before_next.completed",
+                "Checked whether all answers were submitted",
+                **build_log_extra(quiz=quiz, sid=sid, question=question_index),
+                all_answered=all_answered,
+                players=len(players),
+            )

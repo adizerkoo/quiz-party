@@ -1,4 +1,4 @@
-"""Socket.IO обработчики синхронизации состояния игры."""
+"""Socket.IO handlers for state synchronisation and lightweight updates."""
 
 from __future__ import annotations
 
@@ -6,20 +6,29 @@ import logging
 
 from .. import database
 from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code
+from ..logging_config import build_log_extra, log_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, validate_quiz_code
 from ..services import build_results_payload, serialize_quiz_questions, sort_result_players
+
 
 logger = logging.getLogger(__name__)
 
 
 def register_sync_handlers(sio_manager):
-    """Регистрирует socket-события для state sync и выборочной подгрузки данных."""
-    @sio_manager.on("request_sync")
+    """Registers Socket.IO handlers that resynchronise client state."""
+
+    @logged_socket_handler(sio_manager, "request_sync", logger)
     async def handle_sync(sid, data):
-        """Возвращает клиенту актуальное состояние игры после join/reconnect."""
+        """Returns the latest game state after join or reconnect."""
         if not rate_limiter.is_allowed(sid):
-            logger.warning("Rate limit hit on request_sync  sid=%s", sid)
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.request_sync.rate_limited",
+                "request_sync rejected by rate limiter",
+                sid=sid,
+            )
             return
 
         room = data.get("room")
@@ -29,26 +38,46 @@ def register_sync_handlers(sio_manager):
         with database.get_db_session() as db:
             quiz = get_quiz_by_code(db, room)
             if not quiz:
-                logger.warning("Sync requested for missing quiz  room=%s  sid=%s", room, sid)
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.request_sync.quiz_missing",
+                    "request_sync ignored because the quiz does not exist",
+                    room=room,
+                    sid=sid,
+                )
                 return
 
             participant = get_player_by_sid(db, sid)
             if participant is None or participant.quiz_id != quiz.id:
-                # Без валидного участника не шлём sync_state, иначе клиент может показать "фантомную" комнату.
-                logger.info("Sync ignored for sid without active participant  room=%s  sid=%s", room, sid)
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.request_sync.ignored",
+                    "request_sync ignored because sender has no active participant in the room",
+                    room=room,
+                    sid=sid,
+                )
                 return
             if participant.status == "kicked":
                 await sio_manager.emit("player_kicked", {}, room=sid)
-                logger.info("Sync blocked for kicked participant  room=%s  sid=%s", room, sid)
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.request_sync.kicked",
+                    "request_sync blocked because participant is kicked",
+                    **build_log_extra(quiz=quiz, participant=participant, sid=sid),
+                )
                 return
 
             is_finished = quiz.status == "finished"
-            logger.info(
-                "Sync sent  name=%s  room=%s  status=%s  question=%s",
-                participant.name if participant else "unknown",
-                room,
-                quiz.status,
-                quiz.current_question,
+            log_event(
+                logger,
+                logging.INFO,
+                "socket.request_sync.completed",
+                "Sync payload sent",
+                **build_log_extra(quiz=quiz, participant=participant, sid=sid, question=quiz.current_question),
+                status=quiz.status,
             )
 
             answers_history = participant.answers_history if participant else {}
@@ -71,7 +100,6 @@ def register_sync_handlers(sio_manager):
             )
 
             if is_finished:
-                # Для finished-сессии сразу отдаём frozen leaderboard и все правильные ответы.
                 players = sort_result_players(quiz.players)
                 await sio_manager.emit(
                     "show_results",
@@ -82,7 +110,6 @@ def register_sync_handlers(sio_manager):
                     room=sid,
                 )
             elif quiz.status == "playing" and participant and participant.is_host:
-                # Хосту во время игры дополнительно нужен список отключившихся и текущее состояние ответов.
                 disconnected_names = [
                     item.name
                     for item in quiz.players
@@ -93,10 +120,17 @@ def register_sync_handlers(sio_manager):
                 await sio_manager.emit("init_disconnected", {"players": disconnected_names}, room=sid)
                 await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=sid)
 
-    @sio_manager.on("get_update")
+    @logged_socket_handler(sio_manager, "get_update", logger)
     async def get_update(sid, room):
-        """Отправляет хосту актуальный список ответов без полного sync payload."""
+        """Returns just the latest answer list without the full sync payload."""
         if not rate_limiter.is_allowed(sid):
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.get_update.rate_limited",
+                "get_update rejected by rate limiter",
+                sid=sid,
+            )
             return
         if not validate_quiz_code(room):
             return
@@ -105,5 +139,12 @@ def register_sync_handlers(sio_manager):
             quiz = get_quiz_by_code(db, room)
             if quiz:
                 players = get_players_in_quiz(db, quiz.id)
-                logger.debug("get_update  room=%s  players=%d", room, len(players))
+                log_event(
+                    logger,
+                    logging.DEBUG,
+                    "socket.get_update.completed",
+                    "Incremental answer update sent",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                    players=len(players),
+                )
                 await sio_manager.emit("update_answers", players, room=sid)
