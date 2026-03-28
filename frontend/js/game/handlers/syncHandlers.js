@@ -42,6 +42,22 @@ function registerSyncStateHandler(socket) {
 }
 
 /**
+ * Регистрирует постоянное состояние подключения хоста для player UI.
+ *
+ * @param {Object} socket - Socket.io сокет
+ * @returns {void}
+ */
+function registerHostConnectionStateHandler(socket) {
+  socket.on("host_connection_state", (data) => {
+    if (role === "host") {
+      return;
+    }
+
+    setHostOfflineBannerVisible(Boolean(data?.hostOffline));
+  });
+}
+
+/**
  * Применяет синхронизированное состояние
  * @private
  * @param {Object} data - Данные состояния
@@ -64,6 +80,10 @@ function _applyStateSync(data) {
 
   if (data.answersHistory) {
     myAnswersHistory = data.answersHistory;
+  }
+
+  if (role !== "host") {
+    setHostOfflineBannerVisible(Boolean(data.hostOffline));
   }
 
   // Если игра уже завершена, показываем финальный экран
@@ -174,4 +194,5 @@ function _syncHostUI(data) {
  */
 function initSyncHandlers(socket) {
   registerSyncStateHandler(socket);
+  registerHostConnectionStateHandler(socket);
 }

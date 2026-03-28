@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from backend.models import Quiz, Player, User, UserInstallation
 from backend.sockets.lobby import register_lobby_handlers
 from backend.cache import _quiz_cache
+from backend.runtime_state import connection_registry
+from backend.services import hash_secret
 
 
 class FakeSioManager:
@@ -270,6 +272,42 @@ class TestJoinRoom:
         if player:
             assert "<" not in player.name
 
+    @allure.title("Host on player route reconnects as host")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_host_joining_as_player_restores_host_mode(self, sio, db_session, sample_quiz, sample_host):
+        sample_quiz.host_secret_hash = hash_secret("host-secret")
+        sample_host.sid = None
+        sample_host.status = "disconnected"
+        connection_registry.unbind_sid("host-sid-001")
+        db_session.commit()
+
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "host-restored-sid", {
+                "room": sample_quiz.code,
+                "name": "Host as player",
+                "role": "player",
+                "host_token": "host-secret",
+            })
+
+        db_session.refresh(sample_host)
+        assert sample_host.sid == "host-restored-sid"
+        assert sample_host.is_host is True
+        assert sample_host.status == "joined"
+
+        all_participants = db_session.query(Player).filter(Player.quiz_id == sample_quiz.id).all()
+        assert len(all_participants) == 1
+
+        credentials_payload = _get_emitted_payload(sio, "session_credentials")
+        assert credentials_payload["role"] == "host"
+        assert credentials_payload["host_token"]
+
+        host_state_payload = _get_emitted_payload(sio, "host_connection_state")
+        assert host_state_payload["hostOffline"] is False
+
 
 @allure.feature("Socket.IO")
 @allure.story("Join Room Credentials")
@@ -357,6 +395,19 @@ class TestDisconnect:
 
         db_session.refresh(sample_player)
         assert sample_player.sid is None
+
+    @allure.title("Host disconnect emits host offline state")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_host_disconnect_emits_host_offline_state(self, sio, db_session, sample_quiz, sample_host, sample_player):
+        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("disconnect", "host-sid-001")
+
+        payload = _get_emitted_payload(sio, "host_connection_state")
+        assert payload["hostOffline"] is True
 
 
 @allure.feature("Socket.IO")

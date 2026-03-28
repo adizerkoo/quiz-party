@@ -197,11 +197,36 @@ def _find_left_participant(
     return None
 
 
+def _find_host_participant(quiz: models.Quiz) -> models.Player | None:
+    """Возвращает host-participant для текущей игровой сессии, если он уже существует."""
+    return next(
+        (
+            participant
+            for participant in quiz.players
+            if participant.is_host and participant.status != "kicked"
+        ),
+        None,
+    )
+
+
+def _should_restore_host_mode(
+    quiz: models.Quiz,
+    *,
+    requested_role: str | None,
+    submitted_host_token: str | None,
+) -> bool:
+    """Переводит player-вход в host flow только при валидном host token этой комнаты."""
+    if requested_role == "host":
+        return True
+    return verify_secret(submitted_host_token, quiz.host_secret_hash)
+
+
 async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player, host_token: str | None, participant_token: str) -> None:
     """Отправляет клиенту актуальные reconnect/host credentials после join."""
     await sio_manager.emit(
         "session_credentials",
         {
+            "role": participant.role,
             "participant_id": participant.public_id,
             "participant_token": participant_token,
             "host_token": host_token,
@@ -218,6 +243,14 @@ def register_lobby_handlers(sio_manager):
 
     async def _emit_resume_unavailable(target_sid: str, *, reason: str):
         await sio_manager.emit("resume_unavailable", {"reason": reason}, room=target_sid)
+
+    async def _emit_host_connection_state(room: str, *, host_offline: bool, target_sid: str | None = None):
+        """Шлёт клиентам текущее состояние подключения хоста для постоянного индикатора."""
+        await sio_manager.emit(
+            "host_connection_state",
+            {"hostOffline": host_offline},
+            room=target_sid or room,
+        )
 
     async def _schedule_host_timeout(quiz_id: int, quiz_code: str, expected_host_left_at):
         await asyncio.sleep(HOST_TIMEOUT.total_seconds())
@@ -322,6 +355,7 @@ def register_lobby_handlers(sio_manager):
             )
 
             if quiz.status in ("waiting", "playing") and participant.is_host:
+                await _emit_host_connection_state(quiz.code, host_offline=True)
                 previous_timeout_task = _pending_host_timeouts.pop(quiz.id, None)
                 if previous_timeout_task:
                     previous_timeout_task.cancel()
@@ -499,8 +533,8 @@ def register_lobby_handlers(sio_manager):
             )
             return
 
-        role = data.get("role")
-        is_host = role == "host"
+        requested_role = data.get("role")
+        is_host = requested_role == "host"
         requested_name = _normalized_name(str(data.get("name", "Игрок")))
         preferred_emoji = data.get("emoji") if data.get("emoji") in PLAYER_EMOJIS else None
         submitted_host_token = data.get("host_token")
@@ -532,6 +566,17 @@ def register_lobby_handlers(sio_manager):
                 await _emit_game_cancelled(room, quiz, target_sid=sid)
                 return
 
+            # Если player-маршрут открывает сам хост со своим host token,
+            # не создаём дубликат игрока, а возвращаем в host flow.
+            role_was_corrected = False
+            if _should_restore_host_mode(
+                quiz,
+                requested_role=requested_role,
+                submitted_host_token=submitted_host_token,
+            ):
+                role_was_corrected = requested_role != "host"
+                is_host = True
+
             resolved_user = None
             if requested_user_id is not None:
                 resolved_user = db.query(models.User).filter(models.User.id == requested_user_id).first()
@@ -560,14 +605,7 @@ def register_lobby_handlers(sio_manager):
                     )
                     return
 
-                existing_host = next(
-                    (
-                        item
-                        for item in quiz.players
-                        if item.is_host and item.status != "kicked"
-                    ),
-                    None,
-                )
+                existing_host = _find_host_participant(quiz)
                 if existing_host and connection_registry.is_connected(existing_host.id):
                     await sio_manager.emit("host_already_connected", {}, room=sid)
                     log_event(
@@ -825,6 +863,8 @@ def register_lobby_handlers(sio_manager):
             await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
 
             # Отдельное событие реконнекта шлём только если игрок вернулся уже в активную игру.
+            if participant.is_host and quiz.status in ("waiting", "playing"):
+                await _emit_host_connection_state(room, host_offline=False)
             if quiz.status == "playing" and not participant.is_host and old_task is None and submitted_participant_token:
                 await sio_manager.emit(
                     "player_reconnected",
@@ -841,6 +881,7 @@ def register_lobby_handlers(sio_manager):
                 join_message,
                 **build_log_extra(quiz=quiz, participant=participant, sid=sid),
                 reconnect=is_reconnect,
+                role_corrected=role_was_corrected,
                 assigned_name=name_assigned,
                 status=quiz.status,
             )

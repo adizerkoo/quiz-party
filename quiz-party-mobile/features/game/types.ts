@@ -96,6 +96,7 @@ export type GameSyncState = {
   answersHistory?: GameAnswersHistory;
   score?: number;
   emoji?: string;
+  hostOffline?: boolean;
 };
 
 export type NativeGameRouteParams = {

@@ -46,6 +46,29 @@
     border-bottom-color: #6c5ce7;
 }
 
+.host-offline-banner {
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255, 214, 165, 0.9), rgba(255, 241, 214, 0.98));
+    border: 1px solid rgba(253, 160, 133, 0.32);
+    box-shadow: 0 10px 24px rgba(253, 160, 133, 0.14);
+}
+
+.host-offline-banner-title {
+    color: #b05a32;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.host-offline-banner-text {
+    margin-top: 6px;
+    color: #7f624f;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
 /* --- Responsive --- */
 
 @media (max-width: 480px) {

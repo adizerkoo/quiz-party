@@ -11,6 +11,16 @@ function renderQuizTitle() {
 }
 
 
+// Собирает URL нужного игрового режима, чтобы аккуратно переключать player <-> host экран.
+function buildGameUrl(targetRole) {
+  const params = new URLSearchParams({
+    room: roomCode,
+    role: targetRole,
+  });
+  return `game.html?${params.toString()}`;
+}
+
+
 function refreshUI() {
   renderProgress();
   if (role === "host") {
@@ -40,7 +50,8 @@ function refreshUI() {
 }
 
 
-async function checkResumeAccess(latestCredentials, currentProfile, installationPublicId) {
+// Проверяет на сервере, можно ли ещё использовать сохранённые credentials для выбранной роли.
+async function checkResumeAccessForRole(targetRole, latestCredentials, currentProfile, installationPublicId) {
   if (!latestCredentials) {
     return { canProceed: true };
   }
@@ -52,7 +63,7 @@ async function checkResumeAccess(latestCredentials, currentProfile, installation
       sessions: [
         {
           room_code: roomCode,
-          role,
+          role: targetRole,
           participant_id: latestCredentials.participant_id || null,
           participant_token: latestCredentials.participant_token || null,
           host_token: latestCredentials.host_token || null,
@@ -81,7 +92,7 @@ async function checkResumeAccess(latestCredentials, currentProfile, installation
     if (latestCredentials.storageKey) {
       window.QuizUserProfile?.clearStoredSessionCredentialsByKey?.(latestCredentials.storageKey);
     } else {
-      window.QuizUserProfile?.clearStoredSessionCredentials?.({ roomCode, role });
+      window.QuizUserProfile?.clearStoredSessionCredentials?.({ roomCode, role: targetRole });
     }
   }
 
@@ -94,6 +105,52 @@ async function checkResumeAccess(latestCredentials, currentProfile, installation
     reason: session.reason || null,
     cancelReason: session.cancel_reason || null,
   };
+}
+
+
+async function checkResumeAccess(latestCredentials, currentProfile, installationPublicId) {
+  return checkResumeAccessForRole(role, latestCredentials, currentProfile, installationPublicId);
+}
+
+
+// Если текущий player-экран на самом деле открывает хост с валидными host credentials,
+// заранее переводим его в host-режим и не даём создать лишнего игрока.
+async function maybeRestoreHostMode(currentProfile, installationPublicId) {
+  if (role === "host") {
+    return false;
+  }
+
+  const hostCredentials =
+    window.QuizUserProfile?.getStoredSessionCredentials?.({
+      roomCode,
+      role: "host",
+      installation_public_id:
+        currentProfile?.installation_public_id ||
+        installationPublicId,
+    }) || null;
+
+  if (!hostCredentials?.host_token) {
+    return false;
+  }
+
+  try {
+    const hostResumeAccess = await checkResumeAccessForRole(
+      "host",
+      hostCredentials,
+      currentProfile,
+      installationPublicId,
+    );
+
+    if (!hostResumeAccess.canProceed) {
+      return false;
+    }
+
+    window.QuizUserProfile?.clearStoredSessionCredentials?.({ roomCode, role: "player" });
+    window.location.replace(buildGameUrl("host"));
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 
@@ -130,6 +187,10 @@ async function init() {
     window.QuizUserProfile?.setPlayerSessionFromProfile?.(currentProfile);
     playerName = currentProfile.username;
     myEmoji = currentProfile.avatar_emoji || myEmoji;
+  }
+
+  if (await maybeRestoreHostMode(currentProfile, installationPublicId)) {
+    return;
   }
 
   try {
@@ -174,15 +235,26 @@ async function init() {
         payload?.installation_public_id ||
         currentProfile?.installation_public_id ||
         installationPublicId;
+      const resolvedRole =
+        payload?.role === "host" || (role !== "host" && payload?.host_token)
+          ? "host"
+          : role;
 
       window.QuizUserProfile?.saveStoredSessionCredentials?.({
         roomCode,
-        role,
+        role: resolvedRole,
         participant_id: payload?.participant_id || null,
         participant_token: payload?.participant_token || null,
         host_token: payload?.host_token || null,
         installation_public_id: resolvedInstallationPublicId,
       });
+
+      if (resolvedRole !== role) {
+        window.QuizUserProfile?.clearStoredSessionCredentials?.({ roomCode, role });
+        socket.disconnect();
+        window.location.replace(buildGameUrl(resolvedRole));
+        return;
+      }
 
       if (resolvedInstallationPublicId) {
         currentProfile =
@@ -213,6 +285,18 @@ async function init() {
             currentProfile?.installation_public_id ||
             installationPublicId,
         }) || null;
+      const fallbackHostCredentials =
+        role !== "host"
+          ? (
+            window.QuizUserProfile?.getStoredSessionCredentials?.({
+              roomCode,
+              role: "host",
+              installation_public_id:
+                currentProfile?.installation_public_id ||
+                installationPublicId,
+            }) || null
+          )
+          : null;
 
       socket.emit("join_room", {
         room: roomCode,
@@ -220,7 +304,10 @@ async function init() {
         role: role,
         emoji: currentProfile?.avatar_emoji,
         user_id: currentProfile?.id,
-        host_token: role === "host" ? currentCredentials?.host_token : undefined,
+        host_token:
+          role === "host"
+            ? currentCredentials?.host_token
+            : fallbackHostCredentials?.host_token,
         participant_token: role !== "host" ? currentCredentials?.participant_token : undefined,
         installation_public_id:
           currentProfile?.installation_public_id ||

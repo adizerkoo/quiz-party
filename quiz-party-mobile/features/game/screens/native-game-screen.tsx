@@ -77,6 +77,7 @@ export function NativeGameScreen({ role, roomCode }: NativeGameScreenProps) {
             answerInputError={controller.answerInputError}
             currentQuestionData={controller.currentPlayerQuestionData}
             gameStatus={controller.gameStatus}
+            isHostOffline={controller.isHostOffline}
             leaveDisabled={controller.leavePending}
             myAnswersHistory={controller.myAnswersHistory}
             myEmoji={controller.myEmoji}

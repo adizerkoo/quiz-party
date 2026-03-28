@@ -65,7 +65,7 @@ export const menuTheme = {
     dangerText: '#ff4757',
 
     // Цвет бейджа эмодзи в баннере профиля.
-    bannerYellow: '#fdcb6e',
+    bannerYellow: '#a3f1ff',
     bannerYellowSoft: '#ffeaa7',
 
     // Цвета декоративных шаров на фоне.

@@ -12,6 +12,7 @@ let maxReachedQuestion = 0;
 let playerViewQuestion = 0;
 let myAnswersHistory = {};
 let currentQuestions = [];
+let isHostOffline = false;
 
 const urlParams = new URLSearchParams(window.location.search);
 const roomCode = urlParams.get("room");

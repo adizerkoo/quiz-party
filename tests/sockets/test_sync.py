@@ -161,6 +161,27 @@ class TestRequestSync:
     @allure.title("Sync для несуществующей комнаты — ничего не отправляется")
     @allure.severity(allure.severity_level.MINOR)
     @pytest.mark.asyncio
+    @allure.title("Sync for player includes host offline flag")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_sync_for_player_includes_host_offline_flag(self, sio, db_session, playing_quiz, sample_host, sample_player):
+        sample_host.sid = None
+        sample_host.status = "disconnected"
+        connection_registry.unbind_sid("host-sid-001")
+        db_session.commit()
+
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("request_sync", "player-sid-001", {"room": playing_quiz.code})
+        finally:
+            mock.stop()
+
+        sync_call = next(call for call in sio.emit.call_args_list if call.args[0] == "sync_state")
+        assert sync_call.args[1]["hostOffline"] is True
+
+    @allure.title("Sync missing quiz emits nothing")
+    @allure.severity(allure.severity_level.MINOR)
+    @pytest.mark.asyncio
     async def test_sync_missing_quiz(self, sio, db_session):
         """Несуществующий room → emit не вызывается."""
         mock = _patch_db(db_session)

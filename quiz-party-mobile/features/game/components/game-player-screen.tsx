@@ -9,6 +9,7 @@ type GamePlayerScreenProps = {
   answerInputError: boolean;
   currentQuestionData?: GameQuestion;
   gameStatus: GameStatus;
+  isHostOffline: boolean;
   leaveDisabled: boolean;
   myAnswersHistory: Record<string, string>;
   myEmoji: string;
@@ -52,6 +53,7 @@ export function GamePlayerScreen({
   answerInputError,
   currentQuestionData,
   gameStatus,
+  isHostOffline,
   leaveDisabled,
   myAnswersHistory,
   myEmoji,
@@ -84,6 +86,13 @@ export function GamePlayerScreen({
           <Text style={styles.quizSub}>QUIZ PARTY</Text>
           <Text style={styles.quizTitle}>{quizTitle}</Text>
         </View>
+
+        {isHostOffline ? (
+          <View style={styles.hostOfflineBanner}>
+            <Text style={styles.hostOfflineTitle}>Хост оффлайн</Text>
+            <Text style={styles.hostOfflineText}>Ждём, пока ведущий вернётся в игру.</Text>
+          </View>
+        ) : null}
 
         {gameStatus === 'waiting' ? (
           <View style={styles.sectionCard}>
@@ -244,6 +253,17 @@ const styles = StyleSheet.create({
   quizHeader: { alignItems: 'center', marginBottom: 14 },
   quizSub: { color: gameTheme.colors.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: 1.6 },
   quizTitle: { marginTop: 4, color: gameTheme.colors.pinkDark, fontSize: 28, lineHeight: 34, fontWeight: '900', textAlign: 'center' },
+  hostOfflineBanner: {
+    marginBottom: 14,
+    borderRadius: gameTheme.radius.section,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(253, 160, 133, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(253, 160, 133, 0.28)',
+  },
+  hostOfflineTitle: { color: '#b05a32', fontSize: 15, fontWeight: '900' },
+  hostOfflineText: { marginTop: 6, color: '#7f624f', fontSize: 14, lineHeight: 20, fontWeight: '700' },
   sectionCard: {
     borderRadius: gameTheme.radius.card,
     paddingHorizontal: 16,

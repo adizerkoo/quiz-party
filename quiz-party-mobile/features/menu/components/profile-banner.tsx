@@ -68,6 +68,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 9,
     borderRadius: 18,
+    borderColor: menuTheme.colors.joinBorder,
+    borderWidth: 2,
     backgroundColor: 'rgba(255, 255, 255, 0.88)',
     shadowColor: menuTheme.colors.joinBorder,
     shadowOpacity: 0.14,

@@ -198,6 +198,18 @@ function validateAndSend() {
 }
 
 
+// Показывает или скрывает постоянный баннер о том, что ведущий временно оффлайн.
+function setHostOfflineBannerVisible(nextVisible) {
+  isHostOffline = Boolean(nextVisible);
+  const banner = document.getElementById("host-offline-banner");
+  if (!banner) {
+    return;
+  }
+
+  banner.style.display = isHostOffline ? "block" : "none";
+}
+
+
 function openLeaveGameConfirm() {
   const overlay = document.getElementById("leave-game-overlay");
   if (overlay) {

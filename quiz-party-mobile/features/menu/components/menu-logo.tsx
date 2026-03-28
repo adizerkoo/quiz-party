@@ -131,6 +131,7 @@ const styles = StyleSheet.create({
   wrap: {
     width: '100%',
     alignItems: 'center',
+    marginTop: 80,
     marginBottom: 40,
     paddingVertical: 30,
   },
@@ -141,10 +142,10 @@ const styles = StyleSheet.create({
   halo: {
     position: 'absolute',
     top: 8,
-    width: 280,
-    height: 120,
+    width: 320,
+    height: 160,
     borderRadius: 999,
-    backgroundColor: 'rgba(108, 92, 231, 0.12)',
+    backgroundColor: 'rgb(255, 255, 255)',
   },
 
   // Главный логотип.
@@ -157,7 +158,7 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     textAlign: 'center',
     textTransform: 'uppercase',
-    textShadowColor: 'rgba(108, 92, 231, 0.15)',
+    textShadowColor: 'rgba(30, 0, 255, 0.15)',
     textShadowRadius: 25,
   },
 

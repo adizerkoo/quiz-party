@@ -100,6 +100,20 @@ def register_sync_handlers(sio_manager):
 
             answers_history = participant.answers_history if participant else {}
             current_answer = answers_history.get(str(quiz.current_question))
+            host_participant = next(
+                (
+                    item
+                    for item in quiz.players
+                    if item.is_host and item.status != "kicked"
+                ),
+                None,
+            )
+            # Для player UI отдаём текущее состояние подключения хоста,
+            # чтобы баннер корректно восстанавливался после refresh/reconnect.
+            host_offline = bool(
+                host_participant is not None
+                and not connection_registry.is_connected(host_participant.id)
+            )
             await sio_manager.emit(
                 "sync_state",
                 {
@@ -111,6 +125,7 @@ def register_sync_handlers(sio_manager):
                     "questions": serialize_quiz_questions(quiz, include_correct=True) if is_finished else None,
                     "playerAnswer": current_answer,
                     "answersHistory": answers_history,
+                    "hostOffline": host_offline,
                     "score": participant.score if participant else 0,
                     "emoji": participant.emoji if participant else "👤",
                 },

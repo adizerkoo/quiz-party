@@ -84,6 +84,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
   const [answerDraft, setAnswerDraft] = useState('');
   const [answerInputError, setAnswerInputError] = useState(false);
   const [disconnectedNames, setDisconnectedNames] = useState<string[]>([]);
+  const [isHostOffline, setIsHostOffline] = useState(false);
 
   useEffect(() => {
     playerNameRef.current = playerName;
@@ -138,9 +139,15 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     clearGameSessionCredentials(roomCode, role);
   }
 
+  // Собирает маршрут нужного игрового режима, чтобы безопасно переключать player <-> host экран.
+  function buildRoleRoute(targetRole: GameRole) {
+    return `/${targetRole === 'host' ? 'host-game' : 'player-game'}?room=${encodeURIComponent(roomCode)}` as Href;
+  }
+
   function showBlocked(nextState: GameBlockedState) {
     disconnectSocket();
     setIsConnected(false);
+    setIsHostOffline(false);
     setConfirmVisible(false);
     setLeaveConfirmVisible(false);
     setLeavePending(false);
@@ -376,7 +383,11 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     sendAnswer(option);
   }
 
-  async function validateCurrentResumeEligibility(params: {
+  // Проверяет сохранённые credentials на сервере для указанной роли
+  // и при необходимости очищает именно их, а не только текущий экран.
+  async function validateResumeEligibilityForRole(
+    targetRole: GameRole,
+    params: {
     participantId?: string | null;
     participantToken?: string | null;
     hostToken?: string | null;
@@ -384,7 +395,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     userId?: number | null;
   }) {
     if (!params.participantId && !params.participantToken && !params.hostToken) {
-      return { canProceed: true };
+      return { canProceed: true, verified: false };
     }
 
     try {
@@ -392,7 +403,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         sessions: [
           {
             roomCode,
-            role,
+            role: targetRole,
             participantId: params.participantId ?? null,
             participantToken: params.participantToken ?? null,
             hostToken: params.hostToken ?? null,
@@ -405,24 +416,25 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
 
       const session = Array.isArray(response.sessions) ? response.sessions[0] : null;
       if (!session) {
-        return { canProceed: true };
+        return { canProceed: true, verified: false };
       }
 
       if (session.clear_credentials) {
-        clearCurrentSessionCredentials();
+        clearGameSessionCredentials(roomCode, targetRole);
       }
 
       if (session.can_resume) {
-        return { canProceed: true };
+        return { canProceed: true, verified: true };
       }
 
       return {
         canProceed: false,
+        verified: true,
         reason: session.reason ?? null,
         cancelReason: session.cancel_reason ?? null,
       };
     } catch (error) {
-      return { canProceed: true };
+      return { canProceed: true, verified: false };
     }
   }
 
@@ -443,6 +455,10 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         activeProfile?.installationPublicId ??
         getOrCreateMenuInstallationPublicId();
       const currentCredentials = getGameSessionCredentials(roomCode, role);
+      const fallbackHostCredentials =
+        role === 'player'
+          ? getGameSessionCredentials(roomCode, 'host')
+          : null;
 
       if (role === 'player' && !activeProfile) {
         showBlocked(buildBlockedState('missing_profile'));
@@ -459,8 +475,34 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
 
       setIsBootstrapping(true);
       setBlockedState(null);
+      setIsHostOffline(false);
 
       try {
+        if (role === 'player' && fallbackHostCredentials?.hostToken) {
+          // Если player-экран открывает сам хост со своими сохранёнными токенами,
+          // заранее переводим его в host-режим и не даём создать лишнего игрока.
+          const hostResumeAccess = await validateResumeEligibilityForRole('host', {
+            participantId: fallbackHostCredentials.participantId ?? null,
+            participantToken: fallbackHostCredentials.participantToken ?? null,
+            hostToken: fallbackHostCredentials.hostToken ?? null,
+            installationPublicId:
+              fallbackHostCredentials.installationPublicId ??
+              activeProfile?.installationPublicId ??
+              installationPublicId,
+            userId: activeProfile?.id ?? null,
+          });
+
+          if (cancelled) {
+            return;
+          }
+
+          if (hostResumeAccess.canProceed && hostResumeAccess.verified !== false) {
+            clearGameSessionCredentials(roomCode, 'player');
+            router.replace(buildRoleRoute('host'));
+            return;
+          }
+        }
+
         const quiz = await fetchGameQuiz(roomCode, role);
 
         if (cancelled) {
@@ -473,7 +515,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
           return;
         }
 
-        const resumeAccess = await validateCurrentResumeEligibility({
+        const resumeAccess = await validateResumeEligibilityForRole(role, {
           participantId: currentCredentials?.participantId ?? null,
           participantToken: currentCredentials?.participantToken ?? null,
           hostToken: currentCredentials?.hostToken ?? null,
@@ -518,6 +560,10 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
             latestProfile?.installationPublicId ??
             latestCredentials?.installationPublicId ??
             getOrCreateMenuInstallationPublicId();
+          const latestFallbackHostCredentials =
+            role === 'player'
+              ? getGameSessionCredentials(roomCode, 'host')
+              : null;
 
           socket.emit('join_room', {
             room: roomCode,
@@ -526,7 +572,10 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
             emoji: role === 'player' ? latestProfile?.emoji : undefined,
             user_id: latestProfile?.id ?? undefined,
             installation_public_id: latestInstallationPublicId,
-            host_token: role === 'host' ? latestCredentials?.hostToken ?? undefined : undefined,
+            host_token:
+              role === 'host'
+                ? latestCredentials?.hostToken ?? undefined
+                : latestFallbackHostCredentials?.hostToken ?? undefined,
             participant_token: role === 'player' ? latestCredentials?.participantToken ?? undefined : undefined,
             device: Platform.OS,
             browser: 'expo-native',
@@ -545,12 +594,17 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         });
 
         socket.on('session_credentials', (data: {
+          role?: GameRole | null;
           participant_id?: string | null;
           participant_token?: string | null;
           host_token?: string | null;
           installation_public_id?: string | null;
         }) => {
-          const latestCredentials = getGameSessionCredentials(roomCode, role);
+          const resolvedRole =
+            data.role === 'host' || (role !== 'host' && data.host_token)
+              ? 'host'
+              : role;
+          const latestCredentials = getGameSessionCredentials(roomCode, resolvedRole);
           const resolvedInstallationPublicId =
             data.installation_public_id ??
             latestCredentials?.installationPublicId ??
@@ -559,12 +613,19 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
 
           saveGameSessionCredentials({
             roomCode,
-            role,
+            role: resolvedRole,
             participantId: data.participant_id ?? null,
             participantToken: data.participant_token ?? null,
             hostToken: data.host_token ?? null,
             installationPublicId: resolvedInstallationPublicId,
           });
+
+          if (resolvedRole !== role) {
+            clearGameSessionCredentials(roomCode, role);
+            disconnectSocket();
+            router.replace(buildRoleRoute(resolvedRole));
+            return;
+          }
 
           void mergeMenuSessionProfileIdentity({
             id: activeProfile?.id ?? null,
@@ -656,6 +717,14 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
           emitGetUpdate();
         });
 
+        socket.on('host_connection_state', (data: { hostOffline?: boolean }) => {
+          if (role === 'host') {
+            return;
+          }
+
+          setIsHostOffline(Boolean(data?.hostOffline));
+        });
+
         socket.on('sync_state', (data: {
           currentQuestion: number;
           maxReachedQuestion?: number;
@@ -664,12 +733,14 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
           answersHistory?: Record<string, string>;
           emoji?: string;
           questions?: GameQuestion[] | null;
+          hostOffline?: boolean;
         }) => {
           setGameStatus(data.status);
           setCurrentQuestion(data.currentQuestion);
           setRealGameQuestion(data.currentQuestion);
           setPlayerViewQuestion(data.currentQuestion);
           setMaxReachedQuestion(data.maxReachedQuestion ?? data.currentQuestion);
+          setIsHostOffline(role === 'host' ? false : Boolean(data.hostOffline));
 
           if (data.emoji) {
             setMyEmoji(data.emoji);
@@ -798,6 +869,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     hostNoPlayersWarningVisible,
     isBootstrapping,
     isConnected,
+    isHostOffline,
     leaveConfirmVisible,
     leavePending,
     maxReachedQuestion,
