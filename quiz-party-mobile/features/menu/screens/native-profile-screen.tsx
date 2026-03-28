@@ -332,7 +332,7 @@ export function NativeProfileScreen() {
 
     router.push({
       pathname: '/player-game' as Href,
-      params: { room: entry.quiz_code },
+      params: { room: entry.quiz_code, source: 'history' },
     } as Href);
   }
 
