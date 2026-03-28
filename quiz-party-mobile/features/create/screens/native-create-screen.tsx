@@ -727,6 +727,7 @@ const styles = StyleSheet.create({
     color: createTheme.colors.purple,
     fontSize: 14,
     fontWeight: '700',
+    marginBottom: 10,
   },
 
   // Небольшая кнопка "Все идеи".
