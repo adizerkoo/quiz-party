@@ -23,14 +23,14 @@ from .logging_config import build_log_extra, log_event, log_game_event
 from .security import sanitize_text, validate_player_name
 from .services import (
     DevicePayload,
-    build_results_payload,
+    build_quiz_results_response,
     create_quiz_session,
     ensure_installation,
     evaluate_quiz_state,
     evaluate_resume_eligibility,
+    list_user_history,
     load_quiz_graph,
     serialize_quiz_questions,
-    sort_result_players,
 )
 
 
@@ -222,6 +222,14 @@ def register_routes(app):
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
+    @app.get("/api/v1/users/{user_id}/history", response_model=list[schemas.UserHistoryEntry])
+    def get_user_history(user_id: int, db: Session = Depends(database.get_db)):
+        """Returns the user's finished/cancelled game history for the profile UI."""
+        user = db.query(models.User.id).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return list_user_history(db, user_id=user_id)
+
     @app.put("/api/v1/users/{user_id}", response_model=schemas.UserResponse)
     def update_user(user_id: int, user_data: schemas.UserUpdate, db: Session = Depends(database.get_db)):
         """Updates the user profile without changing its identity."""
@@ -332,7 +340,7 @@ def register_routes(app):
             "cancel_reason": quiz.cancel_reason,
         }
 
-    @app.get("/api/v1/quizzes/{code}/results")
+    @app.get("/api/v1/quizzes/{code}/results", response_model=schemas.QuizResultsResponse)
     def get_quiz_results(code: str, db: Session = Depends(database.get_db)):
         """Returns final results for a finished game session."""
         quiz = (
@@ -348,18 +356,7 @@ def register_routes(app):
             db.refresh(quiz)
         if quiz.status != "finished":
             raise HTTPException(status_code=400, detail="Quiz is not finished yet")
-
-        players = sort_result_players(quiz.players)
-        return {
-            "code": quiz.code,
-            "title": quiz.title,
-            "status": quiz.status,
-            "started_at": quiz.started_at,
-            "finished_at": quiz.finished_at,
-            "total_questions": quiz.total_questions,
-            "questions": serialize_quiz_questions(quiz, include_correct=True),
-            "results": build_results_payload(players),
-        }
+        return build_quiz_results_response(quiz)
 
     @app.post("/api/v1/resume/check", response_model=schemas.ResumeCheckResponse)
     def check_resume(payload: schemas.ResumeCheckRequest, db: Session = Depends(database.get_db)):

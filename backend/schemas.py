@@ -41,6 +41,63 @@ class QuestionSchema(BaseModel):
         return value
 
 
+class QuizQuestionPayload(BaseModel):
+    """Question payload used in result/history responses."""
+
+    text: str
+    type: str
+    correct: Optional[str] = None
+    options: Optional[List[str]] = None
+
+
+class QuizResultPlayer(BaseModel):
+    """One leaderboard row in the unified final-results contract."""
+
+    name: str
+    score: int
+    final_rank: Optional[int] = None
+    emoji: Optional[str] = None
+    answers: dict[str, str] = Field(default_factory=dict)
+    answer_times: dict[str, float] = Field(default_factory=dict)
+
+
+class QuizResultsSnapshot(BaseModel):
+    """Stored snapshot body reused by the final-results API."""
+
+    results: List[QuizResultPlayer] = Field(default_factory=list)
+    questions: List[QuizQuestionPayload] = Field(default_factory=list)
+
+
+class QuizResultsResponse(BaseModel):
+    """Unified payload for the final-results screen on every client."""
+
+    code: str
+    title: str
+    status: str
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    total_questions: int
+    questions: List[QuizQuestionPayload] = Field(default_factory=list)
+    results: List[QuizResultPlayer] = Field(default_factory=list)
+
+
+class UserHistoryEntry(BaseModel):
+    """One game in the user profile history."""
+
+    quiz_code: str
+    title: str
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    game_status: str
+    cancel_reason: Optional[str] = None
+    participant_status: str
+    score: Optional[int] = None
+    final_rank: Optional[int] = None
+    is_winner: bool = False
+    winner_names: List[str] = Field(default_factory=list)
+    can_open_results: bool = False
+
+
 class QuizCreate(BaseModel):
     """Payload для создания нового шаблона и первой игровой сессии."""
 

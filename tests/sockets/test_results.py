@@ -123,8 +123,8 @@ class TestFinishGame:
         assert sample_player.final_rank == 1
         assert tied_player.final_rank == 1
 
-        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
-        winners = [item for item in show_call.args[1]["results"] if item["final_rank"] == 1]
+        db_session.refresh(playing_quiz)
+        winners = [item for item in playing_quiz.results_snapshot["results"] if item["final_rank"] == 1]
         assert {item["name"] for item in winners} == {sample_player.name, tied_player.name}
 
     @allure.title("show_results содержит final_rank в payload")
@@ -147,11 +147,13 @@ class TestFinishGame:
 
         show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
         data = show_call.args[1]
-        assert "results" in data
-        assert "questions" in data
-        assert len(data["results"]) >= 1
-        assert data["results"][0]["name"] == sample_player.name
-        assert data["results"][0]["final_rank"] == 1
+        assert data == {"code": playing_quiz.code, "status": "finished"}
+
+        db_session.refresh(playing_quiz)
+        assert playing_quiz.results_snapshot is not None
+        assert len(playing_quiz.results_snapshot["results"]) >= 1
+        assert playing_quiz.results_snapshot["results"][0]["name"] == sample_player.name
+        assert playing_quiz.results_snapshot["results"][0]["final_rank"] == 1
 
     @allure.title("После finish все подключённые участники отключаются")
     @allure.severity(allure.severity_level.NORMAL)
@@ -214,8 +216,8 @@ class TestFinishGame:
         finally:
             mock.stop()
 
-        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
-        names = [item["name"] for item in show_call.args[1]["results"]]
+        db_session.refresh(playing_quiz)
+        names = [item["name"] for item in playing_quiz.results_snapshot["results"]]
         assert sample_host.name not in names
 
     @allure.title("Несколько игроков отсортированы по score DESC")
@@ -240,6 +242,6 @@ class TestFinishGame:
         finally:
             mock.stop()
 
-        show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
-        scores = [item["score"] for item in show_call.args[1]["results"]]
+        db_session.refresh(playing_quiz)
+        scores = [item["score"] for item in playing_quiz.results_snapshot["results"]]
         assert scores == sorted(scores, reverse=True)

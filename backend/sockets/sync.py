@@ -11,10 +11,7 @@ from ..runtime_state import connection_registry
 from ..security import rate_limiter, validate_quiz_code
 from ..services import (
     build_game_cancelled_payload,
-    build_results_payload,
     evaluate_quiz_state,
-    serialize_quiz_questions,
-    sort_result_players,
 )
 
 
@@ -122,7 +119,7 @@ def register_sync_handlers(sio_manager):
                     "status": quiz.status,
                     "started_at": str(quiz.started_at) if quiz.started_at else None,
                     "finished_at": str(quiz.finished_at) if quiz.finished_at else None,
-                    "questions": serialize_quiz_questions(quiz, include_correct=True) if is_finished else None,
+                    "questions": None,
                     "playerAnswer": current_answer,
                     "answersHistory": answers_history,
                     "hostOffline": host_offline,
@@ -133,13 +130,9 @@ def register_sync_handlers(sio_manager):
             )
 
             if is_finished:
-                players = sort_result_players(quiz.players)
                 await sio_manager.emit(
                     "show_results",
-                    {
-                        "results": build_results_payload(players),
-                        "questions": serialize_quiz_questions(quiz, include_correct=True),
-                    },
+                    {"code": quiz.code, "status": quiz.status},
                     room=sid,
                 )
             elif quiz.status == "playing" and participant and participant.is_host:

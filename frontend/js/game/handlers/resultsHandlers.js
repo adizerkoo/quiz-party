@@ -32,34 +32,57 @@ function registerResultsHandler(socket) {
    * @param {Array<string>} data.results[].answers - Ответы игрока на каждый вопрос
    * @param {Array<Object>} data.questions - Массив всех вопросов с правильными ответами
    */
-  socket.on("show_results", (data) => {
-    window.QuizUserProfile?.clearStoredSessionCredentials?.({
-      roomCode,
-      role,
-    });
+  socket.on("show_results", async (data) => {
+    try {
+      await window.QuizGameResults?.loadAndShowResults?.({
+        roomCode: data?.code || roomCode,
+      });
+    } catch (error) {
+      console.error("Failed to load final results", error);
+      showToast("Не удалось загрузить итоги. Попробуй открыть комнату ещё раз.");
+    } finally {
+      socket.disconnect();
+    }
+    return;
     // Переключение экранов
-    document.getElementById("host-screen").style.display = "none";
-    document.getElementById("player-screen").style.display = "none";
 
     // Определяем победителей для эпической анимации
-    const players = data.results || [];
-    const winners = _getWinners(players);
+    // Игра завершена — закрываем соединение, предотвращаем авто-реконнект
+  });
+}
 
-    if (winners.length > 0) {
-      _playEpicWinnerIntro(winners, () => {
-        _renderResultsContent(data);
-        document.getElementById("finish-screen").style.display = "block";
-        _playConfettiAnimation();
-      });
-    } else {
+function showResultsScreen(data) {
+  window.QuizUserProfile?.clearStoredSessionCredentials?.({
+    roomCode,
+    role,
+  });
+
+  if (data?.title) {
+    quizTitle = data.title;
+  }
+  if (Array.isArray(data?.questions)) {
+    currentQuestions = data.questions;
+    window.allQuizQuestions = data.questions;
+  }
+
+  document.getElementById("host-screen").style.display = "none";
+  document.getElementById("player-screen").style.display = "none";
+
+  const players = data?.results || [];
+  const winners = _getWinners(players);
+
+  if (winners.length > 0) {
+    _playEpicWinnerIntro(winners, () => {
       _renderResultsContent(data);
       document.getElementById("finish-screen").style.display = "block";
       _playConfettiAnimation();
-    }
+    });
+    return;
+  }
 
-    // Игра завершена — закрываем соединение, предотвращаем авто-реконнект
-    socket.disconnect();
-  });
+  _renderResultsContent(data);
+  document.getElementById("finish-screen").style.display = "block";
+  _playConfettiAnimation();
 }
 
 /**
@@ -398,6 +421,9 @@ function _renderResultsContent(data) {
   const resultsList = document.getElementById("final-results-list");
   if (!resultsList) return;
 
+  if (data?.title) {
+    quizTitle = data.title;
+  }
   if (data.questions) window.allQuizQuestions = data.questions;
 
   const players = data.results || [];
@@ -619,3 +645,5 @@ function _buildOthersAnswersList(question, index, allPlayers) {
 function initResultsHandlers(socket) {
   registerResultsHandler(socket);
 }
+
+window.showResultsScreen = showResultsScreen;

@@ -21,6 +21,7 @@ import {
 } from '@/features/game/store/game-session-credentials';
 import { GameResumeSessionStatus } from '@/features/game/types';
 import { MENU_AVATARS } from '@/features/menu/data/avatar-options';
+import { fetchMenuHistory } from '@/features/menu/services/menu-history-api';
 import {
   hydrateAndSyncMenuProfileOnAppEntry,
   saveMenuProfileAndSync,
@@ -30,7 +31,7 @@ import {
   hydrateMenuSessionProfile,
 } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
-import { MenuProfile, ProfileModalMode } from '@/features/menu/types';
+import { MenuHistoryEntry, MenuProfile, ProfileModalMode } from '@/features/menu/types';
 
 export function NativeMenuScreen() {
   const router = useRouter();
@@ -42,6 +43,9 @@ export function NativeMenuScreen() {
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [gameInfoVisible, setGameInfoVisible] = useState(false);
   const [resumeSession, setResumeSession] = useState<GameResumeSessionStatus | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<MenuHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null);
 
   const hasProfile = Boolean(profile);
   const joinDescription = hasProfile ? 'Войти в игру только по коду' : 'Войти в комнату';
@@ -140,6 +144,50 @@ export function NativeMenuScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHistory() {
+      if (!profileModalVisible || profileModalMode !== 'edit' || !profile?.id) {
+        setHistoryLoading(false);
+        setHistoryErrorMessage(null);
+        if (!profile?.id) {
+          setHistoryEntries([]);
+        }
+        return;
+      }
+
+      setHistoryLoading(true);
+      setHistoryErrorMessage(null);
+
+      try {
+        const entries = await fetchMenuHistory(profile.id);
+        if (cancelled) {
+          return;
+        }
+
+        setHistoryEntries(Array.isArray(entries) ? entries : []);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setHistoryEntries([]);
+        setHistoryErrorMessage('Не удалось загрузить историю игр. Попробуй открыть профиль ещё раз.');
+      } finally {
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
+      }
+    }
+
+    void loadHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, profileModalMode, profileModalVisible]);
+
   function openCreateProfileModal() {
     setProfileModalMode('create');
     setProfileModalVisible(true);
@@ -176,6 +224,18 @@ export function NativeMenuScreen() {
       // и будет досинхронизирован при следующем онлайн-действии.
         setProfile(getMenuSessionProfile() ?? mergedProfile);
       });
+  }
+
+  function handleOpenHistoryResults(entry: MenuHistoryEntry) {
+    if (!entry.can_open_results) {
+      return;
+    }
+
+    setProfileModalVisible(false);
+    router.push({
+      pathname: '/player-game' as Href,
+      params: { room: entry.quiz_code },
+    } as Href);
   }
 
   function handlePlayerPress() {
@@ -275,9 +335,13 @@ export function NativeMenuScreen() {
 
         <ProfileModal
           avatars={MENU_AVATARS}
+          historyEntries={historyEntries}
+          historyErrorMessage={historyErrorMessage}
+          historyLoading={historyLoading}
           initialProfile={profile}
           locked={!profile}
           mode={profileModalMode}
+          onHistoryOpen={handleOpenHistoryResults}
           onClose={() => {
             if (!profile) {
               return;

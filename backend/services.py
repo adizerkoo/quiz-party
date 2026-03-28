@@ -11,7 +11,7 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session, Query, object_session, selectinload
 
-from . import models
+from . import models, schemas
 from .logging_config import build_log_extra, log_game_event
 from .runtime_state import connection_registry
 
@@ -298,6 +298,139 @@ def build_results_payload(players: Iterable[models.Player]) -> list[dict]:
             }
         )
     return payload
+
+
+def get_result_winners(results: Iterable[dict]) -> list[dict]:
+    """Returns winner rows from the unified results contract."""
+    rows = list(results)
+    if not rows:
+        return []
+
+    has_persisted_ranks = any(isinstance(item.get("final_rank"), int) for item in rows)
+    if has_persisted_ranks:
+        return [item for item in rows if item.get("final_rank") == 1]
+
+    max_score = max(int(item.get("score") or 0) for item in rows)
+    if max_score <= 0:
+        return []
+
+    return [item for item in rows if int(item.get("score") or 0) == max_score]
+
+
+def validate_results_snapshot(snapshot: object) -> dict | None:
+    """Validates persisted results_snapshot and normalizes it to the UI contract."""
+    if not snapshot:
+        return None
+
+    try:
+        normalized = schemas.QuizResultsSnapshot.model_validate(snapshot)
+    except Exception:
+        return None
+
+    return normalized.model_dump(mode="python")
+
+
+def build_results_snapshot_payload(quiz: models.Quiz) -> dict:
+    """Builds a normalized snapshot body directly from the current DB graph."""
+    players = sort_result_players(quiz.players)
+    return schemas.QuizResultsSnapshot.model_validate(
+        {
+            "results": build_results_payload(players),
+            "questions": serialize_quiz_questions(quiz, include_correct=True),
+        }
+    ).model_dump(mode="python")
+
+
+def resolve_results_snapshot_payload(quiz: models.Quiz) -> dict:
+    """Returns snapshot-first results payload, falling back to fresh DB assembly."""
+    snapshot = validate_results_snapshot(quiz.results_snapshot)
+    if snapshot is not None:
+        return snapshot
+
+    return build_results_snapshot_payload(quiz)
+
+
+def build_quiz_results_response(quiz: models.Quiz) -> dict:
+    """Builds the unified final-results response shared by every client."""
+    snapshot = resolve_results_snapshot_payload(quiz)
+    return schemas.QuizResultsResponse.model_validate(
+        {
+            "code": quiz.code,
+            "title": quiz.title,
+            "status": quiz.status,
+            "started_at": quiz.started_at,
+            "finished_at": quiz.finished_at,
+            "total_questions": quiz.total_questions,
+            "questions": snapshot["questions"],
+            "results": snapshot["results"],
+        }
+    ).model_dump(mode="python")
+
+
+def get_quiz_winner_names(quiz: models.Quiz) -> list[str]:
+    """Returns winner names using the same snapshot-first result source of truth."""
+    snapshot = resolve_results_snapshot_payload(quiz)
+    return [
+        str(item.get("name"))
+        for item in get_result_winners(snapshot["results"])
+        if item.get("name")
+    ]
+
+
+def get_quiz_history_sort_key(quiz: models.Quiz):
+    """Returns the freshest meaningful timestamp for history ordering."""
+    return (
+        quiz.finished_at
+        or quiz.cancelled_at
+        or quiz.started_at
+        or quiz.last_activity_at
+        or quiz.created_at
+    )
+
+
+def list_user_history(db: Session, *, user_id: int) -> list[dict]:
+    """Returns profile history rows for one user, newest first."""
+    participants = (
+        db.query(models.Player)
+        .options(
+            selectinload(models.Player.quiz)
+            .selectinload(models.Quiz.players)
+            .selectinload(models.Player.answers)
+            .selectinload(models.ParticipantAnswer.selected_option),
+        )
+        .filter(models.Player.user_id == user_id)
+        .all()
+    )
+
+    entries: list[tuple[object, dict]] = []
+    for participant in participants:
+        quiz = participant.quiz
+        if quiz is None:
+            continue
+        if quiz.status not in {"finished", "cancelled"}:
+            continue
+
+        winner_names = get_quiz_winner_names(quiz) if quiz.status == "finished" else []
+        payload = schemas.UserHistoryEntry.model_validate(
+            {
+                "quiz_code": quiz.code,
+                "title": quiz.title,
+                "started_at": quiz.started_at,
+                "finished_at": quiz.finished_at,
+                "game_status": quiz.status,
+                "cancel_reason": quiz.cancel_reason,
+                "participant_status": participant.status,
+                "score": participant.score,
+                "final_rank": participant.final_rank,
+                "is_winner": participant.final_rank == 1,
+                "winner_names": winner_names,
+                "can_open_results": quiz.status == "finished",
+            }
+        ).model_dump(mode="python")
+        entries.append((get_quiz_history_sort_key(quiz), payload))
+
+    entries.sort(key=lambda item: item[0], reverse=True)
+    return [payload for _, payload in entries]
 
 
 def refresh_participant_score(participant: models.Player) -> int:

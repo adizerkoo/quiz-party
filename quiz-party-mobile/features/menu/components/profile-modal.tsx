@@ -5,13 +5,18 @@ import { AvatarPicker } from '@/features/menu/components/avatar-picker';
 import { MenuButton } from '@/features/menu/components/menu-button';
 import { MenuModalShell } from '@/features/menu/components/menu-modal-shell';
 import { MenuTextField } from '@/features/menu/components/menu-text-field';
-import { MenuProfile, ProfileModalMode } from '@/features/menu/types';
+import { ProfileHistorySection } from '@/features/menu/components/profile-history-section';
+import { MenuHistoryEntry, MenuProfile, ProfileModalMode } from '@/features/menu/types';
 
 type ProfileModalProps = {
   avatars: string[];
+  historyEntries: MenuHistoryEntry[];
+  historyErrorMessage?: string | null;
+  historyLoading: boolean;
   initialProfile: MenuProfile | null;
   locked?: boolean;
   mode: ProfileModalMode;
+  onHistoryOpen: (entry: MenuHistoryEntry) => void;
   visible: boolean;
   onClose: () => void;
   onSubmit: (profile: MenuProfile) => void;
@@ -19,9 +24,13 @@ type ProfileModalProps = {
 
 export function ProfileModal({
   avatars,
+  historyEntries,
+  historyErrorMessage,
+  historyLoading,
   initialProfile,
   locked = false,
   mode,
+  onHistoryOpen,
   visible,
   onClose,
   onSubmit,
@@ -79,6 +88,14 @@ export function ProfileModal({
         avatars={avatars}
         onSelect={setSelectedEmoji}
         selectedAvatar={selectedEmoji}
+      />
+
+      <ProfileHistorySection
+        entries={historyEntries}
+        errorMessage={historyErrorMessage}
+        loading={historyLoading}
+        onOpenResults={onHistoryOpen}
+        visible={mode === 'edit'}
       />
 
       <View style={styles.actions}>

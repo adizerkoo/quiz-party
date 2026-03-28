@@ -14,11 +14,10 @@ from ..security import validate_quiz_code
 from ..services import (
     assign_final_ranks,
     build_game_cancelled_payload,
-    build_results_payload,
+    build_results_snapshot_payload,
     evaluate_quiz_state,
     log_session_event,
     mark_quiz_activity,
-    serialize_quiz_questions,
     sort_result_players,
 )
 
@@ -90,11 +89,7 @@ def register_results_handlers(sio_manager):
                 elif participant.role != "host":
                     participant.final_rank = None
 
-            results_payload = build_results_payload(players)
-            quiz.results_snapshot = {
-                "results": results_payload,
-                "questions": serialize_quiz_questions(quiz, include_correct=True),
-            }
+            quiz.results_snapshot = build_results_snapshot_payload(quiz)
             log_session_event(
                 db,
                 quiz=quiz,
@@ -124,10 +119,7 @@ def register_results_handlers(sio_manager):
             )
             await sio_manager.emit(
                 "show_results",
-                {
-                    "results": results_payload,
-                    "questions": serialize_quiz_questions(quiz, include_correct=True),
-                },
+                {"code": quiz.code, "status": quiz.status},
                 room=room,
             )
 

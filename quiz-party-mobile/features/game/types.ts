@@ -50,9 +50,16 @@ export type GameResultPlayer = {
   final_rank?: number | null;
   emoji?: string;
   answers?: GameAnswersHistory;
+  answer_times?: GameAnswerTimes;
 };
 
 export type GameResultsPayload = {
+  code: string;
+  title: string;
+  status: GameStatus;
+  started_at?: string | null;
+  finished_at?: string | null;
+  total_questions: number;
   results: GameResultPlayer[];
   questions: GameQuestion[];
 };

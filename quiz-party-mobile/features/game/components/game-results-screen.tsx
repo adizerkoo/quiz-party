@@ -19,7 +19,6 @@ import { getRankDisplay, getResultOthers, getResultWinners, isAnswerCorrect } fr
 type GameResultsScreenProps = {
   payload: GameResultsPayload | null;
   playerName: string;
-  quizTitle: string;
   reviewExpanded: boolean;
   onBackToMenu: () => void;
   onToggleReview: () => void;
@@ -153,7 +152,6 @@ export function GameResultsScreen({
   onToggleReview,
   payload,
   playerName,
-  quizTitle,
   reviewExpanded,
 }: GameResultsScreenProps) {
   const [winnerCelebrationKey, setWinnerCelebrationKey] = useState(0);
@@ -209,7 +207,7 @@ export function GameResultsScreen({
   return (
     <ScrollView bounces={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.scoreboardCard}>
-        <Text style={styles.quizTitle}>{quizTitle || 'Quiz Party'}</Text>
+        <Text style={styles.quizTitle}>{payload.title || 'Quiz Party'}</Text>
         <Text style={styles.title}>Итоги викторины</Text>
 
         {/* Победителей оставляем отдельным блоком, как на вебе, чтобы они не сливались с основным рейтингом. */}

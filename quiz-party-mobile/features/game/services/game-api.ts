@@ -1,5 +1,5 @@
 import { buildWebAppUrl, WEB_APP_ORIGIN } from '@/features/web/config/web-app';
-import { GameQuizResponse, GameResumeCheckResponse, GameRole } from '@/features/game/types';
+import { GameQuizResponse, GameResultsPayload, GameResumeCheckResponse, GameRole } from '@/features/game/types';
 
 type ResumeCheckSessionInput = {
   roomCode: string;
@@ -19,6 +19,16 @@ export async function fetchGameQuiz(roomCode: string, role: GameRole) {
   }
 
   return (await response.json()) as GameQuizResponse;
+}
+
+export async function fetchGameResults(roomCode: string) {
+  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/quizzes/${encodeURIComponent(roomCode)}/results`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load results: HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as GameResultsPayload;
 }
 
 export async function checkStoredGameResume(params: {

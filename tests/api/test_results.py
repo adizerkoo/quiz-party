@@ -99,6 +99,59 @@ class TestGetQuizResults:
         winners = [item for item in response.json()["results"] if item["final_rank"] == 1]
         assert {item["name"] for item in winners} == {sample_player.name, tied_player.name}
 
+    @allure.title("Valid snapshot is used as the source of truth")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_results_reads_valid_snapshot_first(self, client, db_session, finished_quiz):
+        finished_quiz.results_snapshot = {
+            "results": [
+                {
+                    "name": "Snapshot Winner",
+                    "score": 99,
+                    "final_rank": 1,
+                    "emoji": "🏆",
+                    "answers": {"1": "Snapshot"},
+                    "answer_times": {"1": 0.7},
+                }
+            ],
+            "questions": [
+                {
+                    "text": "Snapshot question?",
+                    "type": "text",
+                    "correct": "Snapshot",
+                    "options": None,
+                }
+            ],
+        }
+        db_session.commit()
+
+        response = client.get(f"/api/v1/quizzes/{finished_quiz.code}/results")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["title"] == finished_quiz.title
+        assert data["results"] == finished_quiz.results_snapshot["results"]
+        assert data["questions"] == finished_quiz.results_snapshot["questions"]
+
+    @allure.title("Invalid snapshot falls back to DB assembly")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_results_falls_back_to_db_when_snapshot_invalid(self, client, db_session, finished_quiz, sample_player):
+        finished_quiz.results_snapshot = {
+            "results": "broken",
+            "questions": "broken",
+        }
+        sample_player.score = 7
+        sample_player.final_rank = 1
+        db_session.commit()
+
+        response = client.get(f"/api/v1/quizzes/{finished_quiz.code}/results")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["results"][0]["name"] == sample_player.name
+        assert data["results"][0]["score"] == 7
+        assert data["results"][0]["final_rank"] == 1
+        assert len(data["questions"]) == finished_quiz.total_questions
+
     @allure.title("Незавершённая викторина -> 400")
     @allure.severity(allure.severity_level.NORMAL)
     def test_results_not_finished_returns_400(self, client, sample_quiz):

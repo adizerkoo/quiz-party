@@ -19,7 +19,7 @@ import {
   hydrateMenuSessionProfile,
   mergeMenuSessionProfileIdentity,
 } from '@/features/menu/store/menu-profile-session';
-import { buildGameShareUrl, checkStoredGameResume, fetchGameQuiz } from '@/features/game/services/game-api';
+import { buildGameShareUrl, checkStoredGameResume, fetchGameQuiz, fetchGameResults } from '@/features/game/services/game-api';
 import {
   GameBlockedState,
   GameLobbyPlayer,
@@ -56,6 +56,8 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
   const currentQuestionRef = useRef(0);
   const questionsCountRef = useRef(0);
   const toastTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const resultsLoadPromiseRef = useRef<Promise<GameResultsPayload> | null>(null);
+  const loadedResultsRoomRef = useRef<string | null>(null);
 
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
@@ -210,6 +212,44 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     // опирались на один и тот же актуальный список вопросов.
     questionsCountRef.current = nextQuestions.length;
     setQuestions(nextQuestions);
+  }
+
+  function applyResultsPayload(payload: GameResultsPayload) {
+    clearCurrentSessionCredentials();
+
+    startTransition(() => {
+      setQuizTitle(payload.title);
+      setResultsPayload(payload);
+      syncQuestions(payload.questions);
+      setGameStatus('finished');
+      setReviewExpanded(false);
+
+      const winners = getResultWinners(payload.results);
+      setWinnerIntroPlayers(winners.length ? winners : null);
+    });
+  }
+
+  async function loadResultsScreen(targetRoomCode = roomCode) {
+    if (loadedResultsRoomRef.current === targetRoomCode && resultsPayload) {
+      return resultsPayload;
+    }
+
+    if (resultsLoadPromiseRef.current) {
+      return resultsLoadPromiseRef.current;
+    }
+
+    const nextPromise = fetchGameResults(targetRoomCode)
+      .then((payload) => {
+        loadedResultsRoomRef.current = targetRoomCode;
+        applyResultsPayload(payload);
+        return payload;
+      })
+      .finally(() => {
+        resultsLoadPromiseRef.current = null;
+      });
+
+    resultsLoadPromiseRef.current = nextPromise;
+    return nextPromise;
   }
 
   function proceedToNextQuestion() {
@@ -476,6 +516,9 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
       setIsBootstrapping(true);
       setBlockedState(null);
       setIsHostOffline(false);
+      loadedResultsRoomRef.current = null;
+      resultsLoadPromiseRef.current = null;
+      setResultsPayload(null);
 
       try {
         if (role === 'player' && fallbackHostCredentials?.hostToken) {
@@ -512,6 +555,14 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         if (quiz.status === 'cancelled') {
           clearCurrentSessionCredentials();
           showBlocked(buildBlockedStateFromCancelReason(quiz.cancel_reason));
+          return;
+        }
+
+        if (quiz.status === 'finished') {
+          await loadResultsScreen(roomCode);
+          if (!cancelled) {
+            setIsBootstrapping(false);
+          }
           return;
         }
 
@@ -750,6 +801,15 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
             setMyAnswersHistory(data.answersHistory);
           }
 
+          if (data.status === 'finished') {
+            void loadResultsScreen(roomCode).catch(() => {
+              showBlocked(buildBlockedState('network'));
+            }).finally(() => {
+              disconnectSocket();
+            });
+            return;
+          }
+
           if (data.questions?.length) {
             syncQuestions(data.questions);
           }
@@ -759,20 +819,14 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
           }
         });
 
-        socket.on('show_results', (data: GameResultsPayload) => {
-          clearCurrentSessionCredentials();
-
-          startTransition(() => {
-            setResultsPayload(data);
-            syncQuestions(data.questions);
-            setGameStatus('finished');
-            setReviewExpanded(false);
-
-            const winners = getResultWinners(data.results);
-            setWinnerIntroPlayers(winners.length ? winners : null);
-          });
-
-          disconnectSocket();
+        socket.on('show_results', (data: { code?: string | null }) => {
+          void loadResultsScreen(data?.code ?? roomCode)
+            .catch(() => {
+              showBlocked(buildBlockedState('network'));
+            })
+            .finally(() => {
+              disconnectSocket();
+            });
         });
 
         socket.on('room_full', () => showBlocked(buildBlockedState('room_full')));

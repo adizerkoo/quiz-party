@@ -207,6 +207,12 @@ async function init() {
       _showCancelledGame({ reason: data.cancel_reason });
       return;
     }
+    if (data.status === "finished") {
+      quizTitle = data.title || quizTitle;
+      socket.disconnect();
+      await window.QuizGameResults?.loadAndShowResults?.({ roomCode });
+      return;
+    }
 
     const resumeAccess = await checkResumeAccess(
       latestCredentials,

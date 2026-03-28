@@ -47,7 +47,6 @@ export function NativeGameScreen({ role, roomCode }: NativeGameScreenProps) {
             onToggleReview={() => controller.setReviewExpanded((current) => !current)}
             payload={controller.resultsPayload}
             playerName={controller.playerName}
-            quizTitle={controller.quizTitle}
             reviewExpanded={controller.reviewExpanded}
           />
         ) : role === 'host' ? (

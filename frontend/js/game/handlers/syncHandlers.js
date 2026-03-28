@@ -88,7 +88,14 @@ function _applyStateSync(data) {
 
   // Если игра уже завершена, показываем финальный экран
   if (data.status === "finished") {
-    _showFinishScreen();
+    window.QuizGameResults?.loadAndShowResults?.({ roomCode })
+      .catch((error) => {
+        console.error("Failed to load results after sync", error);
+        showToast("Не удалось загрузить итоги. Попробуй открыть комнату ещё раз.");
+      })
+      .finally(() => {
+        socket.disconnect();
+      });
     return;
   }
 
@@ -101,16 +108,6 @@ function _applyStateSync(data) {
   if (role === "host") {
     _syncHostUI(data);
   }
-}
-
-/**
- * Показывает экран финальных результатов
- * @private
- */
-function _showFinishScreen() {
-  document.getElementById("host-screen").style.display = "none";
-  document.getElementById("player-screen").style.display = "none";
-  document.getElementById("finish-screen").style.display = "block";
 }
 
 /**

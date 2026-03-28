@@ -208,6 +208,7 @@ function openProfileModal(options = {}) {
     isProfileModalLocked = Boolean(options.locked);
     resetProfileErrors();
     _applyProfileModalState(mode, profile);
+    window.QuizProfileHistory?.prepareProfileHistory?.({ mode, profile });
     _showProfileModalBase();
 
     setTimeout(() => {

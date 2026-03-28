@@ -16,6 +16,7 @@
 /* === Модалка «Войти в игру» === */
 @import url('./join-modal.css');
 @import url('./profile.css');
+@import url('./profile-history.css');
 
 /* === Мобильная адаптация === */
 @import url('./responsive.css');

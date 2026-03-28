@@ -8,4 +8,19 @@ export type MenuProfile = {
   emoji: string;
 };
 
+export type MenuHistoryEntry = {
+  quiz_code: string;
+  title: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  game_status: 'waiting' | 'playing' | 'finished' | 'cancelled' | string;
+  cancel_reason?: string | null;
+  participant_status: 'joined' | 'disconnected' | 'kicked' | 'left' | 'finished' | string;
+  score?: number | null;
+  final_rank?: number | null;
+  is_winner: boolean;
+  winner_names: string[];
+  can_open_results: boolean;
+};
+
 export type ProfileModalMode = 'create' | 'edit';

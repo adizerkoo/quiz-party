@@ -116,6 +116,13 @@ class TestRequestSync:
             assert "sync_state" in events
             assert "show_results" in events
 
+            sync_call = next(call for call in sio.emit.call_args_list if call.args[0] == "sync_state")
+            assert sync_call.args[1]["status"] == "finished"
+            assert sync_call.args[1]["questions"] is None
+
+            show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
+            assert show_call.args[1] == {"code": finished_quiz.code, "status": "finished"}
+
     @allure.title("Sync содержит данные конкретного игрока")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
