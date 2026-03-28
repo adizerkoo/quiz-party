@@ -59,6 +59,45 @@ function normalizeMenuProfile(profile: MenuProfile) {
   } satisfies MenuProfile;
 }
 
+function getProfileSyncSignature(
+  profile: MenuProfile | null,
+  syncStatus: MenuProfileSyncStatus | null,
+  pendingUpdatedAt: string | null,
+) {
+  const normalizedProfile = profile ? normalizeMenuProfile(profile) : null;
+
+  return JSON.stringify({
+    profile: normalizedProfile
+      ? {
+          id: normalizedProfile.id ?? null,
+          publicId: normalizedProfile.publicId ?? null,
+          installationPublicId: normalizedProfile.installationPublicId ?? null,
+          name: normalizedProfile.name,
+          emoji: normalizedProfile.emoji,
+        }
+      : null,
+    syncStatus,
+    pendingUpdatedAt: pendingUpdatedAt ?? null,
+  });
+}
+
+function createProfileSyncGuard(
+  profile: MenuProfile | null,
+  syncStatus: MenuProfileSyncStatus | null,
+  pendingUpdatedAt: string | null,
+) {
+  const expectedSignature = getProfileSyncSignature(profile, syncStatus, pendingUpdatedAt);
+
+  return () => {
+    const snapshot = getMenuProfileStateSnapshot();
+
+    return (
+      getProfileSyncSignature(snapshot.profile, snapshot.syncStatus, snapshot.pendingUpdatedAt) ===
+      expectedSignature
+    );
+  };
+}
+
 function toMenuProfile(apiUser: ApiUserResponse, fallback: MenuProfile) {
   return {
     id: apiUser.id,
@@ -226,9 +265,19 @@ export async function saveMenuProfileAndSync(profile: MenuProfile) {
 
   const normalizedProfile = normalizeMenuProfile(profile);
   await markProfilePending(normalizedProfile);
+  const pendingSnapshot = getMenuProfileStateSnapshot();
+  const isCurrentSync = createProfileSyncGuard(
+    pendingSnapshot.profile ?? normalizedProfile,
+    pendingSnapshot.syncStatus,
+    pendingSnapshot.pendingUpdatedAt,
+  );
 
   try {
     const syncedProfile = await syncProfileWithBackend(normalizedProfile, 'profile_save');
+    if (!isCurrentSync()) {
+      return getMenuSessionProfile() ?? normalizedProfile;
+    }
+
     return (await markProfileSynced(syncedProfile)) ?? syncedProfile;
   } catch (error) {
     if (isRetryableError(error)) {
@@ -242,22 +291,32 @@ export async function saveMenuProfileAndSync(profile: MenuProfile) {
 export async function syncStoredMenuProfile(trigger: SyncTrigger) {
   await hydrateMenuSessionProfile();
 
-  const storedProfile = getMenuSessionProfile();
+  const snapshot = getMenuProfileStateSnapshot();
+  const storedProfile = snapshot.profile;
   if (!storedProfile) {
     return null;
   }
 
   const normalizedProfile = normalizeMenuProfile(storedProfile);
-  const syncStatus = getMenuProfileStateSnapshot().syncStatus;
+  const syncStatus = snapshot.syncStatus;
+  const isCurrentSync = createProfileSyncGuard(storedProfile, syncStatus, snapshot.pendingUpdatedAt);
 
   // Если есть локальные несинхронизированные правки, сначала поднимем их в БД.
   if (syncStatus === 'pending_create' || syncStatus === 'pending_update') {
     const syncedProfile = await syncProfileWithBackend(normalizedProfile, trigger);
+    if (!isCurrentSync()) {
+      return getMenuSessionProfile() ?? normalizedProfile;
+    }
+
     return (await markProfileSynced(syncedProfile)) ?? syncedProfile;
   }
 
   try {
     const syncedProfile = await syncProfileWithBackend(normalizedProfile, trigger);
+    if (!isCurrentSync()) {
+      return getMenuSessionProfile() ?? normalizedProfile;
+    }
+
     return (await markProfileSynced(syncedProfile)) ?? syncedProfile;
   } catch (error) {
     if (isRetryableError(error)) {

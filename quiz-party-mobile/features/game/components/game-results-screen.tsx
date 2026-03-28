@@ -199,7 +199,7 @@ export function GameResultsScreen({
     winnerHapticTimeoutsRef.current = [
       setTimeout(() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }, 90),
+      }, 590),
       setTimeout(() => {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }, 190),
@@ -408,8 +408,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   quizTitle: {
-    color: gameTheme.colors.purpleDark,
-    fontSize: 22,
+    color: gameTheme.colors.pinkDark,
+    fontSize: 25,
     fontWeight: '900',
     textAlign: 'center',
   },
@@ -463,9 +463,9 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 12,
     paddingVertical: 14,
-    backgroundColor: 'rgba(247, 255, 29, 0.22)',
+    backgroundColor: 'rgba(247, 255, 29, 0.3)',
     borderWidth: 2,
-    borderColor: 'rgba(255, 215, 0, 0.9)',
+    borderColor: 'rgba(255, 217, 0, 0.9)',
     shadowColor: 'rgba(255, 215, 0, 0.24)',
     shadowOpacity: 0.18,
     shadowRadius: 12,

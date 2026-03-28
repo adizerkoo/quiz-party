@@ -25,7 +25,10 @@ import {
   hydrateAndSyncMenuProfileOnAppEntry,
   saveMenuProfileAndSync,
 } from '@/features/menu/services/menu-profile-api';
-import { getMenuSessionProfile } from '@/features/menu/store/menu-profile-session';
+import {
+  getMenuSessionProfile,
+  hydrateMenuSessionProfile,
+} from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 import { MenuProfile, ProfileModalMode } from '@/features/menu/types';
 
@@ -52,16 +55,26 @@ export function NativeMenuScreen() {
     let mounted = true;
 
     async function hydrateProfile() {
-      const hydratedProfile = await hydrateAndSyncMenuProfileOnAppEntry();
-      await hydrateGameSessionCredentials();
+      const localProfile = await hydrateMenuSessionProfile();
       if (!mounted) {
         return;
       }
 
-      setProfile(hydratedProfile);
+      setProfile(localProfile);
+
+      const syncProfilePromise = hydrateAndSyncMenuProfileOnAppEntry();
+      const hydrateCredentialsPromise = hydrateGameSessionCredentials();
+      const hydratedProfile = await syncProfilePromise;
+      await hydrateCredentialsPromise;
+      if (!mounted) {
+        return;
+      }
+
+      const resolvedProfile = hydratedProfile ?? localProfile;
+      setProfile(resolvedProfile);
 
       const installationPublicId =
-        hydratedProfile?.installationPublicId ??
+        resolvedProfile?.installationPublicId ??
         getMenuSessionProfile()?.installationPublicId ??
         null;
 
@@ -71,7 +84,7 @@ export function NativeMenuScreen() {
             return false;
           }
 
-          if (session.role === 'player' && !hydratedProfile) {
+          if (session.role === 'player' && !resolvedProfile) {
             return false;
           }
 
@@ -91,7 +104,7 @@ export function NativeMenuScreen() {
               hostToken: session.hostToken ?? null,
               installationPublicId: session.installationPublicId ?? null,
             })),
-            userId: hydratedProfile?.id ?? null,
+            userId: resolvedProfile?.id ?? null,
             installationPublicId,
           });
 
@@ -117,7 +130,7 @@ export function NativeMenuScreen() {
       }
 
       setResumeSession(nextResumeSession);
-      setProfileModalVisible(!hydratedProfile && !nextResumeSession);
+      setProfileModalVisible(!resolvedProfile && !nextResumeSession);
     }
 
     void hydrateProfile();
@@ -142,7 +155,7 @@ export function NativeMenuScreen() {
     setProfileModalVisible(true);
   }
 
-  async function handleProfileSubmit(nextProfile: MenuProfile) {
+  function handleProfileSubmit(nextProfile: MenuProfile) {
     const mergedProfile: MenuProfile = {
       id: nextProfile.id ?? profile?.id ?? null,
       publicId: nextProfile.publicId ?? profile?.publicId ?? null,
@@ -151,16 +164,18 @@ export function NativeMenuScreen() {
       emoji: nextProfile.emoji,
     };
 
-    try {
-      const savedProfile = await saveMenuProfileAndSync(mergedProfile);
-      setProfile(savedProfile);
-    } catch (error) {
+    setProfile(mergedProfile);
+    setProfileModalVisible(false);
+
+    void saveMenuProfileAndSync(mergedProfile)
+      .then((savedProfile) => {
+        setProfile(savedProfile);
+      })
+      .catch(() => {
       // Даже если сервер сейчас недоступен, локальный профиль уже сохранён
       // и будет досинхронизирован при следующем онлайн-действии.
-      setProfile(getMenuSessionProfile() ?? mergedProfile);
-    }
-
-    setProfileModalVisible(false);
+        setProfile(getMenuSessionProfile() ?? mergedProfile);
+      });
   }
 
   function handlePlayerPress() {
