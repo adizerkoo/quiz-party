@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Href, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,7 +13,6 @@ import { MenuInfoModal } from '@/features/menu/components/menu-info-modal';
 import { MenuLogo } from '@/features/menu/components/menu-logo';
 import { MenuModalShell } from '@/features/menu/components/menu-modal-shell';
 import { ProfileBanner } from '@/features/menu/components/profile-banner';
-import { ProfileModal } from '@/features/menu/components/profile-modal';
 import { checkStoredGameResume } from '@/features/game/services/game-api';
 import {
   clearGameSessionCredentialsByKey,
@@ -20,40 +20,72 @@ import {
   listGameSessionCredentials,
 } from '@/features/game/store/game-session-credentials';
 import { GameResumeSessionStatus } from '@/features/game/types';
-import { MENU_AVATARS } from '@/features/menu/data/avatar-options';
-import { fetchMenuHistory } from '@/features/menu/services/menu-history-api';
-import {
-  hydrateAndSyncMenuProfileOnAppEntry,
-  saveMenuProfileAndSync,
-} from '@/features/menu/services/menu-profile-api';
+import { hydrateAndSyncMenuProfileOnAppEntry } from '@/features/menu/services/menu-profile-api';
 import {
   getMenuSessionProfile,
   hydrateMenuSessionProfile,
 } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
-import { MenuHistoryEntry, MenuProfile, ProfileModalMode } from '@/features/menu/types';
+import { MenuProfile } from '@/features/menu/types';
+
+const UI_TEXT = {
+  joinByCode: 'Войти в игру только по коду',
+  joinRoom: 'Войти в комнату',
+  asHost: 'как ведущий',
+  asPlayer: 'как игрок',
+  thisGame: 'эту игру',
+  roomPrefix: 'комнату',
+  createQuiz: 'Создать новый квиз',
+  organizer: 'Я организатор',
+  player: 'Я игрок',
+  footer: 'Сделано для крутых вечеринок',
+  resumeSubtitlePrefix: 'Можно вернуться в',
+  continueGame: 'Продолжить игру?',
+  returnToGame: 'Вернуться в игру',
+  notNow: 'Не сейчас',
+};
+
+const PAINT_EMOJI = String.fromCodePoint(0x1f3a8);
+const GAMEPAD_EMOJI = String.fromCodePoint(0x1f3ae);
+const HOURGLASS_EMOJI = String.fromCodePoint(0x23f3);
+const SPARKLES = String.fromCodePoint(0x2728);
 
 export function NativeMenuScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const initialProfile = getMenuSessionProfile();
 
   const [profile, setProfile] = useState<MenuProfile | null>(initialProfile);
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
-  const [profileModalMode, setProfileModalMode] = useState<ProfileModalMode>('create');
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [gameInfoVisible, setGameInfoVisible] = useState(false);
   const [resumeSession, setResumeSession] = useState<GameResumeSessionStatus | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<MenuHistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null);
 
   const hasProfile = Boolean(profile);
-  const joinDescription = hasProfile ? 'Войти в игру только по коду' : 'Войти в комнату';
+  const joinDescription = hasProfile ? UI_TEXT.joinByCode : UI_TEXT.joinRoom;
 
   const contentStyle = useMemo(
     () => [styles.content, hasProfile ? styles.contentWithProfile : styles.contentCentered],
     [hasProfile],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncProfileOnFocus() {
+      const localProfile = await hydrateMenuSessionProfile();
+      if (!cancelled) {
+        setProfile(localProfile);
+      }
+    }
+
+    if (isFocused) {
+      void syncProfileOnFocus();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isFocused]);
 
   useEffect(() => {
     let mounted = true;
@@ -82,18 +114,17 @@ export function NativeMenuScreen() {
         getMenuSessionProfile()?.installationPublicId ??
         null;
 
-      const storedSessions = listGameSessionCredentials()
-        .filter((session) => {
-          if (!session?.roomCode || !session?.role) {
-            return false;
-          }
+      const storedSessions = listGameSessionCredentials().filter((session) => {
+        if (!session?.roomCode || !session?.role) {
+          return false;
+        }
 
-          if (session.role === 'player' && !resolvedProfile) {
-            return false;
-          }
+        if (session.role === 'player' && !resolvedProfile) {
+          return false;
+        }
 
-          return true;
-        });
+        return true;
+      });
 
       let nextResumeSession: GameResumeSessionStatus | null = null;
 
@@ -134,7 +165,10 @@ export function NativeMenuScreen() {
       }
 
       setResumeSession(nextResumeSession);
-      setProfileModalVisible(!resolvedProfile && !nextResumeSession);
+
+      if (!resolvedProfile && !nextResumeSession) {
+        openProfileScreen('create', true);
+      }
     }
 
     void hydrateProfile();
@@ -144,103 +178,32 @@ export function NativeMenuScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadHistory() {
-      if (!profileModalVisible || profileModalMode !== 'edit' || !profile?.id) {
-        setHistoryLoading(false);
-        setHistoryErrorMessage(null);
-        if (!profile?.id) {
-          setHistoryEntries([]);
-        }
-        return;
-      }
-
-      setHistoryLoading(true);
-      setHistoryErrorMessage(null);
-
-      try {
-        const entries = await fetchMenuHistory(profile.id);
-        if (cancelled) {
-          return;
-        }
-
-        setHistoryEntries(Array.isArray(entries) ? entries : []);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setHistoryEntries([]);
-        setHistoryErrorMessage('Не удалось загрузить историю игр. Попробуй открыть профиль ещё раз.');
-      } finally {
-        if (!cancelled) {
-          setHistoryLoading(false);
-        }
-      }
-    }
-
-    void loadHistory();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [profile?.id, profileModalMode, profileModalVisible]);
-
-  function openCreateProfileModal() {
-    setProfileModalMode('create');
-    setProfileModalVisible(true);
-  }
-
-  function openEditProfileModal() {
-    if (!profile) {
-      openCreateProfileModal();
-      return;
-    }
-
-    setProfileModalMode('edit');
-    setProfileModalVisible(true);
-  }
-
-  function handleProfileSubmit(nextProfile: MenuProfile) {
-    const mergedProfile: MenuProfile = {
-      id: nextProfile.id ?? profile?.id ?? null,
-      publicId: nextProfile.publicId ?? profile?.publicId ?? null,
-      installationPublicId: nextProfile.installationPublicId ?? profile?.installationPublicId ?? null,
-      name: nextProfile.name,
-      emoji: nextProfile.emoji,
-    };
-
-    setProfile(mergedProfile);
-    setProfileModalVisible(false);
-
-    void saveMenuProfileAndSync(mergedProfile)
-      .then((savedProfile) => {
-        setProfile(savedProfile);
-      })
-      .catch(() => {
-      // Даже если сервер сейчас недоступен, локальный профиль уже сохранён
-      // и будет досинхронизирован при следующем онлайн-действии.
-        setProfile(getMenuSessionProfile() ?? mergedProfile);
-      });
-  }
-
-  function handleOpenHistoryResults(entry: MenuHistoryEntry) {
-    if (!entry.can_open_results) {
-      return;
-    }
-
-    setProfileModalVisible(false);
+  function openProfileScreen(mode: 'create' | 'edit', locked = false) {
     router.push({
-      pathname: '/player-game' as Href,
-      params: { room: entry.quiz_code },
+      pathname: '/profile' as Href,
+      params: {
+        mode,
+        locked: locked ? '1' : '0',
+      },
     } as Href);
+  }
+
+  function openCreateProfileScreen() {
+    openProfileScreen('create', true);
+  }
+
+  function openEditProfileScreen() {
+    if (!profile) {
+      openCreateProfileScreen();
+      return;
+    }
+
+    openProfileScreen('edit');
   }
 
   function handlePlayerPress() {
     if (!profile) {
-      openCreateProfileModal();
+      openCreateProfileScreen();
       return;
     }
 
@@ -249,7 +212,7 @@ export function NativeMenuScreen() {
 
   function handleHostPress() {
     if (!profile) {
-      openCreateProfileModal();
+      openCreateProfileScreen();
       return;
     }
 
@@ -262,8 +225,9 @@ export function NativeMenuScreen() {
 
   function handleResumeClose() {
     setResumeSession(null);
+
     if (!profile) {
-      setProfileModalVisible(true);
+      openCreateProfileScreen();
     }
   }
 
@@ -282,10 +246,10 @@ export function NativeMenuScreen() {
     } as Href);
   }
 
-  const resumeRoleLabel = resumeSession?.role === 'host' ? 'как ведущий' : 'как игрок';
+  const resumeRoleLabel = resumeSession?.role === 'host' ? UI_TEXT.asHost : UI_TEXT.asPlayer;
   const resumeTitleLabel = resumeSession?.title
-    ? `«${resumeSession.title}»`
-    : (resumeSession?.room_code ? `комнату ${resumeSession.room_code}` : 'эту игру');
+    ? `"${resumeSession.title}"`
+    : (resumeSession?.room_code ? `${UI_TEXT.roomPrefix} ${resumeSession.room_code}` : UI_TEXT.thisGame);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -298,60 +262,40 @@ export function NativeMenuScreen() {
           bounces={false}
           contentContainerStyle={contentStyle}
           showsVerticalScrollIndicator={false}>
-          <View style={[styles.mainContainer, hasProfile ? styles.mainContainerWithProfile : styles.mainContainerCentered]}>
+          <View
+            style={[
+              styles.mainContainer,
+              hasProfile ? styles.mainContainerWithProfile : styles.mainContainerCentered,
+            ]}>
             <View style={styles.menuContent}>
               <MenuLogo />
 
-              <ProfileBanner
-                align="right"
-                onPress={openEditProfileModal}
-                profile={profile}
-              />
+              <ProfileBanner align="right" onPress={openEditProfileScreen} profile={profile} />
 
               <View style={styles.menuGrid}>
                 <MenuActionCard
-                  description="Создать новый квиз"
-                  icon="🎨"
+                  description={UI_TEXT.createQuiz}
+                  icon={PAINT_EMOJI}
                   onInfoPress={handleGameInfoPress}
                   onPress={handleHostPress}
-                  title="Я организатор"
+                  title={UI_TEXT.organizer}
                   tone="create"
                 />
 
                 <MenuActionCard
                   description={joinDescription}
-                  icon="🎮"
+                  icon={GAMEPAD_EMOJI}
                   onInfoPress={handleGameInfoPress}
                   onPress={handlePlayerPress}
-                  title="Я игрок"
+                  title={UI_TEXT.player}
                   tone="join"
                 />
               </View>
 
-              <Text style={styles.footerInfo}>Сделано для крутых вечеринок ✨</Text>
+              <Text style={styles.footerInfo}>{`${UI_TEXT.footer} ${SPARKLES}`}</Text>
             </View>
           </View>
         </ScrollView>
-
-        <ProfileModal
-          avatars={MENU_AVATARS}
-          historyEntries={historyEntries}
-          historyErrorMessage={historyErrorMessage}
-          historyLoading={historyLoading}
-          initialProfile={profile}
-          locked={!profile}
-          mode={profileModalMode}
-          onHistoryOpen={handleOpenHistoryResults}
-          onClose={() => {
-            if (!profile) {
-              return;
-            }
-
-            setProfileModalVisible(false);
-          }}
-          onSubmit={handleProfileSubmit}
-          visible={profileModalVisible}
-        />
 
         {profile ? (
           <JoinModal
@@ -361,22 +305,19 @@ export function NativeMenuScreen() {
           />
         ) : null}
 
-        <MenuInfoModal
-          onClose={() => setGameInfoVisible(false)}
-          visible={gameInfoVisible}
-        />
+        <MenuInfoModal onClose={() => setGameInfoVisible(false)} visible={gameInfoVisible} />
 
         <MenuModalShell
           cardOffsetY={-60}
-          icon="⏳"
+          icon={HOURGLASS_EMOJI}
           iconPosition="left"
           onRequestClose={handleResumeClose}
-          subtitle={`Можно вернуться в ${resumeTitleLabel} ${resumeRoleLabel}.`}
-          title="Продолжить игру?"
+          subtitle={`${UI_TEXT.resumeSubtitlePrefix} ${resumeTitleLabel} ${resumeRoleLabel}.`}
+          title={UI_TEXT.continueGame}
           visible={Boolean(resumeSession)}>
           <View style={styles.resumeActions}>
-            <MenuButton label="Вернуться в игру" onPress={handleResumeConfirm} />
-            <MenuButton label="Не сейчас" onPress={handleResumeClose} variant="ghost" />
+            <MenuButton label={UI_TEXT.returnToGame} onPress={handleResumeConfirm} />
+            <MenuButton label={UI_TEXT.notNow} onPress={handleResumeClose} variant="ghost" />
           </View>
         </MenuModalShell>
       </View>
@@ -402,7 +343,6 @@ const styles = StyleSheet.create({
   },
   contentWithProfile: {
     justifyContent: 'flex-start',
-    // Чем меньше значение, тем выше весь экран поднимается к верхней safe-area.
     paddingTop: 0,
   },
   mainContainer: {
@@ -410,24 +350,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mainContainerWithProfile: {
-    // Отдельная вертикальная посадка экрана, когда профиль уже есть.
-    // Так баннер и карточки поднимаются ближе к "чёлке", но не вылезают из safe-area.
     transform: [{ translateY: -42 }],
   },
   mainContainerCentered: {
-    // Главная настройка вертикального положения стартового меню.
-    // Если хочешь поднять весь блок выше, делай число более отрицательным:
-    // -80, -90 и т.д.
-    // Если хочешь опустить ниже, приближай к нулю: -50, -40 и т.д.
     transform: [{ translateY: -104 }],
   },
-  // Главный контейнер меню без лишних промежуточных обёрток.
-  // paddingHorizontal отвечает за близость карточек к краям экрана.
   menuContent: {
     width: '100%',
     maxWidth: 650,
     paddingHorizontal: 6,
-    // Уменьшаем вертикальный воздух, чтобы логотип, баннер и карточки жили плотнее.
     paddingVertical: 26,
   },
   menuGrid: {

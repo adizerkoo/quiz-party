@@ -24,3 +24,12 @@ export type MenuHistoryEntry = {
 };
 
 export type ProfileModalMode = 'create' | 'edit';
+export type ProfileScreenTab = 'profile' | 'history';
+export type MenuHistorySortMode = 'time' | 'wins' | 'host';
+export type MenuHistoryFetchSource = 'network' | 'cache';
+
+export type MenuHistoryFetchResult = {
+  entries: MenuHistoryEntry[];
+  source: MenuHistoryFetchSource;
+  cachedAt: string | null;
+};

@@ -9,18 +9,13 @@ import {
 
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 
-// Верхний логотип "QUIZ PARTY".
-// Файл отвечает только за декоративную верхнюю часть меню:
-// заголовок, линию под ним и мягкие анимации.
-export function MenuLogo() {
-  // Анимация "дыхания" свечения на фоне логотипа.
-  const glowAnim = useRef(new Animated.Value(0)).current;
+const LOGO_SUBTITLE = 'Твой праздник, твои правила!';
 
-  // Анимация лёгкого отклика на нажатие по логотипу.
+export function MenuLogo() {
+  const glowAnim = useRef(new Animated.Value(0)).current;
   const pressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Делаем плавное, бесконечное свечение.
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
@@ -39,13 +34,9 @@ export function MenuLogo() {
     );
 
     loop.start();
-
-    return () => {
-      loop.stop();
-    };
+    return () => loop.stop();
   }, [glowAnim]);
 
-  // Управляет прозрачностью и масштабом светящегося овала за логотипом.
   const haloStyle = useMemo(
     () => ({
       opacity: glowAnim.interpolate({
@@ -64,7 +55,6 @@ export function MenuLogo() {
     [glowAnim],
   );
 
-  // Чуть увеличивает сам текст при удержании.
   const titleStyle = useMemo(
     () => ({
       transform: [
@@ -79,8 +69,6 @@ export function MenuLogo() {
     [pressAnim],
   );
 
-  // Анимированная линия под заголовком:
-  // при нажатии она становится шире и чуть меняет цвет.
   const underlineStyle = useMemo(
     () => ({
       width: pressAnim.interpolate({
@@ -119,15 +107,12 @@ export function MenuLogo() {
 
       <Animated.Text style={[styles.title, titleStyle]}>QUIZ PARTY</Animated.Text>
       <Animated.View style={[styles.underline, underlineStyle]} />
-      <Text style={styles.subtitle}>Твой праздник, твои правила!</Text>
+      <Text style={styles.subtitle}>{LOGO_SUBTITLE}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  // Внешняя зона логотипа.
-  // marginBottom отвечает за расстояние до карточек меню снизу.
-  // paddingVertical — за "воздух" внутри самого логотипного блока.
   wrap: {
     width: '100%',
     alignItems: 'center',
@@ -135,10 +120,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     paddingVertical: 30,
   },
-
-  // Светящийся овал за текстом.
-  // width/height меняют размер свечения,
-  // top двигает его выше/ниже относительно текста.
   halo: {
     position: 'absolute',
     top: 8,
@@ -147,9 +128,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgb(255, 255, 255)',
   },
-
-  // Главный логотип.
-  // fontSize и letterSpacing сильнее всего влияют на общий характер заголовка.
   title: {
     fontSize: 40,
     lineHeight: 54,
@@ -161,16 +139,11 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(30, 0, 255, 0.15)',
     textShadowRadius: 25,
   },
-
-  // Полоска под логотипом.
-  // Её ширина анимируется, а высоту можно менять вручную.
   underline: {
     height: 4,
     borderRadius: 10,
     marginTop: 8,
   },
-
-  // Подзаголовок под QUIZ PARTY.
   subtitle: {
     marginTop: 15,
     textAlign: 'center',

@@ -8,6 +8,8 @@ type AvatarPickerProps = {
   onSelect: (emoji: string) => void;
 };
 
+const PICKER_TITLE = 'Выбери аватар';
+
 export function AvatarPicker({
   avatars,
   selectedAvatar,
@@ -15,7 +17,7 @@ export function AvatarPicker({
 }: AvatarPickerProps) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Выбери аватар</Text>
+      <Text style={styles.title}>{PICKER_TITLE}</Text>
       <View style={styles.grid}>
         {avatars.map((emoji) => {
           const isSelected = emoji === selectedAvatar;
@@ -54,15 +56,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    // Центруем сетку целиком, чтобы справа не оставался "пустой столбец",
-    // а у рядов было одинаковое визуальное поле слева и справа.
     justifyContent: 'center',
     columnGap: 10,
     rowGap: 10,
   },
   avatar: {
-    // Фиксированная ширина даёт ровные плитки на всех экранах,
-    // а центрирование grid само удерживает равные боковые поля.
     width: 56,
     aspectRatio: 1,
     borderWidth: 2,

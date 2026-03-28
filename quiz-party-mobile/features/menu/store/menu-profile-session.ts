@@ -22,6 +22,7 @@ let currentSyncStatus: MenuProfileSyncStatus | null = null;
 let currentLastSyncedAt: string | null = null;
 let currentPendingUpdatedAt: string | null = null;
 let menuProfileHydrated = false;
+let menuProfileHydrationPromise: Promise<MenuProfile | null> | null = null;
 
 function generatePublicId() {
   const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
@@ -137,29 +138,41 @@ export async function hydrateMenuSessionProfile() {
     return currentMenuProfile;
   }
 
-  menuProfileHydrated = true;
-
-  if (!FileSystem.documentDirectory) {
-    ensureInstallationPublicId();
-    return currentMenuProfile;
+  if (menuProfileHydrationPromise) {
+    return menuProfileHydrationPromise;
   }
+
+  menuProfileHydrationPromise = (async () => {
+    if (!FileSystem.documentDirectory) {
+      ensureInstallationPublicId();
+      menuProfileHydrated = true;
+      return currentMenuProfile;
+    }
+
+    try {
+      const info = await FileSystem.getInfoAsync(PROFILE_FILE);
+      if (info.exists) {
+        const raw = await FileSystem.readAsStringAsync(PROFILE_FILE);
+        applyPersistedState(JSON.parse(raw) as MenuProfilePersistedState);
+      }
+    } catch (error) {
+      // Если файл битый или недоступен, просто стартуем с пустого локального состояния.
+    }
+
+    if (!currentInstallationPublicId) {
+      ensureInstallationPublicId();
+      await persistMenuProfileState();
+    }
+
+    menuProfileHydrated = true;
+    return currentMenuProfile;
+  })();
 
   try {
-    const info = await FileSystem.getInfoAsync(PROFILE_FILE);
-    if (info.exists) {
-      const raw = await FileSystem.readAsStringAsync(PROFILE_FILE);
-      applyPersistedState(JSON.parse(raw) as MenuProfilePersistedState);
-    }
-  } catch (error) {
-    // Если файл битый или недоступен, просто стартуем с пустого локального состояния.
+    return await menuProfileHydrationPromise;
+  } finally {
+    menuProfileHydrationPromise = null;
   }
-
-  if (!currentInstallationPublicId) {
-    ensureInstallationPublicId();
-    await persistMenuProfileState();
-  }
-
-  return currentMenuProfile;
 }
 
 export function getOrCreateMenuInstallationPublicId() {

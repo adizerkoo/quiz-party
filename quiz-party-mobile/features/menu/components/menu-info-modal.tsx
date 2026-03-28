@@ -9,36 +9,37 @@ type MenuInfoModalProps = {
   onClose: () => void;
 };
 
-// Общая информационная модалка о том, как устроена игра.
+const UI_TEXT = {
+  title: 'Об игре',
+  subtitle:
+    'Коротко объясняет, как работает Quiz Party для организатора и игрока.',
+  body:
+    'Организатор создает квиз и запускает комнату, а игроки входят по коду комнаты. Сначала каждый выбирает имя и смайлик, после чего может возвращаться в игру уже только по коду.',
+  ok: 'Понятно',
+};
+
 export function MenuInfoModal({ visible, onClose }: MenuInfoModalProps) {
   return (
     <MenuModalShell
       icon="!"
       iconPosition="left"
       onRequestClose={onClose}
-      subtitle="Коротко объясняет, как работает Quiz Party для организатора и игрока."
-      title="О игре"
+      subtitle={UI_TEXT.subtitle}
+      title={UI_TEXT.title}
       visible={visible}>
       <View style={styles.box}>
-        <Text style={styles.text}>
-          Организатор создаёт квиз и запускает комнату, а игроки входят по коду
-          комнаты. Сначала каждый выбирает имя и смайлик, после чего может
-          возвращаться в игру уже только по коду.
-        </Text>
+        <Text style={styles.text}>{UI_TEXT.body}</Text>
       </View>
 
-      <MenuButton label="Понятно" onPress={onClose} />
+      <MenuButton label={UI_TEXT.ok} onPress={onClose} />
     </MenuModalShell>
   );
 }
 
 const styles = StyleSheet.create({
-  // Небольшая внутренняя обёртка текста.
   box: {
     paddingVertical: 4,
   },
-
-  // Основной текст модалки.
   text: {
     textAlign: 'center',
     fontSize: 14,

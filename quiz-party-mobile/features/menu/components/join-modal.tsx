@@ -13,6 +13,22 @@ type JoinModalProps = {
   onClose: () => void;
 };
 
+const UI_TEXT = {
+  missingCode: 'Нужен код, чтобы войти',
+  title: 'Вход в игру',
+  subtitlePrefix:
+    'У тебя уже есть код комнаты,',
+  subtitleSuffix:
+    'Введи его ниже и присоединяйся к игре!',
+  roomCode: 'Код комнаты',
+  join: 'Войти в игру',
+  back: 'Вернуться назад',
+};
+
+const KEY_EMOJI = String.fromCodePoint(0x1f511);
+const DOOR_EMOJI = String.fromCodePoint(0x1f6aa);
+const ROCKET_EMOJI = String.fromCodePoint(0x1f680);
+
 export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
   const router = useRouter();
   const [roomCode, setRoomCode] = useState('');
@@ -33,7 +49,7 @@ export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
     const normalizedCode = roomCode.trim().toUpperCase();
 
     if (!normalizedCode) {
-      setError('Нужен код, чтобы войти 🔑');
+      setError(`${UI_TEXT.missingCode} ${KEY_EMOJI}`);
       return;
     }
 
@@ -48,17 +64,17 @@ export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
   return (
     <MenuModalShell
       cardOffsetY={isInputFocused ? -60 : -60}
-      icon="🔑"
+      icon={KEY_EMOJI}
       iconPosition="left"
       onRequestClose={onClose}
-      subtitle={`У тебя уже есть код комнаты, ${profile.name}? Введи его ниже и присоединяйся к игре!`}
-      title="Вход в игру"
+      subtitle={`${UI_TEXT.subtitlePrefix} ${profile.name}? ${UI_TEXT.subtitleSuffix}`}
+      title={UI_TEXT.title}
       visible={visible}>
       <MenuTextField
         autoCapitalize="characters"
         error={error}
-        icon="🚪"
-        label="Код комнаты"
+        icon={DOOR_EMOJI}
+        label={UI_TEXT.roomCode}
         maxLength={11}
         onBlur={() => setIsInputFocused(false)}
         onChangeText={(value) => setRoomCode(value.toUpperCase())}
@@ -67,8 +83,8 @@ export function JoinModal({ profile, visible, onClose }: JoinModalProps) {
       />
 
       <View style={styles.actions}>
-        <MenuButton label="Войти в игру 🚀" onPress={handlePreviewJoin} />
-        <MenuButton label="Вернуться назад" onPress={onClose} variant="ghost" />
+        <MenuButton label={`${UI_TEXT.join} ${ROCKET_EMOJI}`} onPress={handlePreviewJoin} />
+        <MenuButton label={UI_TEXT.back} onPress={onClose} variant="ghost" />
       </View>
     </MenuModalShell>
   );
