@@ -2,18 +2,32 @@ import { FontAwesome6 } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CreateQuizQuestion } from '@/features/create/types';
+import { loadCreateDraft, saveCreateDraft } from '@/features/create/services/create-storage';
+import { createEmptyQuestionDraft } from '@/features/create/utils/create-validation';
 import { AvatarPicker } from '@/features/menu/components/avatar-picker';
 import { MenuBackground } from '@/features/menu/components/menu-background';
 import { MenuButton } from '@/features/menu/components/menu-button';
+import { ProfileFavoriteComposeModal } from '@/features/menu/components/profile-favorite-compose-modal';
+import { ProfileFavoritesSection } from '@/features/menu/components/profile-favorites-section';
 import { MenuTextField } from '@/features/menu/components/menu-text-field';
 import { ProfileHistorySection } from '@/features/menu/components/profile-history-section';
 import { MENU_AVATARS } from '@/features/menu/data/avatar-options';
+import {
+  addMenuFavorite,
+  fetchMenuFavorites,
+  removeMenuFavorite,
+} from '@/features/menu/services/menu-favorites-api';
 import { fetchMenuHistory } from '@/features/menu/services/menu-history-api';
 import { saveMenuProfileAndSync } from '@/features/menu/services/menu-profile-api';
+import {
+  getCachedMenuFavorites,
+  hydrateMenuFavoritesCache,
+} from '@/features/menu/store/menu-favorites-cache';
 import {
   getCachedMenuHistory,
   hydrateMenuHistoryCache,
@@ -24,29 +38,37 @@ import {
 } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 import {
+  MenuFavoriteQuestion,
   MenuHistoryEntry,
   MenuProfile,
   ProfileModalMode,
   ProfileScreenTab,
 } from '@/features/menu/types';
+import { createFeatureLogger } from '@/features/shared/services/feature-logger';
 
 const UI_TEXT = {
   historyError:
     'Не удалось загрузить историю игр. Попробуй открыть вкладку еще раз.',
+  favoritesError:
+    'Не удалось загрузить избранные вопросы. Попробуй открыть вкладку еще раз.',
   nameRequired: 'Пожалуйста, представься',
   saveError:
     'Не удалось сохранить профиль. Попробуй еще раз.',
   historyTitle: 'История игр',
+  favoritesTitle: 'Избранные',
   editProfile: 'Редактировать профиль',
   introTitle: 'Сначала познакомимся',
   historySubtitle:
     'Тут живут твои последние игры, итоги и победы.',
+  favoritesSubtitle:
+    'Сохраняй любимые вопросы, удаляй лишнее и быстро переиспользуй их в create.',
   profileSubtitle:
     'Имя и аватар останутся такими же и в главном меню.',
   back: 'Назад',
   myProfile: 'Мой профиль',
   profileTab: 'Профиль',
   historyTab: 'История игр',
+  favoritesTab: 'Избранные',
   yourName: 'Твое имя',
   saving: 'Сохраняем...',
   updateProfile: 'Обновить профиль',
@@ -71,6 +93,16 @@ function readCachedHistoryEntries(userId: number) {
   return Array.isArray(cachedRecord.entries) ? cachedRecord.entries : [];
 }
 
+function readCachedFavoriteEntries(userId: number) {
+  const cachedRecord = getCachedMenuFavorites(userId);
+
+  if (!cachedRecord) {
+    return null;
+  }
+
+  return Array.isArray(cachedRecord.entries) ? cachedRecord.entries : [];
+}
+
 function ProfileTabButton({
   active,
   disabled,
@@ -80,7 +112,7 @@ function ProfileTabButton({
 }: {
   active: boolean;
   disabled?: boolean;
-  icon: 'user' | 'clock';
+  icon: 'user' | 'clock' | 'heart';
   label: string;
   onPress: () => void;
 }) {
@@ -109,6 +141,7 @@ function ProfileTabButton({
 export function NativeProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const logger = useRef(createFeatureLogger('native.profile.screen')).current;
   const params = useLocalSearchParams<{
     mode?: string | string[];
     locked?: string | string[];
@@ -124,16 +157,25 @@ export function NativeProfileScreen() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileScreenTab>(
-    requestedTab === 'history' && initialProfile ? 'history' : 'profile',
+    requestedTab === 'history'
+      ? (initialProfile ? 'history' : 'profile')
+      : (requestedTab === 'favorites' ? (initialProfile ? 'favorites' : 'profile') : 'profile'),
   );
   const [historyEntries, setHistoryEntries] = useState<MenuHistoryEntry[]>([]);
+  const [favoriteEntries, setFavoriteEntries] = useState<MenuFavoriteQuestion[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null);
+  const [favoritesErrorMessage, setFavoritesErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [favoriteComposerVisible, setFavoriteComposerVisible] = useState(false);
+  const [favoriteMutationLoading, setFavoriteMutationLoading] = useState(false);
 
   const requestedMode = readSingleParam(params.mode);
   const requestedLocked = readSingleParam(params.locked);
   const hasProfile = Boolean(profile);
+  const profileId = profile?.id ?? null;
+  const installationPublicId = profile?.installationPublicId ?? null;
   const isLocked = requestedLocked === '1' && !hasProfile;
   const screenMode: ProfileModalMode =
     requestedMode === 'create' || !hasProfile ? 'create' : 'edit';
@@ -174,7 +216,7 @@ export function NativeProfileScreen() {
   }, [isLocked, navigation]);
 
   useEffect(() => {
-    if (!profile?.id && activeTab === 'history') {
+    if (!profile?.id && activeTab !== 'profile') {
       setActiveTab('profile');
     }
   }, [activeTab, profile?.id]);
@@ -212,6 +254,45 @@ export function NativeProfileScreen() {
     }
 
     void warmUpHistoryCache();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, profile?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function warmUpFavoritesCache() {
+      if (activeTab === 'favorites') {
+        return;
+      }
+
+      if (!profile?.id) {
+        setFavoriteEntries([]);
+        return;
+      }
+
+      const inMemoryEntries = readCachedFavoriteEntries(profile.id);
+      if (inMemoryEntries) {
+        setFavoriteEntries(inMemoryEntries);
+      } else {
+        setFavoriteEntries([]);
+      }
+
+      await hydrateMenuFavoritesCache();
+      if (cancelled) {
+        return;
+      }
+
+      const hydratedEntries = readCachedFavoriteEntries(profile.id);
+      if (hydratedEntries) {
+        setFavoriteEntries(hydratedEntries);
+        setFavoritesLoading(false);
+      }
+    }
+
+    void warmUpFavoritesCache();
 
     return () => {
       cancelled = true;
@@ -271,6 +352,74 @@ export function NativeProfileScreen() {
       cancelled = true;
     };
   }, [activeTab, profile?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFavorites() {
+      if (activeTab !== 'favorites') {
+        return;
+      }
+
+      if (!profileId) {
+        setFavoriteEntries([]);
+        setFavoritesErrorMessage(null);
+        setFavoritesLoading(false);
+        return;
+      }
+
+      const cachedEntries = readCachedFavoriteEntries(profileId);
+      if (cachedEntries) {
+        setFavoriteEntries(cachedEntries);
+      }
+
+      setFavoritesLoading(!cachedEntries);
+      setFavoritesErrorMessage(null);
+
+      try {
+        logger.info('favorites.load.started', {
+          userId: profileId,
+        });
+        const result = await fetchMenuFavorites({
+          id: profileId,
+          installationPublicId,
+        });
+        if (cancelled) {
+          return;
+        }
+
+        setFavoriteEntries(Array.isArray(result.entries) ? result.entries : []);
+        logger.info('favorites.load.succeeded', {
+          userId: profileId,
+          resultCount: result.entries.length,
+          source: result.source,
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        logger.warn('favorites.load.failed', {
+          userId: profileId,
+          message: error instanceof Error ? error.message : 'unknown_error',
+        });
+        if (!cachedEntries) {
+          setFavoriteEntries([]);
+          setFavoritesErrorMessage(UI_TEXT.favoritesError);
+        }
+      } finally {
+        if (!cancelled) {
+          setFavoritesLoading(false);
+        }
+      }
+    }
+
+    void loadFavorites();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, installationPublicId, logger, profileId]);
 
   function handleBack() {
     if (isLocked) {
@@ -336,12 +485,108 @@ export function NativeProfileScreen() {
     } as Href);
   }
 
-  const cardTitle =
-    activeTab === 'history'
-      ? UI_TEXT.historyTitle
-      : (screenMode === 'edit' ? UI_TEXT.editProfile : UI_TEXT.introTitle);
-  const cardSubtitle =
-    activeTab === 'history' ? UI_TEXT.historySubtitle : UI_TEXT.profileSubtitle;
+  function handleRepeatHistory(entry: MenuHistoryEntry) {
+    if (!entry.can_repeat || !entry.template_public_id) {
+      return;
+    }
+
+    logger.info('repeat.from_history.tapped', {
+      quizCode: entry.quiz_code,
+      templatePublicId: entry.template_public_id,
+    });
+    router.push({
+      pathname: '/create' as Href,
+      params: { templatePublicId: entry.template_public_id },
+    } as Href);
+  }
+
+  async function handleReuseFavorite(entry: MenuFavoriteQuestion) {
+    const existingDraft = await loadCreateDraft();
+    const nextQuestions = [...(existingDraft?.questions ?? [])];
+    const alreadyAdded = nextQuestions.some((question) => (
+      question.source_question_public_id
+      && entry.source_question_public_id
+      && question.source_question_public_id === entry.source_question_public_id
+    ));
+
+    if (!alreadyAdded) {
+      nextQuestions.push({
+        text: entry.text,
+        type: entry.type,
+        correct: entry.correct,
+        options: entry.options ?? null,
+        source_question_public_id: entry.source_question_public_id ?? entry.public_id ?? null,
+      });
+    }
+
+    await saveCreateDraft({
+      title: existingDraft?.title ?? '',
+      questions: nextQuestions,
+      questionDraft: existingDraft?.questionDraft ?? createEmptyQuestionDraft(),
+    });
+    logger.info('favorite.reuse_to_create', {
+      questionPublicId: entry.public_id ?? null,
+      appended: !alreadyAdded,
+    });
+    router.push('/create' as Href);
+  }
+
+  function handleRemoveFavoriteQuestion(entry: MenuFavoriteQuestion) {
+    if (!profile) {
+      return;
+    }
+
+    Alert.alert(
+      'Убрать из избранного?',
+      'Вопрос останется в истории и уже созданных играх, но исчезнет из списка избранных.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Убрать',
+          style: 'destructive',
+          onPress: async () => {
+            if (!entry.public_id) {
+              return;
+            }
+
+            setFavoriteMutationLoading(true);
+            try {
+              await removeMenuFavorite(profile, entry.public_id);
+              setFavoriteEntries((current) => current.filter((item) => item.public_id !== entry.public_id));
+            } catch (error) {
+              setFavoritesErrorMessage('Не удалось удалить вопрос из избранного.');
+            } finally {
+              setFavoriteMutationLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  async function handleSubmitNewFavorite(question: CreateQuizQuestion) {
+    if (!profile) {
+      return;
+    }
+
+    setFavoriteMutationLoading(true);
+
+    try {
+      const favorite = await addMenuFavorite(profile, {
+        ...question,
+        is_favorite: true,
+      });
+      setFavoriteEntries((current) => [
+        favorite,
+        ...current.filter((item) => item.public_id !== favorite.public_id),
+      ]);
+      setFavoriteComposerVisible(false);
+    } catch (error) {
+      setFavoritesErrorMessage('Не удалось сохранить новый избранный вопрос.');
+    } finally {
+      setFavoriteMutationLoading(false);
+    }
+  }
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -392,6 +637,13 @@ export function NativeProfileScreen() {
                   label={UI_TEXT.historyTab}
                   onPress={() => setActiveTab('history')}
                 />
+                <ProfileTabButton
+                  active={activeTab === 'favorites'}
+                  disabled={!profile?.id}
+                  icon="heart"
+                  label={UI_TEXT.favoritesTab}
+                  onPress={() => setActiveTab('favorites')}
+                />
               </View>
 
               {activeTab === 'profile' ? (
@@ -439,13 +691,25 @@ export function NativeProfileScreen() {
                     ) : null}
                   </View>
                 </View>
-              ) : (
+              ) : activeTab === 'history' ? (
                 <View style={styles.panel}>
                   <ProfileHistorySection
                     entries={historyEntries}
                     errorMessage={historyErrorMessage}
                     loading={historyLoading}
                     onOpenResults={handleOpenHistoryResults}
+                    onRepeat={handleRepeatHistory}
+                  />
+                </View>
+              ) : (
+                <View style={styles.panel}>
+                  <ProfileFavoritesSection
+                    entries={favoriteEntries}
+                    errorMessage={favoritesErrorMessage}
+                    loading={favoritesLoading || favoriteMutationLoading}
+                    onAddNew={() => setFavoriteComposerVisible(true)}
+                    onRemove={handleRemoveFavoriteQuestion}
+                    onReuse={handleReuseFavorite}
                   />
                 </View>
               )}
@@ -453,6 +717,13 @@ export function NativeProfileScreen() {
           </View>
         </ScrollView>
       </View>
+
+      <ProfileFavoriteComposeModal
+        onClose={() => setFavoriteComposerVisible(false)}
+        onSubmit={handleSubmitNewFavorite}
+        saving={favoriteMutationLoading}
+        visible={favoriteComposerVisible}
+      />
     </SafeAreaView>
   );
 }

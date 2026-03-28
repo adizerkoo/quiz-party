@@ -18,6 +18,7 @@ export function buildQuestionFromDraft(draft: CreateQuestionDraft): CreateQuizQu
       type: 'text',
       correct: draft.correctText.trim(),
       options: null,
+      source_question_public_id: draft.sourceQuestionPublicId ?? null,
     };
   }
 
@@ -29,6 +30,7 @@ export function buildQuestionFromDraft(draft: CreateQuestionDraft): CreateQuizQu
     type: 'options',
     correct: correctOption,
     options: normalizedOptions,
+    source_question_public_id: draft.sourceQuestionPublicId ?? null,
   };
 }
 
@@ -110,5 +112,6 @@ export function createEmptyQuestionDraft(): CreateQuestionDraft {
     correctText: '',
     options: Array.from({ length: CREATE_DEFAULT_OPTIONS }, () => ''),
     selectedCorrectIndex: 0,
+    sourceQuestionPublicId: null,
   };
 }

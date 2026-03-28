@@ -405,7 +405,7 @@ def setup_logging() -> None:
     game_events_log_level_name = _resolve_level(os.getenv("GAME_EVENTS_LOG_LEVEL"), "INFO")
     sqlalchemy_level_name = _resolve_level(
         os.getenv("LOG_SQLALCHEMY_LEVEL"),
-        "INFO" if app_log_level_name == "DEBUG" else "WARNING",
+        "WARNING",
     )
 
     log_dir = Path(os.getenv("LOG_DIR", str(_default_log_dir())))

@@ -1,9 +1,10 @@
 import { FontAwesome6 } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { Href, useRouter } from 'expo-router';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -27,7 +28,15 @@ import { CreateQuestionCard } from '@/features/create/components/create-question
 import { CreateTextField } from '@/features/create/components/create-text-field';
 import { CreateToastStack } from '@/features/create/components/create-toast-stack';
 import { CreateTypeSelector } from '@/features/create/components/create-type-selector';
-import { fetchCreateLibraryQuestions, createQuizRequest, ensureOwnerProfile } from '@/features/create/services/create-api';
+import {
+  addFavoriteQuestion,
+  createQuizRequest,
+  ensureOwnerProfile,
+  fetchCreateLibraryQuestions,
+  fetchFavoriteQuestions,
+  fetchTemplateDraft,
+  removeFavoriteQuestion,
+} from '@/features/create/services/create-api';
 import { clearCreateDraft, loadCreateDraft, saveCreateDraft } from '@/features/create/services/create-storage';
 import { createTheme } from '@/features/create/theme/create-theme';
 import {
@@ -46,13 +55,20 @@ import {
   validateQuizBeforeLaunch,
 } from '@/features/create/utils/create-validation';
 import { saveGameSessionCredentials } from '@/features/game/store/game-session-credentials';
-import { getMenuSessionProfile, getOrCreateMenuInstallationPublicId } from '@/features/menu/store/menu-profile-session';
+import {
+  getMenuSessionProfile,
+  getOrCreateMenuInstallationPublicId,
+  hydrateMenuSessionProfile,
+} from '@/features/menu/store/menu-profile-session';
+import { MenuProfile } from '@/features/menu/types';
+import { createFeatureLogger } from '@/features/shared/services/feature-logger';
 
 // Полноценный native-экран создания квиза.
 // Здесь повторяются и визуальная структура create.html, и ключевая логика web-страницы:
 // черновик, идеи, библиотека, добавление вопросов, редактирование и запуск комнаты.
 export function NativeCreateScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ templatePublicId?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const titleInputRef = useRef<TextInput>(null);
@@ -67,21 +83,33 @@ export function NativeCreateScreen() {
   const [draft, setDraft] = useState<CreateQuestionDraft>(createEmptyQuestionDraft());
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [libraryQuestions, setLibraryQuestions] = useState<CreateLibraryQuestion[]>([]);
+  const [favoriteQuestions, setFavoriteQuestions] = useState<CreateLibraryQuestion[]>([]);
+  const [ownerProfile, setOwnerProfile] = useState<MenuProfile | null>(getMenuSessionProfile());
   const [libraryLoading, setLibraryLoading] = useState(true);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [libraryModalVisible, setLibraryModalVisible] = useState(false);
   const [activeLibraryCategory, setActiveLibraryCategory] = useState<CreateLibraryCategoryId>('all');
   const [currentIdea, setCurrentIdea] = useState<CreateLibraryQuestion | null>(null);
   const [toasts, setToasts] = useState<CreateToastItem[]>([]);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const requestedTemplatePublicId = readSingleParam(params.templatePublicId);
+  const handledTemplatePrefillRef = useRef<string | null>(null);
+
+  const logger = useRef(createFeatureLogger('native.create.screen')).current;
 
   const filteredLibraryQuestions = useMemo(() => {
+    if (activeLibraryCategory === 'favorites') {
+      return favoriteQuestions;
+    }
+
     if (activeLibraryCategory === 'all') {
       return libraryQuestions;
     }
 
     return libraryQuestions.filter((question) => question.cat === activeLibraryCategory);
-  }, [activeLibraryCategory, libraryQuestions]);
+  }, [activeLibraryCategory, favoriteQuestions, libraryQuestions]);
 
   const currentIdeaText = currentIdea?.text
     ?? (libraryLoading ? 'Загрузка...' : 'Готовые идеи появятся после загрузки библиотеки.');
@@ -116,34 +144,80 @@ export function NativeCreateScreen() {
   useEffect(() => {
     let mounted = true;
 
-    async function loadLibrary() {
-      setLibraryLoading(true);
-
-      try {
-        const items = await fetchCreateLibraryQuestions();
-        if (!mounted) {
-          return;
-        }
-
-        setLibraryQuestions(items);
-        setCurrentIdea(pickNextIdea(items, null));
-      } catch (error) {
-        if (mounted) {
-          pushToast('Не удалось загрузить библиотеку вопросов.');
-        }
-      } finally {
-        if (mounted) {
-          setLibraryLoading(false);
-        }
+    async function hydrateProfile() {
+      const hydratedProfile = await hydrateMenuSessionProfile();
+      if (!mounted) {
+        return;
       }
+
+      setOwnerProfile(hydratedProfile);
     }
 
-    loadLibrary();
+    void hydrateProfile();
 
     return () => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadLibrary() {
+      setLibraryLoading(true);
+      setFavoritesLoading(Boolean(ownerProfile?.id));
+      logger.info('library.load.started', {
+        hasOwnerProfile: Boolean(ownerProfile?.id),
+      });
+
+      try {
+        const [publicItems, favoriteItems] = await Promise.all([
+          fetchCreateLibraryQuestions({
+            scope: 'public',
+            userId: ownerProfile?.id ?? null,
+            installationPublicId: ownerProfile?.installationPublicId ?? null,
+            originScreen: 'create',
+          }),
+          ownerProfile?.id
+            ? fetchFavoriteQuestions({
+              userId: ownerProfile.id,
+              installationPublicId: ownerProfile.installationPublicId ?? null,
+              originScreen: 'create',
+            })
+            : Promise.resolve([]),
+        ]);
+        if (!mounted) {
+          return;
+        }
+
+        setLibraryQuestions(publicItems);
+        setFavoriteQuestions(favoriteItems);
+        setCurrentIdea(pickNextIdea(publicItems, null));
+        logger.info('library.load.succeeded', {
+          publicCount: publicItems.length,
+          favoriteCount: favoriteItems.length,
+        });
+      } catch (error) {
+        if (mounted) {
+          logger.warn('library.load.failed', {
+            message: error instanceof Error ? error.message : 'unknown_error',
+          });
+          pushToast('Не удалось загрузить библиотеку вопросов.');
+        }
+      } finally {
+        if (mounted) {
+          setLibraryLoading(false);
+          setFavoritesLoading(false);
+        }
+      }
+    }
+
+    void loadLibrary();
+
+    return () => {
+      mounted = false;
+    };
+  }, [logger, ownerProfile?.id, ownerProfile?.installationPublicId]);
 
   useEffect(() => {
     if (!libraryQuestions.length) {
@@ -172,6 +246,115 @@ export function NativeCreateScreen() {
 
     return () => clearTimeout(timeoutId);
   }, [draft, draftHydrated, questions, title]);
+
+  useEffect(() => {
+    if (!draftHydrated || !requestedTemplatePublicId) {
+      return;
+    }
+    if (handledTemplatePrefillRef.current === requestedTemplatePublicId) {
+      return;
+    }
+
+    const templatePublicId = requestedTemplatePublicId;
+    let cancelled = false;
+
+    async function prefillFromTemplate() {
+      const profile = ownerProfile ?? getMenuSessionProfile();
+      if (!profile?.id) {
+        logger.warn('create.prefill.denied_local', {
+          reason: 'missing_profile',
+          templatePublicId,
+        });
+        handledTemplatePrefillRef.current = templatePublicId;
+        pushToast('Для повтора игры нужен сохранённый профиль.');
+        return;
+      }
+
+      logger.info('create.prefill.requested', {
+        templatePublicId,
+      });
+
+      try {
+        const templateDraft = await fetchTemplateDraft({
+          templatePublicId,
+          userId: profile.id,
+          installationPublicId: profile.installationPublicId ?? null,
+          originScreen: 'history',
+        });
+        if (cancelled) {
+          return;
+        }
+
+        const applyDraft = () => {
+          applyTemplateDraftPrefill(templateDraft.title, templateDraft.questions ?? []);
+          handledTemplatePrefillRef.current = templatePublicId;
+          logger.info('create.prefill.applied', {
+            templatePublicId,
+            questionCount: templateDraft.questions?.length ?? 0,
+          });
+        };
+
+        if (hasLocalCreateConflict()) {
+          logger.warn('create.prefill.conflicted', {
+            templatePublicId,
+            existingQuestionCount: questions.length,
+          });
+          Alert.alert(
+            'Заменить черновик?',
+            'У тебя уже есть локальный черновик. Повтор игры может заменить его целиком.',
+            [
+              {
+                text: 'Оставить мой черновик',
+                style: 'cancel',
+                onPress: () => {
+                  handledTemplatePrefillRef.current = templatePublicId;
+                },
+              },
+              {
+                text: 'Заменить',
+                style: 'destructive',
+                onPress: applyDraft,
+              },
+            ],
+          );
+          return;
+        }
+
+        applyDraft();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'unknown_error';
+        logger.warn('create.prefill.failed', {
+          templatePublicId,
+          message: errorMessage,
+        });
+        handledTemplatePrefillRef.current = templatePublicId;
+        if (errorMessage.includes('HTTP 403')) {
+          pushToast('Повтор этой игры доступен только ведущему.');
+          logger.warn('repeat.denied.local', {
+            templatePublicId,
+          });
+          return;
+        }
+        pushToast('Не удалось загрузить шаблон для повтора.');
+      }
+    }
+
+    void prefillFromTemplate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    draft.correctText,
+    draft.questionText,
+    draft.options,
+    draftHydrated,
+    logger,
+    ownerProfile,
+    questions.length,
+    requestedTemplatePublicId,
+    title,
+  ]);
 
   useEffect(() => {
     const keyboardEventName = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -206,8 +389,158 @@ export function NativeCreateScreen() {
     }, 3000);
   }
 
-  function updateDraft(patch: Partial<CreateQuestionDraft>) {
-    setDraft((current) => ({ ...current, ...patch }));
+  function updateDraft(
+    patch: Partial<CreateQuestionDraft>,
+    options: { preserveSourceQuestion?: boolean } = {},
+  ) {
+    setDraft((current) => {
+      const shouldClearSourceQuestion =
+        !options.preserveSourceQuestion
+        && !Object.prototype.hasOwnProperty.call(patch, 'sourceQuestionPublicId')
+        && (
+          Object.prototype.hasOwnProperty.call(patch, 'questionText')
+          || Object.prototype.hasOwnProperty.call(patch, 'questionType')
+          || Object.prototype.hasOwnProperty.call(patch, 'correctText')
+          || Object.prototype.hasOwnProperty.call(patch, 'options')
+          || Object.prototype.hasOwnProperty.call(patch, 'selectedCorrectIndex')
+        );
+
+      return {
+        ...current,
+        ...patch,
+        sourceQuestionPublicId: shouldClearSourceQuestion
+          ? null
+          : (patch.sourceQuestionPublicId ?? current.sourceQuestionPublicId ?? null),
+      };
+    });
+  }
+
+  function upsertFavoriteQuestion(question: CreateLibraryQuestion) {
+    setFavoriteQuestions((current) => [
+      { ...question, is_favorite: true },
+      ...current.filter((item) => item.public_id !== question.public_id),
+    ]);
+    setLibraryQuestions((current) => current.map((item) => (
+      item.public_id === question.public_id
+        ? { ...item, is_favorite: true }
+        : item
+    )));
+  }
+
+  function removeFavoriteQuestionLocally(questionPublicId: string) {
+    setFavoriteQuestions((current) => current.filter((item) => item.public_id !== questionPublicId));
+    setLibraryQuestions((current) => current.map((item) => (
+      item.public_id === questionPublicId
+        ? { ...item, is_favorite: false }
+        : item
+    )));
+  }
+
+  async function requireFavoriteProfile() {
+    const profile = ownerProfile ?? getMenuSessionProfile();
+    if (!profile?.id) {
+      pushToast('Сначала сохрани профиль, чтобы пользоваться избранным.');
+      logger.warn('favorite.toggle.denied_local', {
+        reason: 'missing_profile',
+      });
+      return null;
+    }
+
+    return profile;
+  }
+
+  async function handleToggleFavorite(question: CreateLibraryQuestion) {
+    const profile = await requireFavoriteProfile();
+    if (!profile?.id) {
+      return;
+    }
+
+    try {
+      if (question.is_favorite && question.public_id) {
+        await removeFavoriteQuestion({
+          userId: profile.id,
+          installationPublicId: profile.installationPublicId ?? null,
+          questionPublicId: question.public_id,
+          originScreen: 'create',
+        });
+        removeFavoriteQuestionLocally(question.public_id);
+      } else {
+        const favoriteQuestion = await addFavoriteQuestion({
+          userId: profile.id,
+          installationPublicId: profile.installationPublicId ?? null,
+          originScreen: 'create',
+          sourceQuestionPublicId:
+            question.source_question_public_id ?? question.public_id ?? null,
+        });
+        upsertFavoriteQuestion(favoriteQuestion);
+      }
+    } catch (error) {
+      logger.warn('favorite.toggle.failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+        questionPublicId: question.public_id ?? null,
+      });
+      pushToast('Не удалось обновить избранное. Попробуй ещё раз.');
+    }
+  }
+
+  async function handleSaveDraftToFavorites() {
+    const profile = await requireFavoriteProfile();
+    if (!profile?.id) {
+      return;
+    }
+
+    const validationError = validateQuestionDraft(draft);
+    if (validationError) {
+      pushToast(validationError);
+      return;
+    }
+
+    setIsSavingFavorite(true);
+
+    try {
+      const questionPayload = buildQuestionFromDraft(draft);
+      const favoriteQuestion = await addFavoriteQuestion({
+        userId: profile.id,
+        installationPublicId: profile.installationPublicId ?? null,
+        originScreen: 'create',
+        sourceQuestionPublicId: questionPayload.source_question_public_id ?? null,
+        question: questionPayload.source_question_public_id ? null : questionPayload,
+      });
+      upsertFavoriteQuestion(favoriteQuestion);
+      updateDraft(
+        {
+          sourceQuestionPublicId:
+            favoriteQuestion.source_question_public_id ?? favoriteQuestion.public_id ?? null,
+        },
+        { preserveSourceQuestion: true },
+      );
+      pushToast('Вопрос добавлен в избранное.');
+    } catch (error) {
+      logger.warn('favorite.save_custom.failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
+      pushToast('Не удалось сохранить вопрос в избранное.');
+    } finally {
+      setIsSavingFavorite(false);
+    }
+  }
+
+  function hasLocalCreateConflict() {
+    return Boolean(
+      title.trim()
+      || questions.length
+      || draft.questionText.trim()
+      || draft.correctText.trim()
+      || draft.options.some((item) => item.trim()),
+    );
+  }
+
+  function applyTemplateDraftPrefill(templateTitle: string, templateQuestions: CreateQuizQuestion[]) {
+    setTitle(templateTitle);
+    setQuestions(templateQuestions);
+    setDraft(createEmptyQuestionDraft());
+    setEditIndex(null);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   }
 
   function revealInputAboveKeyboard(input: TextInput | null, extraDelay = 0) {
@@ -254,7 +587,11 @@ export function NativeCreateScreen() {
     setDraft((current) => {
       const nextOptions = [...current.options];
       nextOptions[index] = nextValue;
-      return { ...current, options: nextOptions };
+      return {
+        ...current,
+        options: nextOptions,
+        sourceQuestionPublicId: null,
+      };
     });
   }
 
@@ -271,6 +608,7 @@ export function NativeCreateScreen() {
       return {
         ...current,
         options: [...current.options, ''],
+        sourceQuestionPublicId: null,
       };
     });
   }
@@ -294,6 +632,7 @@ export function NativeCreateScreen() {
         ...current,
         options: nextOptions,
         selectedCorrectIndex: Math.max(0, nextCorrectIndex),
+        sourceQuestionPublicId: null,
       };
     });
   }
@@ -303,6 +642,7 @@ export function NativeCreateScreen() {
       ...current,
       options: current.options.map(() => ''),
       selectedCorrectIndex: 0,
+      sourceQuestionPublicId: null,
     }));
   }
 
@@ -468,13 +808,28 @@ export function NativeCreateScreen() {
                 <View style={styles.sectionLabelRow}>
                   <Text style={styles.sectionLabel}>Твой вопрос</Text>
 
-                  <Pressable onPress={() => setLibraryModalVisible(true)} style={({ pressed }) => [
-                    styles.inlineLibraryButton,
-                    pressed && styles.inlineLibraryButtonPressed,
-                  ]}>
-                    <FontAwesome6 color={createTheme.colors.purple} iconStyle="solid" name="book-open" size={12} />
-                    <Text style={styles.inlineLibraryButtonText}>Все идеи</Text>
-                  </Pressable>
+                  <View style={styles.inlineActions}>
+                    <Pressable onPress={handleSaveDraftToFavorites} style={({ pressed }) => [
+                      styles.inlineFavoriteButton,
+                      isSavingFavorite && styles.inlineFavoriteButtonDisabled,
+                      pressed && !isSavingFavorite && styles.inlineFavoriteButtonPressed,
+                    ]}>
+                      <FontAwesome6 color={createTheme.colors.pink} iconStyle="solid" name="heart" size={12} />
+                      <Text style={styles.inlineFavoriteButtonText}>
+                        {isSavingFavorite ? 'Сохраняем...' : 'В избранное'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable onPress={() => setLibraryModalVisible(true)} style={({ pressed }) => [
+                      styles.inlineLibraryButton,
+                      pressed && styles.inlineLibraryButtonPressed,
+                    ]}>
+                      <FontAwesome6 color={createTheme.colors.purple} iconStyle="solid" name="book-open" size={12} />
+                      <Text style={styles.inlineLibraryButtonText}>
+                        {favoritesLoading ? 'Загрузка...' : 'Библиотека'}
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
 
                 <CreateTextField
@@ -596,6 +951,7 @@ export function NativeCreateScreen() {
           onChangeCategory={setActiveLibraryCategory}
           onClose={() => setLibraryModalVisible(false)}
           onImportQuestion={applyImportedQuestion}
+          onToggleFavorite={handleToggleFavorite}
           questions={filteredLibraryQuestions}
           visible={libraryModalVisible}
         />
@@ -625,6 +981,10 @@ function pickNextIdea(
   return nextItem;
 }
 
+function readSingleParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 function buildDraftFromQuestion(question: CreateQuizQuestion): CreateQuestionDraft {
   if (question.type === 'text') {
     return {
@@ -633,6 +993,7 @@ function buildDraftFromQuestion(question: CreateQuizQuestion): CreateQuestionDra
       correctText: question.correct,
       options: createEmptyQuestionDraft().options,
       selectedCorrectIndex: 0,
+      sourceQuestionPublicId: question.source_question_public_id ?? null,
     };
   }
 
@@ -645,6 +1006,7 @@ function buildDraftFromQuestion(question: CreateQuizQuestion): CreateQuestionDra
     correctText: '',
     options,
     selectedCorrectIndex,
+    sourceQuestionPublicId: question.source_question_public_id ?? null,
   };
 }
 
@@ -720,6 +1082,11 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
   },
+  inlineActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
 
   // Текст заголовка секции.
   sectionLabel: {
@@ -751,6 +1118,32 @@ const styles = StyleSheet.create({
 
   inlineLibraryButtonText: {
     color: createTheme.colors.purple,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  inlineFavoriteButton: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 133, 161, 0.22)',
+    borderRadius: createTheme.radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+  },
+  inlineFavoriteButtonPressed: {
+    backgroundColor: 'rgba(255, 133, 161, 0.12)',
+    transform: [{ scale: 0.97 }],
+  },
+  inlineFavoriteButtonDisabled: {
+    opacity: 0.6,
+  },
+  inlineFavoriteButtonText: {
+    color: createTheme.colors.pinkDark,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',

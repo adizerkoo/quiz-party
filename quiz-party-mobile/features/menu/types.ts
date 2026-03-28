@@ -1,3 +1,5 @@
+import type { CreateLibraryQuestion } from '@/features/create/types';
+
 // Базовые типы для native-меню.
 
 export type MenuProfile = {
@@ -21,15 +23,27 @@ export type MenuHistoryEntry = {
   is_winner: boolean;
   winner_names: string[];
   can_open_results: boolean;
+  template_public_id?: string | null;
+  is_host_game: boolean;
+  can_repeat: boolean;
 };
 
+export type MenuFavoriteQuestion = CreateLibraryQuestion;
+
 export type ProfileModalMode = 'create' | 'edit';
-export type ProfileScreenTab = 'profile' | 'history';
+export type ProfileScreenTab = 'profile' | 'history' | 'favorites';
 export type MenuHistorySortMode = 'time' | 'wins' | 'host';
 export type MenuHistoryFetchSource = 'network' | 'cache';
+export type MenuFavoriteFetchSource = 'network' | 'cache';
 
 export type MenuHistoryFetchResult = {
   entries: MenuHistoryEntry[];
   source: MenuHistoryFetchSource;
+  cachedAt: string | null;
+};
+
+export type MenuFavoriteFetchResult = {
+  entries: MenuFavoriteQuestion[];
+  source: MenuFavoriteFetchSource;
   cachedAt: string | null;
 };

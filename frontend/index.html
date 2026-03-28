@@ -17,7 +17,7 @@
     <div class="main-container">
         <div id="profile-banner" class="profile-banner">
             <div class="profile-banner-card">
-                <span id="profile-banner-emoji" class="profile-banner-emoji">🐸</span>
+                <span id="profile-banner-emoji" class="profile-banner-emoji">🐤</span>
                 <div class="profile-banner-copy">
                     <div class="profile-banner-name-row"><strong id="profile-banner-name">Игрок</strong></div>
                 </div>
@@ -84,30 +84,92 @@
             <div class="modal-header">
                 <span class="modal-hero-icon">👋</span>
                 <h3 id="profile-modal-title">Сначала познакомимся</h3>
+                <p id="profile-modal-description">Один раз выбери имя и аватар, дальше в игру можно будет входить только по коду.</p>
+            </div>
+
+            <div id="profile-tabs" class="profile-tabs" style="display:none;">
+                <button type="button" class="profile-tab-button is-active" data-profile-tab="profile">Профиль</button>
+                <button type="button" class="profile-tab-button" data-profile-tab="history">История</button>
+                <button type="button" class="profile-tab-button" data-profile-tab="favorites">Избранные</button>
             </div>
 
             <div class="portal-inputs">
-                <div class="modern-field" id="field-profile-name">
-                    <input type="text" id="profile-name" maxlength="15" placeholder=" " required>
-                    <label>Твоё имя</label>
-                    <span class="field-icon">🙂</span>
-                </div>
-                <span class="input-hint" id="hint-profile-name">Пожалуйста, представься</span>
+                <div id="profile-tab-panel" class="profile-tab-panel">
+                    <div class="modern-field" id="field-profile-name">
+                        <input type="text" id="profile-name" maxlength="15" placeholder=" " required>
+                        <label>Твоё имя</label>
+                        <span class="field-icon">🙂</span>
+                    </div>
+                    <span class="input-hint" id="hint-profile-name">Пожалуйста, представься</span>
 
-                <div class="avatar-picker-wrap">
-                    <div class="avatar-picker-title">Выбери аватар</div>
-                    <div id="avatar-picker" class="avatar-picker-grid"></div>
+                    <div class="avatar-picker-wrap">
+                        <div class="avatar-picker-title">Выбери аватар</div>
+                        <div id="avatar-picker" class="avatar-picker-grid"></div>
+                    </div>
+                    <span class="input-hint" id="hint-profile-avatar">Выбери аватар</span>
                 </div>
-                <span class="input-hint" id="hint-profile-avatar">Выбери аватар</span>
-                <div id="profile-history-section" class="profile-history-section" style="display:none;">
+
+                <div id="profile-history-section" class="profile-history-section" hidden>
                     <div class="profile-history-heading">
-                        <div class="profile-history-title">РСЃС‚РѕСЂРёСЏ РёРіСЂ</div>
-                        <div class="profile-history-subtitle">Р¤РёРЅР°Р»С‹, РѕС‚РјРµРЅС‹ Рё С‚РІРѕРё Р»РёС‡РЅС‹Рµ СЂРµР·СѓР»СЊС‚Р°С‚С‹</div>
+                        <div class="profile-history-title">История игр</div>
+                        <div class="profile-history-subtitle">Здесь живут твои последние игры, итоги и быстрый повтор для хоста.</div>
                     </div>
                     <div id="profile-history-list" class="profile-history-list"></div>
                 </div>
+
+                <div id="profile-favorites-section" class="profile-history-section" hidden>
+                    <div class="profile-history-heading">
+                        <div class="profile-history-title">Избранные вопросы</div>
+                        <div class="profile-history-subtitle">Сохраняй любимые вопросы, удаляй лишнее и быстро переиспользуй их в create.</div>
+                    </div>
+
+                    <div class="profile-favorites-toolbar">
+                        <button type="button" id="profile-favorite-compose-open" class="profile-secondary-button">Добавить вопрос</button>
+                    </div>
+
+                    <div id="profile-favorite-compose" class="profile-favorite-compose" hidden>
+                        <div class="profile-favorite-compose-head">
+                            <strong>Новый избранный вопрос</strong>
+                            <button type="button" id="profile-favorite-compose-close" class="btn-cancel-link profile-inline-link">Скрыть</button>
+                        </div>
+
+                        <div class="profile-favorite-compose-field">
+                            <label for="profile-favorite-question">Вопрос</label>
+                            <input id="profile-favorite-question" type="text" maxlength="180" placeholder="Например: Кто первым засыпает на вечеринках?">
+                        </div>
+
+                        <div class="profile-favorite-compose-field">
+                            <label>Тип ответа</label>
+                            <div class="profile-favorite-type-switch">
+                                <button type="button" class="profile-favorite-type-button is-active" data-favorite-type="text">Текст</button>
+                                <button type="button" class="profile-favorite-type-button" data-favorite-type="options">Выбор</button>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="profile-favorite-type" value="text">
+
+                        <div id="profile-favorite-correct-zone" class="profile-favorite-compose-field">
+                            <label for="profile-favorite-correct">Ответ</label>
+                            <input id="profile-favorite-correct" type="text" maxlength="200" placeholder="Правильный ответ">
+                        </div>
+
+                        <div id="profile-favorite-options-zone" class="profile-favorite-compose-field" hidden>
+                            <div class="profile-favorite-options-head">
+                                <label>Варианты ответа</label>
+                                <button type="button" id="profile-favorite-add-option" class="profile-inline-action">Добавить вариант</button>
+                            </div>
+                            <div id="profile-favorite-options-list" class="profile-favorite-options-list"></div>
+                        </div>
+
+                        <button type="button" id="profile-favorite-submit" class="profile-primary-button">Сохранить в избранное</button>
+                    </div>
+
+                    <div id="profile-favorites-status" class="profile-favorites-status" hidden></div>
+                    <div id="profile-favorites-list" class="profile-history-list"></div>
+                </div>
             </div>
-            <button onclick="submitProfileRegistration()" class="btn-modern-join">
+
+            <button id="profile-submit-btn" onclick="submitProfileRegistration()" class="btn-modern-join">
                 <span id="profile-submit-label">Сохранить профиль ✨</span>
             </button>
             <button id="profile-cancel-btn" onclick="closeProfileModal()" class="btn-cancel-link" style="display:none;">Отмена</button>
@@ -131,11 +193,14 @@
     </div>
 
     <script src="js/shared/user-profile.js"></script>
+    <script src="js/shared/feature-logger.js"></script>
+    <script src="js/shared/question-bank-api.js"></script>
     <script src="js/menu/modal.js"></script>
     <script src="js/menu/join.js"></script>
     <script src="js/menu/resume.js"></script>
     <script src="js/menu/init.js"></script>
     <script src="js/menu/profile-history.js"></script>
+    <script src="js/menu/profile-favorites.js"></script>
     <script src="js/menu/profile.js"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ from pathlib import Path
 import secrets
 import string
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -22,14 +22,21 @@ from .helpers import get_quiz_by_code
 from .logging_config import build_log_extra, log_event, log_game_event
 from .security import sanitize_text, validate_player_name
 from .services import (
+    add_favorite_question,
     DevicePayload,
     build_quiz_results_response,
     create_quiz_session,
     ensure_installation,
+    ensure_system_question_bank_seed,
     evaluate_quiz_state,
     evaluate_resume_eligibility,
+    get_template_draft_for_owner,
+    list_favorite_questions,
+    list_library_categories,
+    list_library_questions,
     list_user_history,
     load_quiz_graph,
+    remove_favorite_question,
     serialize_quiz_questions,
 )
 
@@ -71,6 +78,71 @@ def _clean_optional_text(value, max_length: int) -> str | None:
     if not cleaned:
         return None
     return cleaned[:max_length]
+
+
+def _try_resolve_current_user(
+    db: Session,
+    *,
+    user_id: int | None = None,
+    installation_public_id: str | None = None,
+) -> models.User | None:
+    resolved_user = None
+
+    if user_id is not None:
+        resolved_user = db.query(models.User).filter(models.User.id == user_id).first()
+
+    if installation_public_id:
+        installation = (
+            db.query(models.UserInstallation)
+            .filter(models.UserInstallation.public_id == installation_public_id)
+            .first()
+        )
+        installation_user = None
+        if installation is not None and installation.user_id is not None:
+            installation_user = db.query(models.User).filter(models.User.id == installation.user_id).first()
+
+        if (
+            resolved_user is not None
+            and installation_user is not None
+            and resolved_user.id != installation_user.id
+        ):
+            raise HTTPException(status_code=403, detail="User identity mismatch")
+
+        if resolved_user is None:
+            resolved_user = installation_user
+
+    return resolved_user
+
+
+def _resolve_current_user(
+    db: Session,
+    *,
+    user_id: int | None = None,
+    installation_public_id: str | None = None,
+) -> models.User:
+    if user_id is None and not installation_public_id:
+        raise HTTPException(status_code=422, detail="User identity is required")
+
+    user = _try_resolve_current_user(
+        db,
+        user_id=user_id,
+        installation_public_id=installation_public_id,
+    )
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def _ensure_system_library_seeded(db: Session) -> None:
+    existing_system_question = (
+        db.query(models.QuestionBankQuestion.id)
+        .filter(models.QuestionBankQuestion.origin == "system")
+        .first()
+    )
+    if existing_system_question is not None:
+        return
+    ensure_system_question_bank_seed(db)
+    db.commit()
 
 
 def register_routes(app):
@@ -131,6 +203,19 @@ def register_routes(app):
             db.commit()
             db.refresh(quiz)
             cache_quiz(code, quiz.id, quiz.questions_data, quiz.total_questions)
+            source_question_links = int((quiz.session_metadata or {}).get("source_question_links") or 0)
+            log_event(
+                logger,
+                logging.INFO,
+                "quiz.create.source_links",
+                "Quiz created with reusable question links",
+                room=quiz.code,
+                quiz_code=quiz.code,
+                user_id=getattr(owner, "id", None),
+                template_public_id=quiz.template_public_id,
+                source_question_links=source_question_links,
+                origin_screen="create",
+            )
             log_game_event(
                 logger,
                 logging.INFO,
@@ -229,6 +314,149 @@ def register_routes(app):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         return list_user_history(db, user_id=user_id)
+
+    @app.get("/api/v1/library/categories", response_model=list[schemas.LibraryCategoryResponse])
+    def get_library_categories(db: Session = Depends(database.get_db)):
+        """Returns active server-side question-bank categories for the shared library UI."""
+        _ensure_system_library_seeded(db)
+        return list_library_categories(db)
+
+    @app.get("/api/v1/library/questions", response_model=list[schemas.LibraryQuestionResponse])
+    def get_library_questions(
+        scope: schemas.LibraryScope = Query(default="public"),
+        category: str | None = Query(default=None),
+        search: str | None = Query(default=None),
+        user_id: int | None = Query(default=None),
+        installation_public_id: str | None = Query(default=None, max_length=36),
+        origin_screen: schemas.OriginScreen | None = Query(default=None),
+        db: Session = Depends(database.get_db),
+    ):
+        """Returns public or favorite reusable questions for create/profile screens."""
+        _ensure_system_library_seeded(db)
+        if scope == "favorites":
+            user = _resolve_current_user(
+                db,
+                user_id=user_id,
+                installation_public_id=installation_public_id,
+            )
+        else:
+            user = _try_resolve_current_user(
+                db,
+                user_id=user_id,
+                installation_public_id=installation_public_id,
+            )
+        return list_library_questions(
+            db,
+            scope=scope,
+            user=user,
+            category=category,
+            search=search,
+            origin_screen=origin_screen,
+        )
+
+    @app.get("/api/v1/me/favorites/questions", response_model=list[schemas.LibraryQuestionResponse])
+    def get_my_favorite_questions(
+        user_id: int | None = Query(default=None),
+        installation_public_id: str | None = Query(default=None, max_length=36),
+        category: str | None = Query(default=None),
+        search: str | None = Query(default=None),
+        origin_screen: schemas.OriginScreen | None = Query(default=None),
+        db: Session = Depends(database.get_db),
+    ):
+        """Returns the current user's favorite reusable questions."""
+        user = _resolve_current_user(
+            db,
+            user_id=user_id,
+            installation_public_id=installation_public_id,
+        )
+        return list_favorite_questions(
+            db,
+            user=user,
+            category=category,
+            search=search,
+            origin_screen=origin_screen,
+        )
+
+    @app.post("/api/v1/me/favorites/questions", response_model=schemas.LibraryQuestionResponse)
+    def add_my_favorite_question(
+        payload: schemas.FavoriteQuestionMutationRequest,
+        db: Session = Depends(database.get_db),
+    ):
+        """Adds or creates a reusable favorite question for the current user."""
+        user = _resolve_current_user(
+            db,
+            user_id=payload.user_id,
+            installation_public_id=payload.installation_public_id,
+        )
+        try:
+            result = add_favorite_question(
+                db,
+                user=user,
+                source_question_public_id=payload.source_question_public_id,
+                question_payload=payload.question.model_dump() if payload.question else None,
+                origin_screen=payload.origin_screen,
+            )
+            db.commit()
+            return result
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception:
+            db.rollback()
+            raise
+
+    @app.delete("/api/v1/me/favorites/questions/{question_public_id}", status_code=204)
+    def delete_my_favorite_question(
+        question_public_id: str,
+        user_id: int | None = Query(default=None),
+        installation_public_id: str | None = Query(default=None, max_length=36),
+        origin_screen: schemas.OriginScreen | None = Query(default=None),
+        db: Session = Depends(database.get_db),
+    ):
+        """Removes a reusable question from the current user's favorites."""
+        user = _resolve_current_user(
+            db,
+            user_id=user_id,
+            installation_public_id=installation_public_id,
+        )
+        removed = remove_favorite_question(
+            db,
+            user=user,
+            question_public_id=question_public_id,
+            origin_screen=origin_screen,
+        )
+        if not removed:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Favorite question not found")
+        db.commit()
+        return Response(status_code=204)
+
+    @app.get("/api/v1/templates/{template_public_id}/draft", response_model=schemas.TemplateDraftResponse)
+    def get_template_draft(
+        template_public_id: str,
+        user_id: int | None = Query(default=None),
+        installation_public_id: str | None = Query(default=None, max_length=36),
+        origin_screen: schemas.OriginScreen | None = Query(default=None),
+        db: Session = Depends(database.get_db),
+    ):
+        """Returns a create draft reconstructed from a template for its owner only."""
+        user = _resolve_current_user(
+            db,
+            user_id=user_id,
+            installation_public_id=installation_public_id,
+        )
+        try:
+            payload = get_template_draft_for_owner(
+                db,
+                template_public_id=template_public_id,
+                user=user,
+                origin_screen=origin_screen,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Template not found")
+        return payload
 
     @app.put("/api/v1/users/{user_id}", response_model=schemas.UserResponse)
     def update_user(user_id: int, user_data: schemas.UserUpdate, db: Session = Depends(database.get_db)):

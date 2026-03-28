@@ -1,58 +1,38 @@
 /* =========================================
    ИДЕИ ВОПРОСОВ
-   Смена рандомной идеи под инпутом,
-   вставка идеи в форму по клику.
+   Ротация случайной идеи из серверной публичной библиотеки
+   и быстрая вставка в форму.
 ========================================= */
 
-
-// --- Показать следующую случайную идею ---
 function changeIdea() {
-    if (!questionsLibrary.length) return;
+    if (!questionsLibrary.length) {
+        return;
+    }
 
-    const ideaText = document.getElementById("random-idea-text");
+    const ideaText = document.getElementById('random-idea-text');
+    if (!ideaText) {
+        return;
+    }
 
     ideaText.style.opacity = 0;
-    ideaText.style.transform = "translateY(5px)";
+    ideaText.style.transform = 'translateY(5px)';
 
     setTimeout(() => {
-        let randomIndex;
-        do {
+        let randomIndex = Math.floor(Math.random() * questionsLibrary.length);
+        while (questionsLibrary.length > 1 && questionsLibrary[randomIndex] === currentIdea) {
             randomIndex = Math.floor(Math.random() * questionsLibrary.length);
-        } while (questionsLibrary.length > 1 && questionsLibrary[randomIndex] === currentIdea);
+        }
 
         currentIdea = questionsLibrary[randomIndex];
-        ideaText.textContent = currentIdea.text;
+        ideaText.textContent = currentIdea?.text || '';
         ideaText.style.opacity = 1;
-        ideaText.style.transform = "translateY(0)";
+        ideaText.style.transform = 'translateY(0)';
     }, 200);
 }
 
-
-// --- Вставить текущую идею в форму ---
 function insertIdea() {
-    if (!currentIdea) return;
-
-    const questionInput = document.getElementById("q-input-text");
-    const typeOptions = document.querySelectorAll(".type-option");
-
-    if (questionInput) {
-        questionInput.value = currentIdea.text;
-
-        // Эффект вспышки при вставке
-        questionInput.classList.add("idea-inserted");
-        setTimeout(() => questionInput.classList.remove("idea-inserted"), 800);
+    if (!currentIdea) {
+        return;
     }
-
-    if (currentIdea.type === "text") {
-        selectType("text", typeOptions[0]);
-        const correctInput = document.getElementById("q-input-correct");
-        if (correctInput) correctInput.value = currentIdea.correct || "";
-    } else if (currentIdea.type === "options") {
-        selectType("options", typeOptions[1]);
-        const correctIdx = currentIdea.options.indexOf(currentIdea.correct);
-        renderOptionRows(currentIdea.options.length, currentIdea.options, correctIdx >= 0 ? correctIdx : 0);
-    }
-
-    updateClearButtons();
-    saveDraftToLocal();
+    importQuestion(currentIdea);
 }

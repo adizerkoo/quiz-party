@@ -1,4 +1,5 @@
 (function () {
+    const logger = window.QuizFeatureLogger?.createLogger?.('web.menu.history') || console;
     const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
         dateStyle: 'medium',
         timeStyle: 'short',
@@ -53,6 +54,10 @@
             pills.push({ label: 'Победа', tone: 'winner' });
         }
 
+        if (entry.is_host_game) {
+            pills.push({ label: 'Хост', tone: 'finished' });
+        }
+
         return pills;
     }
 
@@ -78,8 +83,46 @@
         const list = historyList();
         if (!section || !list) return;
 
-        section.style.display = 'block';
+        section.hidden = false;
         list.innerHTML = `<div class="profile-history-state">${escapeValue(message)}</div>`;
+    }
+
+    function openHistoryResults(quizCode) {
+        const normalizedCode = String(quizCode || '').trim().toUpperCase();
+        if (!normalizedCode) {
+            return;
+        }
+
+        window.location.href = `game.html?room=${encodeURIComponent(normalizedCode)}&role=player`;
+    }
+
+    function repeatHistoryTemplate(templatePublicId, quizCode) {
+        const normalizedTemplateId = String(templatePublicId || '').trim();
+        if (!normalizedTemplateId) {
+            return;
+        }
+        logger.info('repeat.from_history.tapped', {
+            quizCode: quizCode || null,
+            templatePublicId: normalizedTemplateId,
+        });
+        window.location.href = `create.html?templatePublicId=${encodeURIComponent(normalizedTemplateId)}`;
+    }
+
+    function attachHistoryActions(list) {
+        list.querySelectorAll('[data-history-room]').forEach((button) => {
+            button.addEventListener('click', () => {
+                openHistoryResults(button.getAttribute('data-history-room'));
+            });
+        });
+
+        list.querySelectorAll('[data-history-repeat]').forEach((button) => {
+            button.addEventListener('click', () => {
+                repeatHistoryTemplate(
+                    button.getAttribute('data-history-repeat'),
+                    button.getAttribute('data-history-quiz'),
+                );
+            });
+        });
     }
 
     function renderHistoryEntries(entries) {
@@ -87,7 +130,7 @@
         const list = historyList();
         if (!section || !list) return;
 
-        section.style.display = 'block';
+        section.hidden = false;
 
         if (!entries.length) {
             renderHistoryState('Пока нет завершённых или отменённых игр. Когда сыграешь, история появится здесь.');
@@ -99,14 +142,14 @@
                 .map((pill) => `<span class="profile-history-pill is-${pill.tone}">${escapeValue(pill.label)}</span>`)
                 .join('');
             const canOpenResults = Boolean(entry.can_open_results);
+            const canRepeat = Boolean(entry.can_repeat && entry.template_public_id);
             const cardClasses = [
                 'profile-history-card',
-                canOpenResults ? 'is-clickable' : 'is-disabled',
                 entry.is_winner ? 'is-winner' : '',
             ].filter(Boolean).join(' ');
 
             return `
-                <div class="${cardClasses}" ${canOpenResults ? `data-history-room="${escapeValue(entry.quiz_code)}"` : ''}>
+                <div class="${cardClasses}">
                     <div class="profile-history-card-head">
                         <div>
                             <div class="profile-history-card-date">${escapeValue(formatHistoryDate(entry))}</div>
@@ -133,19 +176,33 @@
                     </div>
 
                     <div class="profile-history-winners"><strong>${escapeValue(buildWinnersLine(entry))}</strong></div>
-                    <div class="profile-history-open-label">${canOpenResults ? 'Открыть итоги игры' : 'Итоги недоступны для этой записи'}</div>
+
+                    <div class="profile-history-actions">
+                        <button
+                            type="button"
+                            class="profile-history-action ${canOpenResults ? '' : 'is-disabled'}"
+                            ${canOpenResults ? `data-history-room="${escapeValue(entry.quiz_code)}"` : 'disabled'}
+                        >
+                            Итоги
+                        </button>
+                        ${canRepeat
+                            ? `
+                                <button
+                                    type="button"
+                                    class="profile-history-action is-repeat"
+                                    data-history-repeat="${escapeValue(entry.template_public_id)}"
+                                    data-history-quiz="${escapeValue(entry.quiz_code)}"
+                                >
+                                    Повторить
+                                </button>
+                            `
+                            : ''}
+                    </div>
                 </div>
             `;
         }).join('');
 
-        list.querySelectorAll('[data-history-room]').forEach((card) => {
-            card.addEventListener('click', () => {
-                const quizCode = card.getAttribute('data-history-room');
-                if (quizCode) {
-                    openHistoryResults(quizCode);
-                }
-            });
-        });
+        attachHistoryActions(list);
     }
 
     function hideHistory() {
@@ -153,7 +210,7 @@
         const list = historyList();
         if (!section || !list) return;
 
-        section.style.display = 'none';
+        section.hidden = true;
         list.innerHTML = '';
     }
 
@@ -169,10 +226,15 @@
 
         const requestId = ++historyRequestId;
         renderHistoryState('Загружаем историю игр...');
+        logger.info('history.load.started', { userId });
 
         try {
             const response = await fetch(`/api/v1/users/${userId}/history`);
             if (!response.ok) {
+                logger.warn('history.load.failed', {
+                    userId,
+                    status: response.status,
+                });
                 throw new Error(`HTTP ${response.status}`);
             }
 
@@ -181,22 +243,22 @@
                 return;
             }
 
-            renderHistoryEntries(Array.isArray(entries) ? entries : []);
+            const normalizedEntries = Array.isArray(entries) ? entries : [];
+            logger.info('history.load.succeeded', {
+                userId,
+                resultCount: normalizedEntries.length,
+            });
+            renderHistoryEntries(normalizedEntries);
         } catch (error) {
             if (requestId !== historyRequestId) {
                 return;
             }
+            logger.warn('history.load.failed', {
+                userId,
+                message: error?.message || 'unknown_error',
+            });
             renderHistoryState('Не удалось загрузить историю игр. Попробуй открыть профиль ещё раз.');
         }
-    }
-
-    function openHistoryResults(quizCode) {
-        const normalizedCode = String(quizCode || '').trim().toUpperCase();
-        if (!normalizedCode) {
-            return;
-        }
-
-        window.location.href = `game.html?room=${encodeURIComponent(normalizedCode)}&role=player`;
     }
 
     window.QuizProfileHistory = {

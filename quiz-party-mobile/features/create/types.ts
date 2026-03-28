@@ -7,17 +7,24 @@ export type CreateQuizQuestion = {
   type: CreateQuestionType;
   correct: string;
   options: string[] | null;
+  source_question_public_id?: string | null;
 };
 
 // Вопрос из библиотеки идей.
 // Отличается только наличием категории.
 export type CreateLibraryQuestion = CreateQuizQuestion & {
+  public_id?: string;
   cat?: string;
+  source?: 'system' | 'user';
+  visibility?: 'public' | 'private';
+  category_title?: string | null;
+  is_favorite?: boolean;
 };
 
 // Набор фильтров для библиотеки.
 export type CreateLibraryCategoryId =
   | 'all'
+  | 'favorites'
   | 'about-me'
   | 'funny'
   | 'music'
@@ -38,6 +45,7 @@ export type CreateQuestionDraft = {
   correctText: string;
   options: string[];
   selectedCorrectIndex: number;
+  sourceQuestionPublicId?: string | null;
 };
 
 // Полный черновик экрана, который сохраняем локально.
@@ -51,4 +59,11 @@ export type CreateScreenDraft = {
 export type CreateToastItem = {
   id: string;
   message: string;
+};
+
+export type CreateTemplateDraft = {
+  template_public_id: string;
+  title: string;
+  total_questions: number;
+  questions: CreateQuizQuestion[];
 };

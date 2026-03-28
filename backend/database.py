@@ -61,6 +61,21 @@ SessionLocal = sessionmaker(
 )
 
 
+def _seed_system_question_bank() -> None:
+    """Ensures developer library questions are present in the database."""
+    from .services import ensure_system_question_bank_seed
+
+    db = SessionLocal()
+    try:
+        ensure_system_question_bank_seed(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _verify_database_connection() -> None:
     """Runs a lightweight connectivity check before migrations and traffic."""
     try:
@@ -280,6 +295,28 @@ def _repair_schema_after_fallback():
                 connection.execute(text("ALTER TABLE game_sessions DROP COLUMN IF EXISTS winner_id"))
                 repaired_columns.setdefault("game_sessions", []).append("winner_id(dropped)")
 
+        if inspector.has_table("quiz_questions"):
+            question_columns = {column["name"] for column in inspector.get_columns("quiz_questions")}
+            if "source_question_id" not in question_columns:
+                connection.execute(
+                    text(
+                        """
+                        ALTER TABLE quiz_questions
+                        ADD COLUMN source_question_id INTEGER REFERENCES question_bank_questions(id)
+                        """
+                    )
+                )
+                repaired_columns.setdefault("quiz_questions", []).append("source_question_id")
+
+            connection.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_quiz_questions_source_question
+                    ON quiz_questions (source_question_id)
+                    """
+                )
+            )
+
         for table_name, columns in repaired_columns.items():
             log_event(
                 logger,
@@ -332,6 +369,7 @@ def init_db():
                 "db.migrations.completed",
                 "Alembic migrations applied successfully",
             )
+            _seed_system_question_bank()
             return
         except Exception as exc:  # pragma: no cover - exercised in real env
             log_event(
@@ -345,6 +383,7 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
     _repair_schema_after_fallback()
+    _seed_system_question_bank()
     log_event(
         logger,
         logging.WARNING,

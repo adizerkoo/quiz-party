@@ -1,17 +1,18 @@
 /* =========================================
-   ГЛОБАЛЬНОЕ СОСТОЯНИЕ
-   Переменные, разделяемые между всеми модулями
-   страницы создания викторины.
+   ГЛОБАЛЬНОЕ СОСТОЯНИЕ CREATE-ЭКРАНА
+   Общие переменные страницы создания квиза:
+   draft, библиотека вопросов, избранные и runtime-метаданные.
 ========================================= */
 
-// Массив добавленных вопросов викторины
 let quizQuestions = [];
-
-// Индекс редактируемого вопроса (-1 = режим добавления)
 let editIndex = -1;
 
-// Массив вопросов из библиотеки (questions.json)
+// Публичная библиотека и пользовательские избранные теперь приходят только с backend API.
 let questionsLibrary = [];
+let favoriteQuestions = [];
+let libraryCategories = [];
+let activeLibraryCategory = 'all';
 
-// Текущая отображаемая идея
 let currentIdea = null;
+let currentQuestionSourcePublicId = null;
+let handledTemplateDraftPublicId = null;

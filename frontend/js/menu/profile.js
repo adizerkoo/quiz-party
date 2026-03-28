@@ -2,6 +2,9 @@ let availableProfileAvatars = [];
 let selectedProfileAvatar = null;
 let isProfileModalLocked = false;
 let profileModalMode = 'create';
+let activeProfileTab = 'profile';
+
+const profileLogger = window.QuizFeatureLogger?.createLogger?.('web.menu.profile') || console;
 
 function _profileModal() {
     return document.getElementById('profile-modal');
@@ -23,8 +26,28 @@ function _profileSubmitLabel() {
     return document.getElementById('profile-submit-label');
 }
 
+function _profileSubmitButton() {
+    return document.getElementById('profile-submit-btn');
+}
+
 function _profileCancelButton() {
     return document.getElementById('profile-cancel-btn');
+}
+
+function _profileTabs() {
+    return document.getElementById('profile-tabs');
+}
+
+function _profileTabPanel() {
+    return document.getElementById('profile-tab-panel');
+}
+
+function _historySection() {
+    return document.getElementById('profile-history-section');
+}
+
+function _favoritesSection() {
+    return document.getElementById('profile-favorites-section');
 }
 
 function _showProfileModalBase() {
@@ -175,15 +198,43 @@ function _setProfileModalCopy(mode) {
 
     if (mode === 'edit') {
         if (titleEl) titleEl.textContent = 'Редактировать профиль';
-        if (descriptionEl) descriptionEl.textContent = 'Измени имя или аватар. Мы обновим твой профиль в базе, не создавая новый.';
+        if (descriptionEl) descriptionEl.textContent = 'Имя и аватар останутся такими же и в главном меню.';
         if (submitLabelEl) submitLabelEl.textContent = 'Обновить профиль ✨';
         if (cancelBtn) cancelBtn.style.display = 'inline-block';
     } else {
         if (titleEl) titleEl.textContent = 'Сначала познакомимся';
-        if (descriptionEl) descriptionEl.textContent = 'Один раз выбери имя и аватар, дальше в игру можно будет входить только по коду';
+        if (descriptionEl) descriptionEl.textContent = 'Один раз выбери имя и аватар, дальше в игру можно будет входить только по коду.';
         if (submitLabelEl) submitLabelEl.textContent = 'Сохранить профиль ✨';
         if (cancelBtn) cancelBtn.style.display = 'none';
     }
+}
+
+function setActiveProfileTab(tab) {
+    const nextTab = profileModalMode === 'edit' ? (tab || 'profile') : 'profile';
+    activeProfileTab = nextTab;
+
+    _profileTabs()?.querySelectorAll('.profile-tab-button').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.profileTab === nextTab);
+    });
+
+    const isProfileTab = nextTab === 'profile';
+    _profileTabPanel().hidden = !isProfileTab;
+    _historySection().hidden = nextTab !== 'history';
+    _favoritesSection().hidden = nextTab !== 'favorites';
+
+    const submitButton = _profileSubmitButton();
+    if (submitButton) {
+        submitButton.style.display = isProfileTab ? 'inline-flex' : 'none';
+    }
+}
+
+function configureProfileTabs(mode, profile) {
+    const tabs = _profileTabs();
+    if (!tabs) return;
+
+    const showTabs = mode === 'edit' && Boolean(profile?.id);
+    tabs.style.display = showTabs ? 'grid' : 'none';
+    setActiveProfileTab(showTabs ? activeProfileTab : 'profile');
 }
 
 function _applyProfileModalState(mode, profile = null) {
@@ -198,6 +249,7 @@ function _applyProfileModalState(mode, profile = null) {
     selectedProfileAvatar = profile?.avatar_emoji || availableProfileAvatars[0] || null;
     syncProfileNameFieldIcon();
     renderProfileAvatarPicker();
+    configureProfileTabs(mode, profile);
 }
 
 function openProfileModal(options = {}) {
@@ -206,15 +258,17 @@ function openProfileModal(options = {}) {
     const profile = options.profile || (mode === 'edit' ? storedProfile : null);
 
     isProfileModalLocked = Boolean(options.locked);
+    activeProfileTab = options.tab || 'profile';
     resetProfileErrors();
     _applyProfileModalState(mode, profile);
     window.QuizProfileHistory?.prepareProfileHistory?.({ mode, profile });
+    window.QuizProfileFavorites?.prepareProfileFavorites?.({ mode, profile });
     _showProfileModalBase();
+    setActiveProfileTab(activeProfileTab);
 
     setTimeout(() => {
-        const nameInput = _profileNameInput();
-        if (nameInput) {
-            nameInput.focus();
+        if (activeProfileTab === 'profile') {
+            _profileNameInput()?.focus();
         }
     }, 60);
 }
@@ -259,7 +313,9 @@ async function touchStoredProfile(profile) {
         window.QuizUserProfile.saveStoredUserProfile(updatedProfile);
         renderStoredProfile(updatedProfile);
     } catch (error) {
-        console.warn('Failed to touch stored user profile', error);
+        profileLogger.warn('profile.touch.failed', {
+            message: error?.message || 'unknown_error',
+        });
         renderStoredProfile(profile);
     }
 }
@@ -341,7 +397,9 @@ async function submitProfileRegistration() {
             openJoinModal();
         }
     } catch (error) {
-        console.error('Profile save failed', error);
+        profileLogger.warn('profile.save.failed', {
+            message: error?.message || 'unknown_error',
+        });
         showFieldError(nameField, nameHint, 'Ошибка сервера. Попробуй ещё раз');
     }
 }
@@ -358,6 +416,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         openProfileModal({ locked: true, mode: 'create' });
     }
 
+    _profileTabs()?.querySelectorAll('.profile-tab-button').forEach((button) => {
+        button.addEventListener('click', () => {
+            const requestedTab = button.dataset.profileTab || 'profile';
+            setActiveProfileTab(requestedTab);
+        });
+    });
+
     const modal = _profileModal();
     if (modal) {
         modal.addEventListener('click', (event) => {
@@ -372,7 +437,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         banner.addEventListener('click', () => {
             const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
             if (currentProfile) {
-                openProfileModal({ mode: 'edit' });
+                openProfileModal({ mode: 'edit', tab: 'profile' });
             }
         });
     }

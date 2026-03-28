@@ -1,68 +1,82 @@
 /* =========================================
-   ЗАПУСК ВЕЧЕРИНКИ (saveAndGo)
-   Валидация всех данных и отправка
-   викторины на сервер, переход в игру.
+   ЗАПУСК ВЕЧЕРИНКИ
+   Валидация, сохранение шаблона на backend и переход
+   в host-runtime без поломки существующего сценария.
 ========================================= */
 
+const createLaunchLogger = window.QuizFeatureLogger?.createLogger?.('web.create.launch')
+    || console;
 
 async function saveAndGo() {
     const titleInput = document.getElementById('quiz-title-input');
-    const title = titleInput.value.trim();
+    const title = titleInput?.value.trim() || '';
 
-    // --- Проверка названия ---
     if (!title) {
-        showToast("Введите название вечеринки!");
-        titleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        titleInput.focus();
+        showToast('Введи название вечеринки!');
+        titleInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        titleInput?.focus();
         return;
     }
 
-    // --- Проверка наличия вопросов ---
     if (quizQuestions.length === 0) {
-        showToast("Добавьте хотя бы один вопрос!");
+        showToast('Добавьте хотя бы один вопрос!');
         const questionInput = document.getElementById('q-input-text');
-        questionInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        questionInput.focus();
+        questionInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        questionInput?.focus();
         return;
     }
 
-    // --- Проверка каждого вопроса ---
-    for (let i = 0; i < quizQuestions.length; i++) {
-        const q = quizQuestions[i];
-
-        if (!q.text.trim()) {
-            showToast(`Вопрос №${i + 1} не заполнен!`);
+    for (let index = 0; index < quizQuestions.length; index += 1) {
+        const question = quizQuestions[index];
+        if (!question?.text?.trim()) {
+            showToast(`Вопрос №${index + 1} не заполнен!`);
             renderQuestions();
-            document.querySelectorAll('.question-row')[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            document.getElementById('q-input-text').focus();
+            document.querySelectorAll('.question-row')[index]?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+            document.getElementById('q-input-text')?.focus();
             return;
         }
 
-        if (q.type === 'text' && (!q.correct || !q.correct.trim())) {
-            showToast(`Вопрос №${i + 1}: укажите правильный ответ!`);
+        if (question.type === 'text' && !question?.correct?.trim()) {
+            showToast(`Вопрос №${index + 1}: укажите правильный ответ!`);
             renderQuestions();
-            document.querySelectorAll('.question-row')[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            document.getElementById('q-input-correct').focus();
+            document.querySelectorAll('.question-row')[index]?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+            document.getElementById('q-input-correct')?.focus();
             return;
         }
 
-        if (q.type === 'options') {
-            if (!q.options || q.options.some(opt => !opt.trim())) {
-                showToast(`Вопрос №${i + 1}: заполните все варианты ответа!`);
+        if (question.type === 'options') {
+            if (!Array.isArray(question.options) || question.options.some((item) => !item?.trim())) {
+                showToast(`Вопрос №${index + 1}: заполните все варианты ответа!`);
                 renderQuestions();
-                document.querySelectorAll('.question-row')[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.querySelectorAll('.question-row')[index]?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                });
                 return;
             }
-            if (!q.correct || !q.options.includes(q.correct)) {
-                showToast(`Вопрос №${i + 1}: выберите правильный вариант!`);
+            if (!question.correct || !question.options.includes(question.correct)) {
+                showToast(`Вопрос №${index + 1}: выберите правильный вариант!`);
                 renderQuestions();
-                document.querySelectorAll('.question-row')[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.querySelectorAll('.question-row')[index]?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                });
                 return;
             }
         }
     }
 
-    // --- Создаём комнату и отправляем на сервер ---
+    createLaunchLogger.info('quiz.create.started', {
+        questionCount: quizQuestions.length,
+        linkedSourceCount: quizQuestions.filter((item) => item.source_question_public_id).length,
+    });
+
     try {
         const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
         const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
@@ -106,24 +120,34 @@ async function saveAndGo() {
             }),
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            const roomCode = data.code;
-            window.QuizUserProfile?.saveStoredSessionCredentials?.({
-                roomCode,
-                role: 'host',
-                host_token: data.host_token || null,
-                installation_public_id: installationPublicId,
+        if (!response.ok) {
+            createLaunchLogger.warn('quiz.create.failed', {
+                status: response.status,
             });
-            localStorage.removeItem('quizQuestions');
-            localStorage.removeItem('quizTitle');
-            localStorage.removeItem('quizDraft');
-            window.location.href = `game.html?role=host&room=${roomCode}`;
-        } else {
-            showToast("Сервер не принял данные");
+            showToast('Сервер не принял данные');
+            return;
         }
-    } catch (e) {
-        console.error("Server error:", e);
-        showToast("Backend не запущен! Проверь Python.");
+
+        const data = await response.json();
+        const roomCode = data.code;
+        window.QuizUserProfile?.saveStoredSessionCredentials?.({
+            roomCode,
+            role: 'host',
+            host_token: data.host_token || null,
+            installation_public_id: installationPublicId,
+        });
+        localStorage.removeItem('quizQuestions');
+        localStorage.removeItem('quizTitle');
+        localStorage.removeItem('quizDraft');
+        createLaunchLogger.info('quiz.create.succeeded', {
+            roomCode,
+            templatePublicId: data.template_public_id || null,
+        });
+        window.location.href = `game.html?role=host&room=${roomCode}`;
+    } catch (error) {
+        createLaunchLogger.warn('quiz.create.failed', {
+            message: error?.message || 'unknown_error',
+        });
+        showToast('Backend не запущен! Проверь Python.');
     }
 }

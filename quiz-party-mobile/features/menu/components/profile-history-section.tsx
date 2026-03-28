@@ -11,6 +11,7 @@ type ProfileHistorySectionProps = {
   loading: boolean;
   visible?: boolean;
   onOpenResults: (entry: MenuHistoryEntry) => void;
+  onRepeat?: (entry: MenuHistoryEntry) => void;
 };
 
 const UI_TEXT = {
@@ -34,6 +35,7 @@ const UI_TEXT = {
   host: 'Ведущий',
   openResults: 'Открыть итоги игры',
   resultsUnavailable: 'Итоги недоступны для этой записи',
+  repeatGame: 'Повторить',
   title: 'История игр',
   sortByTime: 'Все игры',
   sortByWins: 'Мои победы',
@@ -84,13 +86,7 @@ function buildStatusPills(entry: MenuHistoryEntry) {
 }
 
 function isHostHistoryEntry(entry: MenuHistoryEntry) {
-  return (
-    entry.game_status === 'finished' &&
-    entry.participant_status === 'finished' &&
-    typeof entry.final_rank !== 'number' &&
-    !entry.is_winner &&
-    (entry.score == null || entry.score === 0)
-  );
+  return Boolean(entry.is_host_game);
 }
 
 function formatRank(entry: MenuHistoryEntry) {
@@ -172,6 +168,7 @@ export function ProfileHistorySection({
   infoMessage,
   loading,
   onOpenResults,
+  onRepeat,
   visible = true,
 }: ProfileHistorySectionProps) {
   const [sortMode, setSortMode] = useState<MenuHistorySortMode>('time');
@@ -300,6 +297,17 @@ export function ProfileHistorySection({
                   ]}>
                   <Text style={styles.winnersLine}>{formatWinners(entry)}</Text>
                 </View>
+              ) : null}
+              {entry.can_repeat && onRepeat ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => onRepeat(entry)}
+                  style={({ pressed }) => [
+                    styles.repeatButton,
+                    pressed && styles.repeatButtonPressed,
+                  ]}>
+                  <Text style={styles.repeatButtonText}>{UI_TEXT.repeatGame}</Text>
+                </Pressable>
               ) : null}
               <Text style={[styles.openLabel, !canOpenResults && styles.openLabelDisabled]}>
                 {canOpenResults ? UI_TEXT.openResults : UI_TEXT.resultsUnavailable}
@@ -617,5 +625,25 @@ const styles = StyleSheet.create({
   },
   openLabelDisabled: {
     color: menuTheme.colors.hint,
+  },
+  repeatButton: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 95, 135, 0.22)',
+    backgroundColor: 'rgba(255, 95, 135, 0.1)',
+  },
+  repeatButtonPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  repeatButtonText: {
+    color: menuTheme.colors.create,
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
 });

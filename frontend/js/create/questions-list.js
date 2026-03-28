@@ -26,8 +26,9 @@ function renderQuestions() {
 
         let answersHtml = "";
         if (q.type === 'options') {
+            const optionValues = Array.isArray(q.options) ? q.options : [];
             answersHtml = `<div class="preview-options-grid">`;
-            q.options.forEach(opt => {
+            optionValues.forEach(opt => {
                 const isCorrect = opt === q.correct;
                 answersHtml += `<div class="preview-opt-item ${isCorrect ? 'is-correct' : ''}">${escapeHtml(opt)} ${isCorrect ? '<i class="fa fa-check"></i>' : ''}</div>`;
             });

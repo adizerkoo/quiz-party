@@ -49,6 +49,42 @@
     transform: rotate(15deg);
 }
 
+.create-inline-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-inline-favorite {
+    appearance: none;
+    border: 1.5px solid rgba(255, 133, 161, 0.24);
+    background: rgba(255, 255, 255, 0.72);
+    padding: 5px 12px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #d63384;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 20px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.btn-inline-favorite i {
+    font-size: 0.78rem;
+}
+
+.btn-inline-favorite:active {
+    transform: scale(0.95);
+    background: rgba(255, 133, 161, 0.12);
+}
+
 /* =========================================
    ОВЕРЛЕЙ И КОНТЕЙНЕР МОДАЛКИ
    Затемнение фона, анимация появления,
@@ -167,6 +203,49 @@
     border: 2px solid #f1f2f6;
 }
 
+.library-item-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.library-item-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.library-favorite-button {
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255, 133, 161, 0.22);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    color: #ff85a1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.library-favorite-button.is-active {
+    background: rgba(255, 133, 161, 0.12);
+    border-color: rgba(255, 133, 161, 0.5);
+    color: #d63384;
+}
+
+.library-empty-state {
+    padding: 18px;
+    border-radius: 18px;
+    background: rgba(244, 240, 255, 0.72);
+    border: 1px dashed rgba(108, 92, 231, 0.2);
+    color: #6b6f85;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
 .library-item b {
     display: block;
     margin-bottom: 8px;
@@ -260,6 +339,13 @@
         transform: translateY(-1px);
         box-shadow: 0 3px 6px rgba(108, 92, 231, 0.1);
     }
+
+    .btn-inline-favorite:hover {
+        background: rgba(255, 133, 161, 0.08);
+        border-color: rgba(255, 133, 161, 0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(255, 133, 161, 0.12);
+    }
     
     .btn-inline-library:hover i {
         transform: rotate(15deg);
@@ -282,6 +368,12 @@
         background: #fff;
         transform: translateY(-3px);
         box-shadow: 0 8px 20px rgba(255, 133, 161, 0.15);
+    }
+
+    .library-favorite-button:hover {
+        transform: scale(1.04);
+        background: rgba(255, 133, 161, 0.12);
+        border-color: rgba(255, 133, 161, 0.42);
     }
 
 }

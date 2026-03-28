@@ -58,4 +58,10 @@ function clearSingleInput(el) {
     const input = el.previousElementSibling;
     input.value = "";
     el.style.display = "none";
+    if (typeof clearCurrentDraftSourceLink === 'function') {
+        clearCurrentDraftSourceLink();
+    }
+    if (typeof saveDraftToLocal === 'function') {
+        saveDraftToLocal();
+    }
 }

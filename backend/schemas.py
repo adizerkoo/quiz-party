@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .config import PLAYER_EMOJIS
 
@@ -17,6 +17,7 @@ class QuestionSchema(BaseModel):
     type: str
     correct: str = Field(..., min_length=1, max_length=200)
     options: Optional[List[str]] = None
+    source_question_public_id: Optional[str] = Field(default=None, max_length=36)
 
     @field_validator("type")
     @classmethod
@@ -48,6 +49,7 @@ class QuizQuestionPayload(BaseModel):
     type: str
     correct: Optional[str] = None
     options: Optional[List[str]] = None
+    source_question_public_id: Optional[str] = None
 
 
 class QuizResultPlayer(BaseModel):
@@ -96,6 +98,9 @@ class UserHistoryEntry(BaseModel):
     is_winner: bool = False
     winner_names: List[str] = Field(default_factory=list)
     can_open_results: bool = False
+    template_public_id: Optional[str] = None
+    is_host_game: bool = False
+    can_repeat: bool = False
 
 
 class QuizCreate(BaseModel):
@@ -161,6 +166,67 @@ class ResumeCheckResponse(BaseModel):
     has_resume_game: bool
     resume_game: Optional[ResumeSessionStatus] = None
     sessions: List[ResumeSessionStatus]
+
+
+LibraryScope = Literal["public", "favorites"]
+OriginScreen = Literal["create", "profile", "history"]
+
+
+class LibraryCategoryResponse(BaseModel):
+    """One question-bank category row for the library UI."""
+
+    public_id: str
+    slug: str
+    title: str
+    sort_order: int
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LibraryQuestionResponse(BaseModel):
+    """Reusable question row returned by library/favorites endpoints."""
+
+    public_id: str
+    text: str
+    type: str
+    correct: str
+    options: Optional[List[str]] = None
+    source_question_public_id: str
+    source: Literal["system", "user"]
+    visibility: Literal["public", "private"]
+    category_slug: Optional[str] = None
+    category_title: Optional[str] = None
+    is_favorite: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class FavoriteQuestionMutationRequest(BaseModel):
+    """Adds an existing bank question to favorites or creates a private reusable one."""
+
+    user_id: Optional[int] = None
+    installation_public_id: Optional[str] = Field(default=None, max_length=36)
+    origin_screen: Optional[OriginScreen] = None
+    source_question_public_id: Optional[str] = Field(default=None, max_length=36)
+    question: Optional[QuestionSchema] = None
+
+    @model_validator(mode="after")
+    def validate_payload_shape(self) -> "FavoriteQuestionMutationRequest":
+        if self.source_question_public_id and self.question is not None:
+            raise ValueError("Provide either source_question_public_id or question")
+        if not self.source_question_public_id and self.question is None:
+            raise ValueError("source_question_public_id or question is required")
+        return self
+
+
+class TemplateDraftResponse(BaseModel):
+    """Draft payload that lets the host reopen create with a stored template snapshot."""
+
+    template_public_id: str
+    title: str
+    total_questions: int
+    questions: List[QuestionSchema] = Field(default_factory=list)
 
 
 class UserCreate(BaseModel):

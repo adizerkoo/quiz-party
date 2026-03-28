@@ -1,99 +1,274 @@
 /* =========================================
    БИБЛИОТЕКА ВОПРОСОВ
-   Модалка с готовыми вопросами: открытие/
-   закрытие, фильтрация по категориям,
-   импорт вопроса в форму.
+   Серверная библиотека, вкладка избранного и импорт
+   reusable-вопросов в create-форму.
 ========================================= */
 
+const createLibraryLogger = window.QuizFeatureLogger?.createLogger?.('web.create.library')
+    || console;
 
-// --- Открыть / закрыть модалку библиотеки ---
-function toggleLibrary() {
-    const modal = document.getElementById('library-modal');
-    const isVisible = modal.style.display === 'flex';
+function getLibraryModal() {
+    return document.getElementById('library-modal');
+}
 
-    if (isVisible) {
-        modal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-    } else {
-        modal.style.display = 'flex';
-        document.body.classList.add('modal-open');
-        filterLibrary('all');
+function getLibraryFilterContainer() {
+    return document.getElementById('library-filter');
+}
+
+function getLibraryListContainer() {
+    return document.getElementById('library-list');
+}
+
+function normalizeLibraryFavoriteKey(question) {
+    return question?.source_question_public_id || question?.public_id || null;
+}
+
+function isQuestionFavorite(question) {
+    const favoriteKey = normalizeLibraryFavoriteKey(question);
+    if (!favoriteKey) {
+        return Boolean(question?.is_favorite);
+    }
+    return favoriteQuestions.some((item) => normalizeLibraryFavoriteKey(item) === favoriteKey);
+}
+
+function upsertFavoriteQuestionLocally(question) {
+    const favoriteKey = normalizeLibraryFavoriteKey(question);
+    const nextFavorite = {
+        ...question,
+        is_favorite: true,
+    };
+
+    favoriteQuestions = [
+        nextFavorite,
+        ...favoriteQuestions.filter((item) => normalizeLibraryFavoriteKey(item) !== favoriteKey),
+    ];
+
+    questionsLibrary = questionsLibrary.map((item) => {
+        if (normalizeLibraryFavoriteKey(item) !== favoriteKey) {
+            return item;
+        }
+        return {
+            ...item,
+            is_favorite: true,
+        };
+    });
+
+    if (currentIdea && normalizeLibraryFavoriteKey(currentIdea) === favoriteKey) {
+        currentIdea = {
+            ...currentIdea,
+            is_favorite: true,
+        };
     }
 }
 
-
-// --- Фильтр вопросов по категории ---
-function filterLibrary(category) {
-    const container = document.getElementById('library-list');
-    if (!container) return;
-
-    // Переключаем подсветку кнопок фильтра
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        if (btn.getAttribute('data-category') === category) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
+function removeFavoriteQuestionLocally(question) {
+    const favoriteKey = normalizeLibraryFavoriteKey(question);
+    favoriteQuestions = favoriteQuestions.filter((item) => normalizeLibraryFavoriteKey(item) !== favoriteKey);
+    questionsLibrary = questionsLibrary.map((item) => {
+        if (normalizeLibraryFavoriteKey(item) !== favoriteKey) {
+            return item;
         }
+        return {
+            ...item,
+            is_favorite: false,
+        };
     });
 
-    container.innerHTML = "";
+    if (currentIdea && normalizeLibraryFavoriteKey(currentIdea) === favoriteKey) {
+        currentIdea = {
+            ...currentIdea,
+            is_favorite: false,
+        };
+    }
+}
 
-    const filtered = category === 'all'
-        ? questionsLibrary
-        : questionsLibrary.filter(q => q.cat === category);
+function renderLibraryFilters(categories = libraryCategories) {
+    const container = getLibraryFilterContainer();
+    if (!container) {
+        return;
+    }
 
-    filtered.forEach(q => {
-        const item = document.createElement('div');
-        item.className = 'library-item';
+    const buttonConfigs = [
+        { id: 'all', label: 'Все' },
+        { id: 'favorites', label: 'Избранные' },
+        ...categories.map((category) => ({
+            id: category.slug,
+            label: category.title,
+        })),
+    ];
 
-        const typeMarkup = q.type === 'text'
-            ? `<i class="fa-solid fa-pen"></i> Текст`
-            : `<i class="fa-solid fa-circle-dot"></i> Выбор`;
+    container.innerHTML = '';
+    buttonConfigs.forEach((config) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `filter-btn ${activeLibraryCategory === config.id ? 'active' : ''}`;
+        button.dataset.category = config.id;
+        button.textContent = config.label;
+        button.onclick = () => filterLibrary(config.id);
+        container.appendChild(button);
+    });
+}
 
-        item.innerHTML = `
-            <div class="library-item-content">
+function getFilteredLibraryItems() {
+    if (activeLibraryCategory === 'favorites') {
+        return favoriteQuestions;
+    }
+    if (activeLibraryCategory === 'all') {
+        return questionsLibrary;
+    }
+    return questionsLibrary.filter((question) => question.category_slug === activeLibraryCategory);
+}
+
+function renderLibraryEmptyState(container) {
+    const profile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+    const requiresProfile = activeLibraryCategory === 'favorites' && !profile?.id;
+    container.innerHTML = `
+        <div class="library-empty-state">
+            ${escapeHtml(
+                requiresProfile
+                    ? 'Сначала сохрани профиль, чтобы пользоваться избранным.'
+                    : 'По этому фильтру пока нет вопросов.',
+            )}
+        </div>
+    `;
+}
+
+async function handleLibraryFavoriteToggle(question) {
+    const profile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+    if (!profile?.id) {
+        showToast('Сначала сохрани профиль, чтобы пользоваться избранным.');
+        createLibraryLogger.warn('favorite.toggle.denied_local', {
+            reason: 'missing_profile',
+        });
+        return;
+    }
+
+    try {
+        if (isQuestionFavorite(question)) {
+            await window.QuizQuestionBankApi.removeFavoriteQuestion(question.public_id, {
+                originScreen: 'create',
+            });
+            removeFavoriteQuestionLocally(question);
+        } else {
+            const savedQuestion = await window.QuizQuestionBankApi.addFavoriteQuestion({
+                originScreen: 'create',
+                sourceQuestionPublicId: normalizeLibraryFavoriteKey(question),
+            });
+            upsertFavoriteQuestionLocally(savedQuestion);
+        }
+        renderLibraryQuestions();
+    } catch (error) {
+        createLibraryLogger.warn('favorite.toggle.failed', {
+            questionPublicId: question?.public_id || null,
+            message: error?.message || 'unknown_error',
+        });
+        showToast('Не удалось обновить избранное. Попробуй еще раз.');
+    }
+}
+
+function renderLibraryQuestions() {
+    const container = getLibraryListContainer();
+    if (!container) {
+        return;
+    }
+
+    const items = getFilteredLibraryItems();
+    renderLibraryFilters();
+
+    if (!items.length) {
+        renderLibraryEmptyState(container);
+        return;
+    }
+
+    container.innerHTML = '';
+    items.forEach((question) => {
+        const card = document.createElement('div');
+        card.className = 'library-item';
+
+        const favoriteActive = isQuestionFavorite(question);
+        const typeMarkup = question.type === 'text'
+            ? '<i class="fa-solid fa-pen"></i> Текст'
+            : '<i class="fa-solid fa-circle-dot"></i> Выбор';
+
+        card.innerHTML = `
+            <div class="library-item-top">
                 <span class="library-tag">${typeMarkup}</span>
-                <b>${escapeHtml(q.text)}</b>
+                <button type="button" class="library-favorite-button ${favoriteActive ? 'is-active' : ''}">
+                    <i class="fa-solid fa-heart"></i>
+                </button>
+            </div>
+            <div class="library-item-content">
+                <b>${escapeHtml(question.text)}</b>
                 <div class="library-answer-preview">
-                    <i class="fa-solid fa-check-double"></i> Ответ: ${escapeHtml(q.correct)}
+                    <i class="fa-solid fa-check-double"></i> Ответ: ${escapeHtml(question.correct)}
                 </div>
             </div>
         `;
 
-        item.onclick = () => {
-            importQuestion(q);
+        card.addEventListener('click', () => {
+            importQuestion(question);
             toggleLibrary();
-        };
-        container.appendChild(item);
+        });
+
+        card.querySelector('.library-favorite-button')?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            void handleLibraryFavoriteToggle(question);
+        });
+
+        container.appendChild(card);
     });
 
     container.scrollTop = 0;
 }
 
+function toggleLibrary() {
+    const modal = getLibraryModal();
+    if (!modal) {
+        return;
+    }
 
-// --- Импортировать вопрос из библиотеки в форму ---
-function importQuestion(q) {
+    const isVisible = modal.style.display === 'flex';
+    if (isVisible) {
+        modal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+        return;
+    }
+
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+    renderLibraryQuestions();
+}
+
+function filterLibrary(category) {
+    activeLibraryCategory = category || 'all';
+    renderLibraryQuestions();
+}
+
+function importQuestion(question) {
     const questionInput = document.getElementById('q-input-text');
     const typeOptions = document.querySelectorAll('.type-option');
-    const typeInput = document.getElementById('q-input-type');
+    if (!questionInput) {
+        return;
+    }
 
-    if (!questionInput || !typeInput) return;
-
-    questionInput.value = q.text;
-
-    // Эффект вспышки
+    questionInput.value = question.text || '';
     questionInput.classList.remove('idea-inserted');
-    void questionInput.offsetWidth; // reflow для перезапуска анимации
+    void questionInput.offsetWidth;
     questionInput.classList.add('idea-inserted');
 
-    // Переключаем тип
-    selectType(q.type, q.type === 'text' ? typeOptions[0] : typeOptions[1]);
-
-    if (q.type === 'text') {
-        document.getElementById('q-input-correct').value = q.correct || '';
-    } else if (q.type === 'options') {
-        const correctIdx = q.options.indexOf(q.correct);
-        renderOptionRows(q.options.length, q.options, correctIdx >= 0 ? correctIdx : 0);
+    currentQuestionSourcePublicId = normalizeLibraryFavoriteKey(question);
+    if (question.type === 'text') {
+        selectType('text', typeOptions[0], { preserveSourceQuestion: true });
+        document.getElementById('q-input-correct').value = question.correct || '';
+    } else {
+        selectType('options', typeOptions[1], { preserveSourceQuestion: true });
+        const optionValues = Array.isArray(question.options) ? question.options : [];
+        const correctIndex = optionValues.indexOf(question.correct);
+        renderOptionRows(
+            optionValues.length || DEFAULT_OPTIONS,
+            optionValues,
+            correctIndex >= 0 ? correctIndex : 0,
+        );
     }
 
     setTimeout(() => questionInput.classList.remove('idea-inserted'), 800);

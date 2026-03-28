@@ -21,23 +21,28 @@
                 <a href="index.html" class="btn-back">← Назад</a>
                 <h1 class="party-title">QUIZ PARTY</h1>
             </div>
-            
+
             <div class="input-group main-title-group">
                 <label>Название вечеринки:</label>
                 <input type="text" id="quiz-title-input" maxlength="50" placeholder="Например: ДР Артёма 🎂" class="main-title-input">
             </div>
 
             <div class="creation-zone">
-               <div class="input-group">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div class="input-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px;">
                         <label style="margin: 0;">Твой вопрос</label>
-                        <button type="button" class="btn-inline-library" onclick="toggleLibrary()">
-                            <i class="fa-solid fa-book-open"></i> Все идеи
-                        </button>
+                        <div class="create-inline-actions">
+                            <button type="button" id="save-favorite-btn" class="btn-inline-favorite">
+                                <i class="fa-solid fa-heart"></i> В избранное
+                            </button>
+                            <button type="button" class="btn-inline-library" onclick="toggleLibrary()">
+                                <i class="fa-solid fa-book-open"></i> Библиотека
+                            </button>
+                        </div>
                     </div>
 
                     <input type="text" id="q-input-text" placeholder="Например: В каком году вышел первый iPhone?">
-                    
+
                     <div class="idea-wrapper" style="display: flex; align-items: center; gap: 8px;">
                         <div id="idea-container" class="idea-container" style="flex-grow: 1;">
                             <i class="fas fa-lightbulb idea-icon"></i> Идея: <span id="random-idea-text">Загрузка...</span>
@@ -70,7 +75,7 @@
                                 Очистить
                             </button>
                         </div>
-                        
+
                         <div id="options-list"></div>
 
                         <button type="button" id="btn-add-option" class="btn-add-option" onclick="addOptionRow()">
@@ -108,8 +113,10 @@
             </button>
         </div>
     </div>
-    <!-- JS модули создания викторины -->
+
     <script src="js/shared/user-profile.js"></script>
+    <script src="js/shared/feature-logger.js"></script>
+    <script src="js/shared/question-bank-api.js"></script>
     <script src="js/create/state.js"></script>
     <script src="js/create/utils.js"></script>
     <script src="js/create/storage.js"></script>
@@ -119,24 +126,16 @@
     <script src="js/create/library.js"></script>
     <script src="js/create/save-and-go.js"></script>
     <script src="js/create/init.js"></script>
+
     <div id="library-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>💡 Готовые вопросы</h2>
                 <button class="close-modal" onclick="toggleLibrary()">×</button>
             </div>
-            <div class="library-filter">
-                <button class="filter-btn active" data-category="all" onclick="filterLibrary('all')">Все</button>
-                <button class="filter-btn" data-category="about-me" onclick="filterLibrary('about-me')">Обо мне</button>
-                <button class="filter-btn" data-category="funny" onclick="filterLibrary('funny')">Юмор</button>
-                <button class="filter-btn" data-category="music" onclick="filterLibrary('music')">Музыка</button>
-                <button class="filter-btn" data-category="sports" onclick="filterLibrary('sports')">Спорт</button>
-                <button class="filter-btn" data-category="movie" onclick="filterLibrary('movie')">Фильмы</button>
-                <button class="filter-btn" data-category="friends" onclick="filterLibrary('friends')">О нас</button>
-            </div>
-            <div id="library-list" class="library-items-container">
-                </div>
+            <div id="library-filter" class="library-filter"></div>
+            <div id="library-list" class="library-items-container"></div>
         </div>
-    </div>    
+    </div>
 </body>
 </html>

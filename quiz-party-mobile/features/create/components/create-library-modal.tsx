@@ -15,6 +15,7 @@ type CreateLibraryModalProps = {
   onClose: () => void;
   onChangeCategory: (category: CreateLibraryCategoryId) => void;
   onImportQuestion: (question: CreateLibraryQuestion) => void;
+  onToggleFavorite: (question: CreateLibraryQuestion) => void;
 };
 
 // Модалка библиотеки готовых вопросов.
@@ -25,6 +26,7 @@ export function CreateLibraryModal({
   onClose,
   onChangeCategory,
   onImportQuestion,
+  onToggleFavorite,
 }: CreateLibraryModalProps) {
   return (
     <Modal
@@ -70,9 +72,9 @@ export function CreateLibraryModal({
           <ScrollView
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}>
-            {questions.map((question, index) => (
+            {questions.length ? questions.map((question, index) => (
               <Pressable
-                key={`${question.text}-${index}`}
+                key={`${question.public_id ?? question.text}-${index}`}
                 onPress={() => onImportQuestion(question)}
                 style={({ pressed }) => [
                   styles.itemCard,
@@ -90,6 +92,22 @@ export function CreateLibraryModal({
                       {question.type === 'text' ? 'Текст' : 'Выбор'}
                     </Text>
                   </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onToggleFavorite(question)}
+                    style={({ pressed }) => [
+                      styles.favoriteButton,
+                      question.is_favorite && styles.favoriteButtonActive,
+                      pressed && styles.favoriteButtonPressed,
+                    ]}>
+                    <FontAwesome6
+                      color={question.is_favorite ? createTheme.colors.white : createTheme.colors.pink}
+                      iconStyle={question.is_favorite ? 'solid' : 'regular'}
+                      name="heart"
+                      size={13}
+                    />
+                  </Pressable>
                 </View>
 
                 <Text style={styles.itemTitle}>{question.text}</Text>
@@ -99,7 +117,13 @@ export function CreateLibraryModal({
                   <Text style={styles.answerBadgeText}>Ответ: {question.correct}</Text>
                 </View>
               </Pressable>
-            ))}
+            )) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  В этой вкладке пока пусто. Добавь вопрос в избранное, и он появится здесь.
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
       </View>
@@ -219,6 +243,9 @@ const styles = StyleSheet.create({
   },
 
   tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
 
@@ -262,5 +289,37 @@ const styles = StyleSheet.create({
     color: '#27ae60',
     fontSize: 13,
     fontWeight: '700',
+  },
+  favoriteButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 95, 135, 0.18)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
+  favoriteButtonActive: {
+    borderColor: createTheme.colors.pink,
+    backgroundColor: createTheme.colors.pink,
+  },
+  favoriteButtonPressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  emptyState: {
+    marginTop: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#f1f2f6',
+    backgroundColor: '#faf9ff',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  emptyStateText: {
+    color: createTheme.colors.textSoft,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
   },
 });

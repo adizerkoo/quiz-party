@@ -4,6 +4,7 @@ import { CreateLibraryCategory } from '@/features/create/types';
 // Подписи оставлены такими же, как в web-версии.
 export const CREATE_LIBRARY_CATEGORIES: CreateLibraryCategory[] = [
   { id: 'all', label: 'Все' },
+  { id: 'favorites', label: 'Избранные' },
   { id: 'about-me', label: 'Обо мне' },
   { id: 'funny', label: 'Юмор' },
   { id: 'music', label: 'Музыка' },
