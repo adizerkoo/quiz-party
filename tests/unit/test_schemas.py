@@ -10,7 +10,16 @@ import pytest
 from pydantic import ValidationError
 from datetime import datetime
 
-from backend.schemas import QuestionSchema, QuizCreate, QuizResponse, UserCreate, UserUpdate, UserResponse, UserTouch
+from backend.schemas import (
+    QuestionSchema,
+    QuizCreate,
+    QuizResponse,
+    UserCreate,
+    UserSessionExchangeRequest,
+    UserUpdate,
+    UserResponse,
+    UserTouch,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -130,6 +139,39 @@ class TestQuestionSchema:
     def test_none_options_allowed(self):
         """Для текстовых вопросов options может быть None."""
         q = QuestionSchema(text="Q", type="text", correct="A", options=None)
+        assert q.options is None
+
+    @allure.title("Correct answer for options-question must exist in options")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_options_question_requires_matching_correct_answer(self):
+        with pytest.raises(ValidationError, match="correct must match"):
+            QuestionSchema(
+                text="Capital?",
+                type="options",
+                correct="Paris",
+                options=["London", "Berlin"],
+            )
+
+    @allure.title("Whitespace-only options are rejected")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_blank_option_rejected(self):
+        with pytest.raises(ValidationError, match="blank"):
+            QuestionSchema(
+                text="Capital?",
+                type="options",
+                correct="Paris",
+                options=["Paris", "   "],
+            )
+
+    @allure.title("Text question ignores accidental options payload")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_text_question_drops_options_payload(self):
+        q = QuestionSchema(
+            text="2 + 2?",
+            type="text",
+            correct="4",
+            options=["4", "5"],
+        )
         assert q.options is None
 
 
@@ -290,6 +332,16 @@ class TestUserSchemas:
         touch = UserTouch(device_brand="Google")
         assert touch.device_brand == "Google"
         assert touch.device_platform is None
+
+    @allure.title("UserSessionExchangeRequest reuses touch payload shape")
+    @allure.severity(allure.severity_level.MINOR)
+    def test_user_session_exchange_request(self):
+        payload = UserSessionExchangeRequest(
+            device_platform="ios",
+            installation_public_id="install-123",
+        )
+        assert payload.device_platform == "ios"
+        assert payload.installation_public_id == "install-123"
 
     @allure.title("UserUpdate валидирует обновление имени и аватара")
     @allure.severity(allure.severity_level.MINOR)

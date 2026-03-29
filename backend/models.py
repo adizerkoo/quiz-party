@@ -113,6 +113,7 @@ class UserInstallation(Base):
         Index("ix_user_installations_public_id", "public_id", unique=True),
         Index("ix_user_installations_user_last_seen", "user_id", "last_seen_at"),
         Index("ix_user_installations_client_key", "client_installation_key"),
+        Index("ix_user_installations_session_token_hash", "session_token_hash", unique=True),
     )
 
     id = Column(Integer, primary_key=True)
@@ -126,6 +127,8 @@ class UserInstallation(Base):
     browser = Column(String(40), nullable=True)
     browser_version = Column(String(20), nullable=True)
     app_version = Column(String(40), nullable=True)
+    session_token_hash = Column(String(128), nullable=True)
+    session_token_issued_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utc_now)
     last_seen_at = Column(DateTime, nullable=False, default=_utc_now)
     installation_metadata = Column(JSON, nullable=False, default=dict)

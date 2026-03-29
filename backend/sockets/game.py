@@ -391,6 +391,7 @@ def register_game_handlers(sio_manager):
                 **build_log_extra(quiz=quiz, participant=host, sid=sid, question=step),
                 total_questions=quiz.total_questions,
             )
+            await sio_manager.emit("move_to_next", {"question": quiz.current_question}, room=room)
             await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
 
     @logged_socket_handler(sio_manager, "override_score", logger)

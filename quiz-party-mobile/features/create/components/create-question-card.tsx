@@ -159,12 +159,12 @@ export function CreateQuestionCard({
 
           {question.type === 'options' && question.options ? (
             <View style={styles.optionsGrid}>
-              {question.options.map((option) => {
+              {question.options.map((option, optionIndex) => {
                 const isCorrect = option === question.correct;
 
                 return (
                   <View
-                    key={`${question.text}-${option}`}
+                    key={`${question.text}-${optionIndex}-${option}`}
                     style={[
                       styles.optionPreview,
                       isCorrect && styles.optionPreviewCorrect,

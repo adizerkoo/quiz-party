@@ -52,8 +52,10 @@
         };
     }
 
-    async function requestJson(url, options, meta) {
-        const response = await fetch(url, options);
+    async function requestJson(url, options, meta, authParams = null) {
+        const response = authParams && window.QuizUserProfile?.fetchWithStoredProfileAuth
+            ? await window.QuizUserProfile.fetchWithStoredProfileAuth(url, options, authParams)
+            : await fetch(url, options);
         if (!response.ok) {
             logger.warn('request.failed', {
                 ...(meta || {}),
@@ -102,10 +104,20 @@
             category: params.category || null,
             originScreen: params.originScreen || 'create',
         });
-        const payload = await requestJson(`/api/v1/library/questions${query}`, undefined, {
-            action: 'fetchLibraryQuestions',
-            scope: params.scope || 'public',
-        });
+        const payload = await requestJson(
+            `/api/v1/library/questions${query}`,
+            undefined,
+            {
+                action: 'fetchLibraryQuestions',
+                scope: params.scope || 'public',
+            },
+            identity.profile
+                ? {
+                    required: params.scope === 'favorites',
+                    profile: identity.profile,
+                }
+                : null,
+        );
         const questions = Array.isArray(payload) ? payload.map(normalizeQuestion) : [];
         logger.info('library.load.succeeded', {
             scope: params.scope || 'public',
@@ -126,9 +138,17 @@
         logger.info('favorites.load.started', {
             originScreen: params.originScreen || 'profile',
         });
-        const payload = await requestJson(`/api/v1/me/favorites/questions${query}`, undefined, {
-            action: 'fetchFavoriteQuestions',
-        });
+        const payload = await requestJson(
+            `/api/v1/me/favorites/questions${query}`,
+            undefined,
+            {
+                action: 'fetchFavoriteQuestions',
+            },
+            {
+                required: true,
+                profile: identity.profile,
+            },
+        );
         const questions = Array.isArray(payload) ? payload.map(normalizeQuestion) : [];
         logger.info('favorites.load.succeeded', {
             resultCount: questions.length,
@@ -149,18 +169,27 @@
 
     async function addFavoriteQuestion(params = {}) {
         const body = buildFavoriteRequestBody(params);
+        const identity = requireCurrentIdentity();
         logger.info('favorite.toggle.started', {
             mode: body.source_question_public_id ? 'existing' : 'custom',
             originScreen: body.origin_screen,
         });
-        const payload = await requestJson('/api/v1/me/favorites/questions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        }, {
-            action: 'addFavoriteQuestion',
-            mode: body.source_question_public_id ? 'existing' : 'custom',
-        });
+        const payload = await requestJson(
+            '/api/v1/me/favorites/questions',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            },
+            {
+                action: 'addFavoriteQuestion',
+                mode: body.source_question_public_id ? 'existing' : 'custom',
+            },
+            {
+                required: true,
+                profile: identity.profile,
+            },
+        );
         const question = normalizeQuestion(payload);
         logger.info('favorite.toggle.succeeded', {
             mode: body.source_question_public_id ? 'existing' : 'custom',
@@ -181,9 +210,13 @@
             questionPublicId,
             originScreen: params.originScreen || 'create',
         });
-        const response = await fetch(
+        const response = await window.QuizUserProfile.fetchWithStoredProfileAuth(
             `/api/v1/me/favorites/questions/${encodeURIComponent(questionPublicId)}${query}`,
             { method: 'DELETE' },
+            {
+                required: true,
+                profile: identity.profile,
+            },
         );
         if (!response.ok) {
             logger.warn('favorite.toggle.failed', {
@@ -218,6 +251,10 @@
             {
                 action: 'fetchTemplateDraft',
                 templatePublicId,
+            },
+            {
+                required: true,
+                profile: identity.profile,
             },
         );
         logger.info('template.draft.load.succeeded', {

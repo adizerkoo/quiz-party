@@ -3,6 +3,7 @@ import {
   fetchFavoriteQuestions,
   removeFavoriteQuestion,
 } from '@/features/create/services/create-api';
+import { ensureMenuProfileSession } from '@/features/menu/services/menu-profile-api';
 import {
   getCachedMenuFavorites,
   hydrateMenuFavoritesCache,
@@ -11,7 +12,7 @@ import {
 import { MenuFavoriteFetchResult, MenuFavoriteQuestion, MenuProfile } from '@/features/menu/types';
 
 export async function fetchMenuFavorites(
-  profile: Pick<MenuProfile, 'id' | 'installationPublicId'>,
+  profile: Pick<MenuProfile, 'id' | 'installationPublicId' | 'sessionToken'>,
 ) {
   const userId = profile.id;
   if (!userId) {
@@ -23,9 +24,11 @@ export async function fetchMenuFavorites(
   }
 
   try {
+    const authenticatedProfile = await ensureMenuProfileSession(profile as MenuProfile);
     const entries = await fetchFavoriteQuestions({
       userId,
-      installationPublicId: profile.installationPublicId ?? null,
+      installationPublicId: authenticatedProfile?.installationPublicId ?? profile.installationPublicId ?? null,
+      sessionToken: authenticatedProfile?.sessionToken ?? profile.sessionToken ?? null,
       originScreen: 'profile',
     });
     const cachedRecord = await setCachedMenuFavorites(userId, entries);
@@ -56,9 +59,12 @@ export async function addMenuFavorite(profile: MenuProfile, question: MenuFavori
     throw new Error('Profile id is required for favorites');
   }
 
+  const authenticatedProfile = await ensureMenuProfileSession(profile);
   const favorite = await addFavoriteQuestion({
     userId: profile.id,
-    installationPublicId: profile.installationPublicId ?? null,
+    installationPublicId:
+      authenticatedProfile?.installationPublicId ?? profile.installationPublicId ?? null,
+    sessionToken: authenticatedProfile?.sessionToken ?? profile.sessionToken ?? null,
     originScreen: 'profile',
     sourceQuestionPublicId: question.source_question_public_id ?? question.public_id ?? null,
     question,
@@ -74,9 +80,12 @@ export async function removeMenuFavorite(profile: MenuProfile, questionPublicId:
     throw new Error('Profile id is required for favorites');
   }
 
+  const authenticatedProfile = await ensureMenuProfileSession(profile);
   await removeFavoriteQuestion({
     userId: profile.id,
-    installationPublicId: profile.installationPublicId ?? null,
+    installationPublicId:
+      authenticatedProfile?.installationPublicId ?? profile.installationPublicId ?? null,
+    sessionToken: authenticatedProfile?.sessionToken ?? profile.sessionToken ?? null,
     questionPublicId,
     originScreen: 'profile',
   });

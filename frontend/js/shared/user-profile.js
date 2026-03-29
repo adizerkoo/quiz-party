@@ -21,6 +21,12 @@
         return String(roomCode || '').trim().toUpperCase();
     }
 
+    function _normalizeSessionToken(token) {
+        if (typeof token !== 'string') return null;
+        const cleaned = token.trim();
+        return cleaned ? cleaned : null;
+    }
+
     function _isValidProfile(profile) {
         return Boolean(
             profile &&
@@ -66,6 +72,7 @@
 
     function saveStoredUserProfile(profile) {
         if (!_isValidProfile(profile)) return;
+        const current = getStoredUserProfile();
 
         const normalized = {
             id: profile.id,
@@ -77,6 +84,9 @@
             installation_public_id: profile.installation_public_id || getOrCreateInstallationPublicId(),
             created_at: profile.created_at || null,
             last_login_at: profile.last_login_at || null,
+            session_token:
+                _normalizeSessionToken(profile.session_token) ||
+                _normalizeSessionToken(current?.session_token),
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
     }
@@ -96,6 +106,9 @@
                 patch.installation_public_id ||
                 storedProfile.installation_public_id ||
                 getOrCreateInstallationPublicId(),
+            session_token:
+                _normalizeSessionToken(patch.session_token) ||
+                _normalizeSessionToken(storedProfile.session_token),
         };
 
         saveStoredUserProfile(nextProfile);
@@ -245,6 +258,122 @@
         _writeSessionCredentialsStore(store);
     }
 
+    function getStoredSessionToken(profile = null) {
+        const targetProfile = profile || getStoredUserProfile();
+        return _normalizeSessionToken(targetProfile?.session_token);
+    }
+
+    function buildAuthHeaders(options = {}) {
+        const headers = new Headers(options.headers || {});
+        const sessionToken =
+            _normalizeSessionToken(options.sessionToken) ||
+            getStoredSessionToken(options.profile || null);
+
+        if (sessionToken) {
+            headers.set('Authorization', `Bearer ${sessionToken}`);
+        }
+        return headers;
+    }
+
+    async function refreshStoredUserSession(profile = null) {
+        const currentProfile = profile || getStoredUserProfile();
+        if (!_isValidProfile(currentProfile)) {
+            return null;
+        }
+
+        const installationPublicId =
+            currentProfile.installation_public_id ||
+            getOrCreateInstallationPublicId();
+        const deviceInfo = detectClientDeviceInfo();
+        const response = await fetch(`/api/v1/users/${currentProfile.id}/session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                device_platform: deviceInfo.device_platform || null,
+                device_brand: deviceInfo.device_brand || null,
+                installation_public_id: installationPublicId,
+            }),
+        });
+
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+            clearStoredUserProfile();
+            return null;
+        }
+
+        if (!response.ok) {
+            const error = new Error(`HTTP ${response.status}`);
+            error.status = response.status;
+            throw error;
+        }
+
+        const refreshedProfile = await response.json();
+        saveStoredUserProfile(refreshedProfile);
+        return getStoredUserProfile();
+    }
+
+    async function ensureStoredUserSession(profile = null, options = {}) {
+        const currentProfile = profile || getStoredUserProfile();
+        if (!_isValidProfile(currentProfile)) {
+            return null;
+        }
+
+        if (!options.forceRefresh && getStoredSessionToken(currentProfile)) {
+            return currentProfile;
+        }
+
+        return refreshStoredUserSession(currentProfile);
+    }
+
+    async function fetchWithStoredProfileAuth(url, options = {}, params = {}) {
+        const required = params.required !== false;
+        let profile = params.profile || getStoredUserProfile();
+
+        if (profile) {
+            try {
+                profile = await ensureStoredUserSession(profile, {
+                    forceRefresh: Boolean(params.forceRefreshSession),
+                });
+            } catch (error) {
+                if (required) {
+                    throw error;
+                }
+            }
+        }
+
+        let headers = buildAuthHeaders({
+            headers: options.headers,
+            profile,
+        });
+        if (required && !headers.has('Authorization')) {
+            const error = new Error('SESSION_REQUIRED');
+            error.status = 401;
+            throw error;
+        }
+
+        let response = await fetch(url, {
+            ...options,
+            headers,
+        });
+
+        if (response.status === 401 && profile?.id) {
+            const refreshedProfile = await refreshStoredUserSession(profile).catch(() => null);
+            if (refreshedProfile?.session_token) {
+                headers = buildAuthHeaders({
+                    headers: options.headers,
+                    profile: refreshedProfile,
+                });
+                response = await fetch(url, {
+                    ...options,
+                    headers,
+                });
+            }
+        }
+
+        return response;
+    }
+
     function detectClientDeviceInfo() {
         const ua = navigator.userAgent || '';
         let device = 'desktop';
@@ -351,6 +480,11 @@
         clearStoredSessionCredentials,
         listStoredSessionCredentials,
         clearStoredSessionCredentialsByKey,
+        getStoredSessionToken,
+        buildAuthHeaders,
+        refreshStoredUserSession,
+        ensureStoredUserSession,
+        fetchWithStoredProfileAuth,
         detectClientDeviceInfo,
         fetchAvailableAvatars,
         setPlayerSessionFromProfile,

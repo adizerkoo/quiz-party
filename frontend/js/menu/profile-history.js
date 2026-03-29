@@ -229,7 +229,14 @@
         logger.info('history.load.started', { userId });
 
         try {
-            const response = await fetch(`/api/v1/users/${userId}/history`);
+            const response = await window.QuizUserProfile.fetchWithStoredProfileAuth(
+                `/api/v1/users/${userId}/history`,
+                undefined,
+                {
+                    required: true,
+                    profile,
+                },
+            );
             if (!response.ok) {
                 logger.warn('history.load.failed', {
                     userId,

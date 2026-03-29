@@ -78,7 +78,7 @@ async function saveAndGo() {
     });
 
     try {
-        const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+        let currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
         const deviceInfo = window.QuizUserProfile?.detectClientDeviceInfo?.() || {};
         const installationPublicId =
             currentProfile?.installation_public_id ||
@@ -88,19 +88,27 @@ async function saveAndGo() {
 
         if (ownerId && window.QuizUserProfile) {
             try {
-                const touchResponse = await fetch(`/api/v1/users/${ownerId}/touch`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        device_platform: deviceInfo.device_platform || null,
-                        device_brand: deviceInfo.device_brand || null,
-                        installation_public_id: installationPublicId,
-                    }),
-                });
+                const touchResponse = await window.QuizUserProfile.fetchWithStoredProfileAuth(
+                    `/api/v1/users/${ownerId}/touch`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            device_platform: deviceInfo.device_platform || null,
+                            device_brand: deviceInfo.device_brand || null,
+                            installation_public_id: installationPublicId,
+                        }),
+                    },
+                    {
+                        required: true,
+                        profile: currentProfile,
+                    },
+                );
 
                 if (touchResponse.ok) {
                     const syncedProfile = await touchResponse.json();
                     window.QuizUserProfile.saveStoredUserProfile(syncedProfile);
+                    currentProfile = window.QuizUserProfile.getStoredUserProfile();
                     ownerId = syncedProfile.id;
                 } else {
                     ownerId = null;
@@ -110,9 +118,14 @@ async function saveAndGo() {
             }
         }
 
+        const requestHeaders = new Headers({ 'Content-Type': 'application/json' });
+        if (ownerId && currentProfile && window.QuizUserProfile?.buildAuthHeaders) {
+            const authHeaders = window.QuizUserProfile.buildAuthHeaders({ profile: currentProfile });
+            authHeaders.forEach((value, key) => requestHeaders.set(key, value));
+        }
         const response = await fetch('/api/v1/quizzes', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: requestHeaders,
             body: JSON.stringify({
                 title,
                 questions: quizQuestions,

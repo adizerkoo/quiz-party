@@ -3,7 +3,10 @@ import {
   CreateQuizQuestion,
   CreateTemplateDraft,
 } from '@/features/create/types';
-import { ensureOwnerMenuProfile } from '@/features/menu/services/menu-profile-api';
+import {
+  ensureOwnerMenuProfile,
+  fetchWithMenuProfileAuth,
+} from '@/features/menu/services/menu-profile-api';
 import { MenuProfile } from '@/features/menu/types';
 import { createFeatureLogger } from '@/features/shared/services/feature-logger';
 import { WEB_APP_ORIGIN } from '@/features/web/config/web-app';
@@ -34,6 +37,7 @@ type FetchLibraryParams = {
   scope?: 'public' | 'favorites';
   userId?: number | null;
   installationPublicId?: string | null;
+  sessionToken?: string | null;
   category?: string | null;
   search?: string | null;
   originScreen?: 'create' | 'profile' | 'history';
@@ -42,6 +46,7 @@ type FetchLibraryParams = {
 type FavoriteMutationParams = {
   userId: number;
   installationPublicId?: string | null;
+  sessionToken?: string | null;
   originScreen?: 'create' | 'profile' | 'history';
   sourceQuestionPublicId?: string | null;
   question?: CreateQuizQuestion | null;
@@ -89,6 +94,24 @@ function buildFavoriteBody(params: FavoriteMutationParams) {
   };
 }
 
+function buildAuthProfile(params: {
+  userId?: number | null;
+  installationPublicId?: string | null;
+  sessionToken?: string | null;
+}) {
+  if (!params.userId) {
+    return null;
+  }
+
+  return {
+    id: params.userId,
+    installationPublicId: params.installationPublicId ?? null,
+    sessionToken: params.sessionToken ?? null,
+    name: '',
+    emoji: '',
+  } satisfies MenuProfile;
+}
+
 export async function fetchCreateLibraryQuestions(params: FetchLibraryParams = {}) {
   const query = buildQuery({
     scope: params.scope ?? 'public',
@@ -103,7 +126,20 @@ export async function fetchCreateLibraryQuestions(params: FetchLibraryParams = {
     category: params.category ?? null,
   });
 
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/library/questions${query}`);
+  const authProfile = buildAuthProfile({
+    userId: params.userId ?? null,
+    installationPublicId: params.installationPublicId ?? null,
+    sessionToken: params.sessionToken ?? null,
+  });
+  const { response } = await fetchWithMenuProfileAuth(
+    `${WEB_APP_ORIGIN}/api/v1/library/questions${query}`,
+    undefined,
+    authProfile,
+    {
+      required: false,
+      retryAnonymouslyOnAuthFailure: true,
+    },
+  );
   if (!response.ok) {
     logger.warn('library.load.failed', {
       scope: params.scope ?? 'public',
@@ -124,6 +160,7 @@ export async function fetchCreateLibraryQuestions(params: FetchLibraryParams = {
 export async function fetchFavoriteQuestions(params: {
   userId: number;
   installationPublicId?: string | null;
+  sessionToken?: string | null;
   category?: string | null;
   search?: string | null;
   originScreen?: 'create' | 'profile' | 'history';
@@ -140,7 +177,16 @@ export async function fetchFavoriteQuestions(params: {
     category: params.category ?? null,
   });
 
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/me/favorites/questions${query}`);
+  const authProfile = buildAuthProfile({
+    userId: params.userId,
+    installationPublicId: params.installationPublicId ?? null,
+    sessionToken: params.sessionToken ?? null,
+  });
+  const { response } = await fetchWithMenuProfileAuth(
+    `${WEB_APP_ORIGIN}/api/v1/me/favorites/questions${query}`,
+    undefined,
+    authProfile,
+  );
   if (!response.ok) {
     logger.warn('favorites.load.failed', {
       status: response.status,
@@ -162,11 +208,20 @@ export async function addFavoriteQuestion(params: FavoriteMutationParams) {
     originScreen: params.originScreen ?? 'create',
   });
 
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/me/favorites/questions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildFavoriteBody(params)),
+  const authProfile = buildAuthProfile({
+    userId: params.userId,
+    installationPublicId: params.installationPublicId ?? null,
+    sessionToken: params.sessionToken ?? null,
   });
+  const { response } = await fetchWithMenuProfileAuth(
+    `${WEB_APP_ORIGIN}/api/v1/me/favorites/questions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildFavoriteBody(params)),
+    },
+    authProfile,
+  );
   if (!response.ok) {
     logger.warn('favorite.toggle.failed', {
       mode: params.sourceQuestionPublicId ? 'existing' : 'custom',
@@ -186,6 +241,7 @@ export async function addFavoriteQuestion(params: FavoriteMutationParams) {
 export async function removeFavoriteQuestion(params: {
   userId: number;
   installationPublicId?: string | null;
+  sessionToken?: string | null;
   questionPublicId: string;
   originScreen?: 'create' | 'profile' | 'history';
 }) {
@@ -201,9 +257,17 @@ export async function removeFavoriteQuestion(params: {
     originScreen: params.originScreen ?? 'create',
   });
 
-  const response = await fetch(
+  const authProfile = buildAuthProfile({
+    userId: params.userId,
+    installationPublicId: params.installationPublicId ?? null,
+    sessionToken: params.sessionToken ?? null,
+  });
+  const { response } = await fetchWithMenuProfileAuth(
     `${WEB_APP_ORIGIN}/api/v1/me/favorites/questions/${params.questionPublicId}${query}`,
-    { method: 'DELETE' },
+    {
+      method: 'DELETE',
+    },
+    authProfile,
   );
   if (!response.ok) {
     logger.warn('favorite.toggle.failed', {
@@ -224,6 +288,7 @@ export async function fetchTemplateDraft(params: {
   templatePublicId: string;
   userId: number;
   installationPublicId?: string | null;
+  sessionToken?: string | null;
   originScreen?: 'create' | 'profile' | 'history';
 }) {
   const query = buildQuery({
@@ -232,8 +297,15 @@ export async function fetchTemplateDraft(params: {
     origin_screen: params.originScreen ?? 'history',
   });
 
-  const response = await fetch(
+  const authProfile = buildAuthProfile({
+    userId: params.userId,
+    installationPublicId: params.installationPublicId ?? null,
+    sessionToken: params.sessionToken ?? null,
+  });
+  const { response } = await fetchWithMenuProfileAuth(
     `${WEB_APP_ORIGIN}/api/v1/templates/${params.templatePublicId}/draft${query}`,
+    undefined,
+    authProfile,
   );
   if (!response.ok) {
     throw new Error(`Failed to load template draft: HTTP ${response.status}`);
@@ -254,16 +326,40 @@ export async function createQuizRequest(params: {
   title: string;
   questions: CreateQuizQuestion[];
   ownerId?: number | null;
+  ownerInstallationPublicId?: string | null;
+  ownerSessionToken?: string | null;
 }) {
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/quizzes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      title: params.title,
-      questions: params.questions,
-      owner_id: params.ownerId ?? null,
-    }),
-  });
+  let response: Response;
+  if (params.ownerId) {
+    const authProfile = buildAuthProfile({
+      userId: params.ownerId,
+      installationPublicId: params.ownerInstallationPublicId ?? null,
+      sessionToken: params.ownerSessionToken ?? null,
+    });
+    ({ response } = await fetchWithMenuProfileAuth(
+      `${WEB_APP_ORIGIN}/api/v1/quizzes`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: params.title,
+          questions: params.questions,
+          owner_id: params.ownerId ?? null,
+        }),
+      },
+      authProfile,
+    ));
+  } else {
+    response = await fetch(`${WEB_APP_ORIGIN}/api/v1/quizzes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: params.title,
+        questions: params.questions,
+        owner_id: null,
+      }),
+    });
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to create quiz: HTTP ${response.status}`);

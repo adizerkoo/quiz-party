@@ -75,6 +75,7 @@ export function ProfileModal({
       id: initialProfile?.id ?? null,
       publicId: initialProfile?.publicId ?? null,
       installationPublicId: initialProfile?.installationPublicId ?? null,
+      sessionToken: initialProfile?.sessionToken ?? null,
       name: normalizedName,
       emoji: selectedEmoji,
     });

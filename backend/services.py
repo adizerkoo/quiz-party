@@ -448,21 +448,48 @@ def ensure_installation(
         return None
 
     installation = None
-    if device.installation_public_id:
+    requested_installation_public_id = device.installation_public_id
+    requested_client_installation_key = device.client_installation_key
+    if requested_installation_public_id:
         # Самый надёжный способ связать клиента со старой установкой.
         installation = (
             db.query(models.UserInstallation)
-            .filter(models.UserInstallation.public_id == device.installation_public_id)
+            .filter(models.UserInstallation.public_id == requested_installation_public_id)
             .first()
         )
+        if (
+            installation is not None
+            and user is not None
+            and installation.user_id not in {None, user.id}
+        ):
+            logger.warning(
+                "installation.public_id.conflict ignored  installation_public_id=%s  existing_user_id=%s  requested_user_id=%s",
+                requested_installation_public_id,
+                installation.user_id,
+                user.id,
+            )
+            installation = None
+            requested_installation_public_id = None
 
-    if installation is None and device.client_installation_key:
+    if installation is None and requested_client_installation_key:
         # Дополнительный lookup для клиентов, у которых есть свой локальный installation key.
         installation = (
             db.query(models.UserInstallation)
-            .filter(models.UserInstallation.client_installation_key == device.client_installation_key)
+            .filter(models.UserInstallation.client_installation_key == requested_client_installation_key)
             .first()
         )
+        if (
+            installation is not None
+            and user is not None
+            and installation.user_id not in {None, user.id}
+        ):
+            logger.warning(
+                "installation.client_key.conflict ignored  client_installation_key=%s  existing_user_id=%s  requested_user_id=%s",
+                requested_client_installation_key,
+                installation.user_id,
+                user.id,
+            )
+            installation = None
 
     if installation is None and user is not None:
         # Последний мягкий fallback для старых клиентов без стабильного installation id.
@@ -480,15 +507,15 @@ def ensure_installation(
     if installation is None:
         installation = models.UserInstallation(
             user=user,
-            public_id=device.installation_public_id or models._public_id(),
-            client_installation_key=device.client_installation_key,
+            public_id=requested_installation_public_id or models._public_id(),
+            client_installation_key=requested_client_installation_key,
         )
         db.add(installation)
 
     installation.user = user
-    if device.installation_public_id:
+    if requested_installation_public_id:
         # Если клиент уже прислал внешний installation id, считаем его source of truth.
-        installation.public_id = device.installation_public_id
+        installation.public_id = requested_installation_public_id
     installation.platform = device.platform or installation.platform or "unknown"
     installation.device_family = device.device_family or installation.device_family
     installation.device_brand = device.device_brand or installation.device_brand
@@ -497,8 +524,8 @@ def ensure_installation(
     installation.browser_version = device.browser_version or installation.browser_version
     installation.app_version = device.app_version or installation.app_version
     installation.last_seen_at = models._utc_now()
-    if device.client_installation_key:
-        installation.client_installation_key = device.client_installation_key
+    if requested_client_installation_key:
+        installation.client_installation_key = requested_client_installation_key
     if user is not None:
         user.device_platform = installation.platform
         user.device_brand = installation.device_brand
@@ -601,7 +628,29 @@ def validate_results_snapshot(snapshot: object) -> dict | None:
     except Exception:
         return None
 
-    return normalized.model_dump(mode="python")
+    payload = normalized.model_dump(mode="python")
+    if not isinstance(snapshot, dict):
+        return payload
+
+    raw_results = snapshot.get("results")
+    if isinstance(raw_results, list):
+        for raw_row, normalized_row in zip(raw_results, payload.get("results", [])):
+            if not isinstance(raw_row, dict):
+                continue
+            for key in list(normalized_row.keys()):
+                if normalized_row.get(key) is None and key not in raw_row:
+                    normalized_row.pop(key, None)
+
+    raw_questions = snapshot.get("questions")
+    if isinstance(raw_questions, list):
+        for raw_question, normalized_question in zip(raw_questions, payload.get("questions", [])):
+            if not isinstance(raw_question, dict):
+                continue
+            for key in list(normalized_question.keys()):
+                if normalized_question.get(key) is None and key not in raw_question:
+                    normalized_question.pop(key, None)
+
+    return payload
 
 
 def build_results_snapshot_payload(quiz: models.Quiz) -> dict:
@@ -638,7 +687,7 @@ def build_quiz_results_response(quiz: models.Quiz) -> dict:
             "questions": snapshot["questions"],
             "results": snapshot["results"],
         }
-    ).model_dump(mode="python")
+    ).model_dump(mode="python", exclude_unset=True)
 
 
 def get_quiz_winner_names(quiz: models.Quiz) -> list[str]:

@@ -60,6 +60,7 @@ import {
   getOrCreateMenuInstallationPublicId,
   hydrateMenuSessionProfile,
 } from '@/features/menu/store/menu-profile-session';
+import { ensureMenuProfileSession } from '@/features/menu/services/menu-profile-api';
 import { MenuProfile } from '@/features/menu/types';
 import { createFeatureLogger } from '@/features/shared/services/feature-logger';
 
@@ -96,6 +97,7 @@ export function NativeCreateScreen() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const requestedTemplatePublicId = readSingleParam(params.templatePublicId);
   const handledTemplatePrefillRef = useRef<string | null>(null);
+  const inFlightTemplatePrefillRef = useRef<string | null>(null);
 
   const logger = useRef(createFeatureLogger('native.create.screen')).current;
 
@@ -150,7 +152,16 @@ export function NativeCreateScreen() {
         return;
       }
 
-      setOwnerProfile(hydratedProfile);
+      if (!hydratedProfile?.id) {
+        setOwnerProfile(hydratedProfile);
+        return;
+      }
+
+      const authenticatedProfile =
+        await ensureMenuProfileSession(hydratedProfile).catch(() => hydratedProfile);
+      if (mounted) {
+        setOwnerProfile(authenticatedProfile);
+      }
     }
 
     void hydrateProfile();
@@ -171,23 +182,49 @@ export function NativeCreateScreen() {
       });
 
       try {
-        const [publicItems, favoriteItems] = await Promise.all([
+        const authenticatedOwnerProfile = ownerProfile?.id
+          ? await ensureMenuProfileSession(ownerProfile).catch(() => ownerProfile)
+          : ownerProfile;
+        if (mounted && authenticatedOwnerProfile && authenticatedOwnerProfile !== ownerProfile) {
+          setOwnerProfile(authenticatedOwnerProfile);
+        }
+        const [publicItemsResult, favoriteItemsResult] = await Promise.allSettled([
           fetchCreateLibraryQuestions({
             scope: 'public',
-            userId: ownerProfile?.id ?? null,
-            installationPublicId: ownerProfile?.installationPublicId ?? null,
+            userId: authenticatedOwnerProfile?.id ?? null,
+            installationPublicId: authenticatedOwnerProfile?.installationPublicId ?? null,
+            sessionToken: authenticatedOwnerProfile?.sessionToken ?? null,
             originScreen: 'create',
           }),
-          ownerProfile?.id
+          authenticatedOwnerProfile?.id
             ? fetchFavoriteQuestions({
-              userId: ownerProfile.id,
-              installationPublicId: ownerProfile.installationPublicId ?? null,
+              userId: authenticatedOwnerProfile.id,
+              installationPublicId: authenticatedOwnerProfile.installationPublicId ?? null,
+              sessionToken: authenticatedOwnerProfile.sessionToken ?? null,
               originScreen: 'create',
             })
             : Promise.resolve([]),
         ]);
         if (!mounted) {
           return;
+        }
+
+        if (publicItemsResult.status !== 'fulfilled') {
+          throw publicItemsResult.reason;
+        }
+
+        const publicItems = publicItemsResult.value;
+        const favoriteItems = favoriteItemsResult.status === 'fulfilled'
+          ? favoriteItemsResult.value
+          : [];
+
+        if (favoriteItemsResult.status !== 'fulfilled') {
+          logger.warn('favorites.load.failed', {
+            message:
+              favoriteItemsResult.reason instanceof Error
+                ? favoriteItemsResult.reason.message
+                : 'unknown_error',
+          });
         }
 
         setLibraryQuestions(publicItems);
@@ -217,7 +254,7 @@ export function NativeCreateScreen() {
     return () => {
       mounted = false;
     };
-  }, [logger, ownerProfile?.id, ownerProfile?.installationPublicId]);
+  }, [logger, ownerProfile?.id, ownerProfile?.installationPublicId, ownerProfile?.sessionToken]);
 
   useEffect(() => {
     if (!libraryQuestions.length) {
@@ -254,9 +291,13 @@ export function NativeCreateScreen() {
     if (handledTemplatePrefillRef.current === requestedTemplatePublicId) {
       return;
     }
+    if (inFlightTemplatePrefillRef.current === requestedTemplatePublicId) {
+      return;
+    }
 
     const templatePublicId = requestedTemplatePublicId;
     let cancelled = false;
+    inFlightTemplatePrefillRef.current = templatePublicId;
 
     async function prefillFromTemplate() {
       const profile = ownerProfile ?? getMenuSessionProfile();
@@ -275,10 +316,21 @@ export function NativeCreateScreen() {
       });
 
       try {
+        const authenticatedProfile = await ensureMenuProfileSession(profile);
+        if (cancelled) {
+          return;
+        }
+
+        if (authenticatedProfile && authenticatedProfile !== ownerProfile) {
+          setOwnerProfile(authenticatedProfile);
+        }
+
         const templateDraft = await fetchTemplateDraft({
           templatePublicId,
-          userId: profile.id,
-          installationPublicId: profile.installationPublicId ?? null,
+          userId: authenticatedProfile?.id ?? profile.id,
+          installationPublicId:
+            authenticatedProfile?.installationPublicId ?? profile.installationPublicId ?? null,
+          sessionToken: authenticatedProfile?.sessionToken ?? profile.sessionToken ?? null,
           originScreen: 'history',
         });
         if (cancelled) {
@@ -336,6 +388,10 @@ export function NativeCreateScreen() {
           return;
         }
         pushToast('Не удалось загрузить шаблон для повтора.');
+      } finally {
+        if (inFlightTemplatePrefillRef.current === templatePublicId) {
+          inFlightTemplatePrefillRef.current = null;
+        }
       }
     }
 
@@ -345,15 +401,12 @@ export function NativeCreateScreen() {
       cancelled = true;
     };
   }, [
-    draft.correctText,
-    draft.questionText,
-    draft.options,
     draftHydrated,
     logger,
-    ownerProfile,
-    questions.length,
+    ownerProfile?.id,
+    ownerProfile?.installationPublicId,
+    ownerProfile?.sessionToken,
     requestedTemplatePublicId,
-    title,
   ]);
 
   useEffect(() => {
@@ -446,7 +499,20 @@ export function NativeCreateScreen() {
       return null;
     }
 
-    return profile;
+    const authenticatedProfile = await ensureMenuProfileSession(profile).catch(() => null);
+    if (!authenticatedProfile?.sessionToken) {
+      pushToast('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґС‚РІРµСЂРґРёС‚СЊ РїСЂРѕС„РёР»СЊ. РџРѕРїСЂРѕР±СѓР№ РµС‰С‘ СЂР°Р·.');
+      logger.warn('favorite.toggle.denied_local', {
+        reason: 'missing_session',
+      });
+      return null;
+    }
+
+    if (authenticatedProfile !== ownerProfile) {
+      setOwnerProfile(authenticatedProfile);
+    }
+
+    return authenticatedProfile;
   }
 
   async function handleToggleFavorite(question: CreateLibraryQuestion) {
@@ -460,6 +526,7 @@ export function NativeCreateScreen() {
         await removeFavoriteQuestion({
           userId: profile.id,
           installationPublicId: profile.installationPublicId ?? null,
+          sessionToken: profile.sessionToken ?? null,
           questionPublicId: question.public_id,
           originScreen: 'create',
         });
@@ -468,6 +535,7 @@ export function NativeCreateScreen() {
         const favoriteQuestion = await addFavoriteQuestion({
           userId: profile.id,
           installationPublicId: profile.installationPublicId ?? null,
+          sessionToken: profile.sessionToken ?? null,
           originScreen: 'create',
           sourceQuestionPublicId:
             question.source_question_public_id ?? question.public_id ?? null,
@@ -502,6 +570,7 @@ export function NativeCreateScreen() {
       const favoriteQuestion = await addFavoriteQuestion({
         userId: profile.id,
         installationPublicId: profile.installationPublicId ?? null,
+        sessionToken: profile.sessionToken ?? null,
         originScreen: 'create',
         sourceQuestionPublicId: questionPayload.source_question_public_id ?? null,
         question: questionPayload.source_question_public_id ? null : questionPayload,
@@ -742,6 +811,8 @@ export function NativeCreateScreen() {
         title: title.trim(),
         questions,
         ownerId: ownerProfile?.id ?? null,
+        ownerInstallationPublicId: ownerProfile?.installationPublicId ?? null,
+        ownerSessionToken: ownerProfile?.sessionToken ?? null,
       });
       saveGameSessionCredentials({
         roomCode: createdQuiz.code,

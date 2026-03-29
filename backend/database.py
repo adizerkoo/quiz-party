@@ -152,6 +152,40 @@ def _repair_schema_after_fallback():
                 text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_public_id ON users (public_id)")
             )
 
+        if inspector.has_table("user_installations"):
+            installation_columns = {
+                column["name"] for column in inspector.get_columns("user_installations")
+            }
+            missing_installation_columns = []
+
+            if "session_token_hash" not in installation_columns:
+                connection.execute(
+                    text("ALTER TABLE user_installations ADD COLUMN session_token_hash VARCHAR(128)")
+                )
+                missing_installation_columns.append("session_token_hash")
+            if "session_token_issued_at" not in installation_columns:
+                connection.execute(
+                    text(
+                        """
+                        ALTER TABLE user_installations
+                        ADD COLUMN session_token_issued_at TIMESTAMP WITHOUT TIME ZONE
+                        """
+                    )
+                )
+                missing_installation_columns.append("session_token_issued_at")
+
+            if missing_installation_columns:
+                repaired_columns["user_installations"] = missing_installation_columns
+
+            connection.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS ix_user_installations_session_token_hash
+                    ON user_installations (session_token_hash)
+                    """
+                )
+            )
+
         if inspector.has_table("session_participants"):
             participant_columns = {
                 column["name"] for column in inspector.get_columns("session_participants")

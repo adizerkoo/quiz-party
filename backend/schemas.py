@@ -27,6 +27,15 @@ class QuestionSchema(BaseModel):
             raise ValueError('type must be "text" or "options"')
         return value
 
+    @field_validator("text", "correct")
+    @classmethod
+    def validate_required_text_fields(cls, value: str) -> str:
+        """Trims required text fields and rejects whitespace-only values."""
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Value cannot be blank")
+        return cleaned
+
     @field_validator("options")
     @classmethod
     def validate_options(cls, value: Optional[List[str]]) -> Optional[List[str]]:
@@ -36,10 +45,29 @@ class QuestionSchema(BaseModel):
                 raise ValueError("Minimum 2 options required")
             if len(value) > 6:
                 raise ValueError("Maximum 6 options allowed")
+            normalized_options: list[str] = []
             for option in value:
-                if len(option) > 200:
+                cleaned = str(option).strip()
+                if not cleaned:
+                    raise ValueError("Option text cannot be blank")
+                if len(cleaned) > 200:
                     raise ValueError("Option text too long (max 200 chars)")
+                normalized_options.append(cleaned)
+            return normalized_options
         return value
+
+    @model_validator(mode="after")
+    def validate_question_shape(self) -> "QuestionSchema":
+        """Ensures the payload shape matches the declared question type."""
+        if self.type == "text":
+            self.options = None
+            return self
+
+        if not self.options:
+            raise ValueError('options are required when type is "options"')
+        if self.correct not in self.options:
+            raise ValueError("correct must match one of the provided options")
+        return self
 
 
 class QuizQuestionPayload(BaseModel):
@@ -270,6 +298,12 @@ class UserTouch(BaseModel):
     installation_public_id: Optional[str] = Field(default=None, max_length=36)
 
 
+class UserSessionExchangeRequest(UserTouch):
+    """Payload for exchanging a legacy installation binding into a bearer session."""
+
+    pass
+
+
 class UserResponse(BaseModel):
     """Публичное представление профиля пользователя в ответах API."""
 
@@ -282,5 +316,6 @@ class UserResponse(BaseModel):
     installation_public_id: Optional[str] = None
     created_at: datetime
     last_login_at: datetime
+    session_token: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

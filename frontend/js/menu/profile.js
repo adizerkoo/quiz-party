@@ -286,19 +286,26 @@ async function touchStoredProfile(profile) {
         profile.installation_public_id ||
         window.QuizUserProfile.getOrCreateInstallationPublicId();
     try {
-        const response = await fetch(`/api/v1/users/${profile.id}/touch`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
+        const response = await window.QuizUserProfile.fetchWithStoredProfileAuth(
+            `/api/v1/users/${profile.id}/touch`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    device_platform: deviceInfo.device_platform,
+                    device_brand: deviceInfo.device_brand,
+                    installation_public_id: installationPublicId,
+                }),
             },
-            body: JSON.stringify({
-                device_platform: deviceInfo.device_platform,
-                device_brand: deviceInfo.device_brand,
-                installation_public_id: installationPublicId,
-            }),
-        });
+            {
+                required: true,
+                profile,
+            },
+        );
 
-        if (response.status === 404) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
             window.QuizUserProfile?.clearStoredUserProfile?.();
             renderStoredProfile(null);
             openProfileModal({ locked: true });
@@ -349,7 +356,7 @@ async function submitProfileRegistration() {
     const method = isUpdate ? 'PUT' : 'POST';
 
     try {
-        const response = await fetch(url, {
+        const requestOptions = {
             method,
             headers: {
                 'Content-Type': 'application/json',
@@ -361,9 +368,22 @@ async function submitProfileRegistration() {
                 device_brand: deviceInfo.device_brand || null,
                 installation_public_id: installationPublicId,
             }),
-        });
+        };
+        const response = isUpdate
+            ? await window.QuizUserProfile.fetchWithStoredProfileAuth(
+                url,
+                requestOptions,
+                {
+                    required: true,
+                    profile: storedProfile,
+                },
+            )
+            : await fetch(url, requestOptions);
 
-        if (response.status === 404 && isUpdate) {
+        if (
+            isUpdate &&
+            (response.status === 401 || response.status === 403 || response.status === 404)
+        ) {
             window.QuizUserProfile?.clearStoredUserProfile?.();
             renderStoredProfile(null);
             isProfileModalLocked = true;

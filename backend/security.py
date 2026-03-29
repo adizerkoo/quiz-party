@@ -1,11 +1,20 @@
 """Утилиты безопасности и валидации для backend Quiz Party."""
 
 from collections import defaultdict
+from dataclasses import dataclass
+from hashlib import sha256
 import logging
 import re
+import secrets
 import time
 
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy.orm import Session
+
+from . import database, models
+
 logger = logging.getLogger(__name__)
+BEARER_AUTH_HEADERS = {"WWW-Authenticate": "Bearer"}
 
 
 class RateLimiter:
@@ -78,6 +87,106 @@ class RateLimiter:
 
 
 rate_limiter = RateLimiter(max_requests=100, time_window=60)
+
+
+@dataclass(slots=True)
+class AuthenticatedUserContext:
+    """Authenticated profile context resolved from the bearer session token."""
+
+    user: models.User
+    installation: models.UserInstallation
+
+
+def hash_session_token(token: str) -> str:
+    """Returns a SHA-256 hash of the opaque profile session token."""
+    return sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_session_token() -> str:
+    """Generates a new opaque bearer token for profile-related API calls."""
+    return secrets.token_urlsafe(32)
+
+
+def issue_installation_session_token(installation: models.UserInstallation) -> str:
+    """Rotates the session token bound to a concrete user installation."""
+    token = issue_session_token()
+    installation.session_token_hash = hash_session_token(token)
+    installation.session_token_issued_at = models._utc_now()
+    return token
+
+
+def _parse_bearer_token(authorization: str | None) -> str | None:
+    if authorization is None:
+        return None
+
+    scheme, _, credentials = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not credentials.strip():
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid session token",
+            headers=BEARER_AUTH_HEADERS,
+        )
+    return credentials.strip()
+
+
+def _resolve_authenticated_user_context(
+    db: Session,
+    *,
+    token: str,
+) -> AuthenticatedUserContext | None:
+    installation = (
+        db.query(models.UserInstallation)
+        .filter(models.UserInstallation.session_token_hash == hash_session_token(token))
+        .first()
+    )
+    if installation is None or installation.user is None or installation.user_id is None:
+        return None
+    return AuthenticatedUserContext(user=installation.user, installation=installation)
+
+
+def get_optional_authenticated_user(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    db: Session = Depends(database.get_db),
+) -> AuthenticatedUserContext | None:
+    """Returns the authenticated profile context or None when no bearer token is provided."""
+    token = _parse_bearer_token(authorization)
+    if token is None:
+        return None
+
+    auth = _resolve_authenticated_user_context(db, token=token)
+    if auth is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid session token",
+            headers=BEARER_AUTH_HEADERS,
+        )
+    return auth
+
+
+def get_current_authenticated_user(
+    auth: AuthenticatedUserContext | None = Depends(get_optional_authenticated_user),
+) -> AuthenticatedUserContext:
+    """FastAPI dependency that requires a valid bearer token."""
+    if auth is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Session token is required",
+            headers=BEARER_AUTH_HEADERS,
+        )
+    return auth
+
+
+def ensure_authenticated_identity_matches(
+    auth: AuthenticatedUserContext,
+    *,
+    user_id: int | None = None,
+    installation_public_id: str | None = None,
+) -> None:
+    """Rejects attempts to use a valid token against another user's identity."""
+    if user_id is not None and auth.user.id != user_id:
+        raise HTTPException(status_code=403, detail="User identity mismatch")
+    if installation_public_id and auth.installation.public_id != installation_public_id:
+        raise HTTPException(status_code=403, detail="Installation identity mismatch")
 
 
 def validate_quiz_code(code: str) -> bool:

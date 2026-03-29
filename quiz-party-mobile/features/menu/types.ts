@@ -6,6 +6,7 @@ export type MenuProfile = {
   id?: number | null;
   publicId?: string | null;
   installationPublicId?: string | null;
+  sessionToken?: string | null;
   name: string;
   emoji: string;
 };

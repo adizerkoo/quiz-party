@@ -18,6 +18,7 @@ type ApiUserResponse = {
   username: string;
   avatar_emoji: string;
   installation_public_id?: string | null;
+  session_token?: string | null;
 };
 
 type SyncTrigger = 'app_entry' | 'profile_save' | 'create_quiz';
@@ -46,6 +47,15 @@ function buildProfilePayload(profile: MenuProfile) {
   };
 }
 
+function normalizeSessionToken(token: string | null | undefined) {
+  if (typeof token !== 'string') {
+    return null;
+  }
+
+  const cleaned = token.trim();
+  return cleaned || null;
+}
+
 function normalizeMenuProfile(profile: MenuProfile) {
   const installationPublicId =
     profile.installationPublicId ?? getOrCreateMenuInstallationPublicId();
@@ -54,6 +64,7 @@ function normalizeMenuProfile(profile: MenuProfile) {
     id: profile.id ?? null,
     publicId: profile.publicId ?? null,
     installationPublicId,
+    sessionToken: normalizeSessionToken(profile.sessionToken),
     name: profile.name.trim(),
     emoji: normalizeMenuAvatar(profile.emoji),
   } satisfies MenuProfile;
@@ -72,6 +83,7 @@ function getProfileSyncSignature(
           id: normalizedProfile.id ?? null,
           publicId: normalizedProfile.publicId ?? null,
           installationPublicId: normalizedProfile.installationPublicId ?? null,
+          sessionToken: normalizedProfile.sessionToken ?? null,
           name: normalizedProfile.name,
           emoji: normalizedProfile.emoji,
         }
@@ -106,6 +118,9 @@ function toMenuProfile(apiUser: ApiUserResponse, fallback: MenuProfile) {
       apiUser.installation_public_id ??
       fallback.installationPublicId ??
       getOrCreateMenuInstallationPublicId(),
+    sessionToken:
+      normalizeSessionToken(apiUser.session_token) ??
+      normalizeSessionToken(fallback.sessionToken),
     name: apiUser.username,
     emoji: normalizeMenuAvatar(apiUser.avatar_emoji),
   } satisfies MenuProfile;
@@ -138,26 +153,28 @@ async function createRemoteProfile(profile: MenuProfile) {
   return parseUserResponse(response, 'Failed to create profile');
 }
 
-async function updateRemoteProfile(profile: MenuProfile) {
-  if (!profile.id) {
-    throw new Error('Profile id is required for update');
+export function buildMenuProfileAuthHeaders(
+  initHeaders?: HeadersInit,
+  profile?: MenuProfile | null,
+) {
+  const headers = new Headers(initHeaders ?? {});
+  const sessionToken = normalizeSessionToken(profile?.sessionToken);
+
+  if (sessionToken) {
+    headers.set('Authorization', `Bearer ${sessionToken}`);
+  } else {
+    headers.delete('Authorization');
   }
 
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/users/${profile.id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildProfilePayload(profile)),
-  });
-
-  return parseUserResponse(response, 'Failed to update profile');
+  return headers;
 }
 
-async function touchRemoteProfile(profile: MenuProfile) {
+async function exchangeRemoteProfileSession(profile: MenuProfile) {
   if (!profile.id) {
-    throw new Error('Profile id is required for touch');
+    throw new Error('Profile id is required for session exchange');
   }
 
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/users/${profile.id}/touch`, {
+  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/users/${profile.id}/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -167,6 +184,168 @@ async function touchRemoteProfile(profile: MenuProfile) {
         profile.installationPublicId ?? getOrCreateMenuInstallationPublicId(),
     }),
   });
+
+  return parseUserResponse(response, 'Failed to refresh profile session');
+}
+
+export async function ensureMenuProfileSession(
+  profile: MenuProfile | null,
+  options?: { forceRefresh?: boolean },
+) {
+  if (!profile?.id) {
+    return profile;
+  }
+
+  const normalizedProfile = normalizeMenuProfile(profile);
+  const storedProfile = getMenuSessionProfile();
+  const normalizedStoredProfile =
+    storedProfile?.id === normalizedProfile.id
+      ? normalizeMenuProfile(storedProfile)
+      : null;
+  const activeProfile = normalizedStoredProfile ?? normalizedProfile;
+
+  if (!options?.forceRefresh && activeProfile.sessionToken) {
+    return activeProfile;
+  }
+
+  let refreshedProfile: MenuProfile;
+  try {
+    refreshedProfile = toMenuProfile(
+      await exchangeRemoteProfileSession(activeProfile),
+      activeProfile,
+    );
+  } catch (error) {
+    if (
+      error instanceof HttpStatusError
+      && (error.status === 401 || error.status === 403 || error.status === 404)
+    ) {
+      const snapshot = getMenuProfileStateSnapshot();
+      if (snapshot.profile?.id === activeProfile.id) {
+        await setMenuSessionProfile(null, {
+          syncStatus: null,
+          lastSyncedAt: null,
+          pendingUpdatedAt: null,
+        });
+      }
+    }
+
+    throw error;
+  }
+
+  const snapshot = getMenuProfileStateSnapshot();
+
+  return (
+    (await setMenuSessionProfile(refreshedProfile, {
+      syncStatus: snapshot.syncStatus ?? 'synced',
+      lastSyncedAt: snapshot.lastSyncedAt,
+      pendingUpdatedAt: snapshot.pendingUpdatedAt,
+    })) ?? refreshedProfile
+  );
+}
+
+export async function fetchWithMenuProfileAuth(
+  input: string,
+  init?: RequestInit,
+  profile?: MenuProfile | null,
+  options?: {
+    required?: boolean;
+    retryAnonymouslyOnAuthFailure?: boolean;
+  },
+) {
+  const required = options?.required !== false;
+  const retryAnonymouslyOnAuthFailure = options?.retryAnonymouslyOnAuthFailure === true;
+  let authenticatedProfile = profile ?? null;
+
+  if (authenticatedProfile?.id) {
+    try {
+      authenticatedProfile = await ensureMenuProfileSession(authenticatedProfile);
+    } catch (error) {
+      if (required) {
+        throw error;
+      }
+
+      authenticatedProfile = null;
+    }
+  }
+
+  const sendRequest = (requestProfile: MenuProfile | null) => fetch(input, {
+    ...init,
+    headers: buildMenuProfileAuthHeaders(init?.headers, requestProfile),
+  });
+
+  if (required && !buildMenuProfileAuthHeaders(init?.headers, authenticatedProfile).has('Authorization')) {
+    throw new HttpStatusError(401, 'Session token is required');
+  }
+
+  let response = await sendRequest(authenticatedProfile);
+
+  if (response.status === 401 && authenticatedProfile?.id) {
+    try {
+      authenticatedProfile = await ensureMenuProfileSession(authenticatedProfile, {
+        forceRefresh: true,
+      });
+    } catch (error) {
+      if (required) {
+        throw error;
+      }
+
+      authenticatedProfile = null;
+    }
+
+    if (authenticatedProfile?.sessionToken) {
+      response = await sendRequest(authenticatedProfile);
+    } else if (!required && retryAnonymouslyOnAuthFailure) {
+      response = await sendRequest(null);
+    }
+  } else if (response.status === 401 && !required && retryAnonymouslyOnAuthFailure) {
+    response = await sendRequest(null);
+  }
+
+  return {
+    response,
+    profile: authenticatedProfile,
+  };
+}
+
+async function updateRemoteProfile(profile: MenuProfile) {
+  if (!profile.id) {
+    throw new Error('Profile id is required for update');
+  }
+
+  const authenticatedProfile = await ensureMenuProfileSession(profile);
+  const { response } = await fetchWithMenuProfileAuth(
+    `${WEB_APP_ORIGIN}/api/v1/users/${profile.id}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildProfilePayload(authenticatedProfile ?? profile)),
+    },
+    authenticatedProfile ?? profile,
+  );
+
+  return parseUserResponse(response, 'Failed to update profile');
+}
+
+async function touchRemoteProfile(profile: MenuProfile) {
+  if (!profile.id) {
+    throw new Error('Profile id is required for touch');
+  }
+
+  const authenticatedProfile = await ensureMenuProfileSession(profile);
+  const { response } = await fetchWithMenuProfileAuth(
+    `${WEB_APP_ORIGIN}/api/v1/users/${profile.id}/touch`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_platform: Platform.OS,
+        device_brand: null,
+        installation_public_id:
+          authenticatedProfile?.installationPublicId ?? getOrCreateMenuInstallationPublicId(),
+      }),
+    },
+    authenticatedProfile ?? profile,
+  );
 
   return parseUserResponse(response, 'Failed to touch profile');
 }

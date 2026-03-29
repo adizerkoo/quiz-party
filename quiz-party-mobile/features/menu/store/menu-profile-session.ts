@@ -24,6 +24,15 @@ let currentPendingUpdatedAt: string | null = null;
 let menuProfileHydrated = false;
 let menuProfileHydrationPromise: Promise<MenuProfile | null> | null = null;
 
+function normalizeSessionToken(token: string | null | undefined) {
+  if (typeof token !== 'string') {
+    return null;
+  }
+
+  const cleaned = token.trim();
+  return cleaned || null;
+}
+
 function generatePublicId() {
   const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
   return template.replace(/[xy]/g, (char) => {
@@ -53,6 +62,7 @@ function normalizeMenuProfile(profile: MenuProfile | null) {
     id: profile.id ?? null,
     publicId: profile.publicId ?? null,
     installationPublicId,
+    sessionToken: normalizeSessionToken(profile.sessionToken),
     name: profile.name.trim(),
     emoji: normalizeMenuAvatar(profile.emoji),
   } satisfies MenuProfile;
@@ -65,6 +75,7 @@ function buildPersistedState(): MenuProfilePersistedState {
           ...currentMenuProfile,
           installationPublicId:
             currentMenuProfile.installationPublicId ?? currentInstallationPublicId ?? ensureInstallationPublicId(),
+          sessionToken: normalizeSessionToken(currentMenuProfile.sessionToken),
         }
       : null,
     installationPublicId: currentInstallationPublicId ?? ensureInstallationPublicId(),
@@ -236,6 +247,7 @@ export async function mergeMenuSessionProfileIdentity(
     id?: number | null;
     publicId?: string | null;
     installationPublicId?: string | null;
+    sessionToken?: string | null;
   },
   options?: {
     syncStatus?: MenuProfileSyncStatus | null;
@@ -274,6 +286,10 @@ export async function mergeMenuSessionProfileIdentity(
       patch.installationPublicId !== undefined
         ? patch.installationPublicId
         : (currentMenuProfile.installationPublicId ?? currentInstallationPublicId),
+    sessionToken:
+      patch.sessionToken !== undefined
+        ? normalizeSessionToken(patch.sessionToken)
+        : normalizeSessionToken(currentMenuProfile.sessionToken),
   };
 
   await persistMenuProfileState();

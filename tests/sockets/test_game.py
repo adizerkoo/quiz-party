@@ -334,6 +334,29 @@ class TestNextQuestion:
         db_session.refresh(playing_quiz)
         assert playing_quiz.current_question == len(playing_quiz.questions_data)
 
+    @allure.title("Host jump broadcasts the target question to all clients")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_move_to_step_broadcasts_question_change(self, sio, db_session, playing_quiz, sample_host):
+        mock = _patch_db(db_session)
+        try:
+            await sio.call("move_to_step", "host-sid-001", {
+                "room": playing_quiz.code,
+                "question": 3,
+            })
+        finally:
+            mock.stop()
+
+        db_session.refresh(playing_quiz)
+        assert playing_quiz.current_question == 3
+
+        move_events = [
+            call for call in sio.emit.call_args_list
+            if call.args and call.args[0] == "move_to_next"
+        ]
+        assert move_events
+        assert move_events[-1].args[1]["question"] == 3
+
 
 class TestOverrideScore:
 

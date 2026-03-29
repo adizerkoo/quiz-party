@@ -1,12 +1,14 @@
 """
-API tests for persistent mobile users.
+API tests for persistent user profiles and protected history endpoints.
 """
 
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 import allure
 
-from backend.models import Player, Quiz, User
+from backend.models import Player, Quiz, User, UserInstallation
+from backend.security import issue_installation_session_token
 
 
 VALID_USER_PAYLOAD = {
@@ -15,175 +17,6 @@ VALID_USER_PAYLOAD = {
     "device_platform": "android",
     "device_brand": "Samsung",
 }
-
-
-@allure.feature("API")
-@allure.story("Users")
-class TestUsersApi:
-    """Checks for the persistent user-profile API."""
-
-    @allure.title("Create user returns a stored profile")
-    @allure.severity(allure.severity_level.BLOCKER)
-    def test_create_user_success(self, client):
-        resp = client.post("/api/v1/users", json=VALID_USER_PAYLOAD)
-        assert resp.status_code == 200
-
-        data = resp.json()
-        assert data["id"] > 0
-        assert data["username"] == "Alice"
-        assert data["avatar_emoji"] == "\U0001F431"
-        assert data["device_platform"] == "android"
-        assert data["device_brand"] == "Samsung"
-        assert data["created_at"] is not None
-        assert data["last_login_at"] is not None
-        assert data["public_id"]
-
-    @allure.title("Create user returns installation public id when provided")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_create_user_returns_installation_public_id(self, client):
-        installation_public_id = "install-test-0001"
-        resp = client.post(
-            "/api/v1/users",
-            json={**VALID_USER_PAYLOAD, "installation_public_id": installation_public_id},
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["installation_public_id"] == installation_public_id
-
-    @allure.title("Users meta returns available avatars")
-    @allure.severity(allure.severity_level.NORMAL)
-    def test_get_users_meta(self, client):
-        resp = client.get("/api/v1/users/meta")
-        assert resp.status_code == 200
-        assert "avatar_emojis" in resp.json()
-        assert "\U0001F431" in resp.json()["avatar_emojis"]
-
-    @allure.title("User is available by id")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_get_user_by_id(self, client):
-        created = client.post("/api/v1/users", json=VALID_USER_PAYLOAD).json()
-        resp = client.get(f"/api/v1/users/{created['id']}")
-
-        assert resp.status_code == 200
-        assert resp.json()["username"] == "Alice"
-
-    @allure.title("Duplicate usernames are allowed in users")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_create_user_allows_duplicate_username(self, client):
-        first = client.post("/api/v1/users", json=VALID_USER_PAYLOAD)
-        assert first.status_code == 200
-
-        resp = client.post(
-            "/api/v1/users",
-            json={
-                **VALID_USER_PAYLOAD,
-                "avatar_emoji": "\U0001F438",
-                "device_platform": "ios",
-                "device_brand": "Apple",
-            },
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["username"] == VALID_USER_PAYLOAD["username"]
-        assert data["id"] != first.json()["id"]
-
-    @allure.title("Touch updates last_login_at and device info")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_touch_user(self, client):
-        created = client.post("/api/v1/users", json=VALID_USER_PAYLOAD).json()
-
-        resp = client.post(
-            f"/api/v1/users/{created['id']}/touch",
-            json={"device_platform": "ios", "device_brand": "Apple"},
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["device_platform"] == "ios"
-        assert data["device_brand"] == "Apple"
-        assert data["installation_public_id"] is not None
-
-    @allure.title("User update changes the same row")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_update_user(self, client):
-        created = client.post("/api/v1/users", json=VALID_USER_PAYLOAD).json()
-
-        resp = client.put(
-            f"/api/v1/users/{created['id']}",
-            json={
-                "username": "New Alice",
-                "avatar_emoji": "\U0001F438",
-                "device_platform": "ios",
-                "device_brand": "Apple",
-            },
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["id"] == created["id"]
-        assert data["username"] == "New Alice"
-        assert data["avatar_emoji"] == "\U0001F438"
-        assert data["device_platform"] == "ios"
-        assert data["device_brand"] == "Apple"
-
-    @allure.title("User update can reuse an existing username")
-    @allure.severity(allure.severity_level.CRITICAL)
-    def test_update_user_allows_duplicate_username(self, client):
-        first = client.post("/api/v1/users", json=VALID_USER_PAYLOAD).json()
-        second = client.post(
-            "/api/v1/users",
-            json={
-                "username": "Bob",
-                "avatar_emoji": "\U0001F436",
-                "device_platform": "android",
-                "device_brand": "Xiaomi",
-            },
-        ).json()
-
-        resp = client.put(
-            f"/api/v1/users/{second['id']}",
-            json={
-                "username": first["username"],
-                "avatar_emoji": "\U0001F436",
-                "device_platform": "ios",
-                "device_brand": "Apple",
-            },
-        )
-
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["id"] == second["id"]
-        assert data["username"] == first["username"]
-
-    @allure.title("Updating an unknown user returns 404")
-    @allure.severity(allure.severity_level.NORMAL)
-    def test_update_user_not_found(self, client):
-        resp = client.put(
-            "/api/v1/users/99999",
-            json={
-                "username": "New Alice",
-                "avatar_emoji": "\U0001F438",
-                "device_platform": "ios",
-                "device_brand": "Apple",
-            },
-        )
-        assert resp.status_code == 404
-
-    @allure.title("Invalid avatar is rejected")
-    @allure.severity(allure.severity_level.NORMAL)
-    def test_create_user_invalid_avatar(self, client):
-        payload = {**VALID_USER_PAYLOAD, "avatar_emoji": "\U0001F916"}
-        resp = client.post("/api/v1/users", json=payload)
-        assert resp.status_code == 422
-
-    @allure.title("Unknown user returns 404")
-    @allure.severity(allure.severity_level.NORMAL)
-    def test_get_user_not_found(self, client):
-        resp = client.get("/api/v1/users/99999")
-        assert resp.status_code == 404
-
 
 HISTORY_QUESTIONS = [
     {
@@ -195,12 +28,30 @@ HISTORY_QUESTIONS = [
 ]
 
 
-def _create_user_record(db_session, *, username="History User", avatar_emoji="🐱"):
+def _auth_headers(session_token: str | None) -> dict[str, str]:
+    assert session_token
+    return {"Authorization": f"Bearer {session_token}"}
+
+
+def _create_user_via_api(client, **overrides) -> dict:
+    response = client.post("/api/v1/users", json={**VALID_USER_PAYLOAD, **overrides})
+    assert response.status_code == 200
+    return response.json()
+
+
+def _create_user_record(db_session, *, username="History User", avatar_emoji="\U0001F431"):
     user = User(username=username, avatar_emoji=avatar_emoji)
-    db_session.add(user)
+    installation = UserInstallation(
+        user=user,
+        public_id=str(uuid4()),
+        platform="web",
+    )
+    session_token = issue_installation_session_token(installation)
+    db_session.add_all([user, installation])
     db_session.commit()
     db_session.refresh(user)
-    return user
+    db_session.refresh(installation)
+    return user, session_token
 
 
 def _create_history_quiz(
@@ -240,7 +91,7 @@ def _create_history_quiz(
         is_host=True,
         status="finished" if status == "finished" else "joined",
         score=0,
-        emoji="🐶",
+        emoji="\U0001F436",
     )
     participant = Player(
         name=user.username,
@@ -269,7 +120,7 @@ def _create_history_quiz(
                 status=extra.get("status", "finished"),
                 score=extra.get("score", 0),
                 final_rank=extra.get("final_rank"),
-                emoji=extra.get("emoji", "🦊"),
+                emoji=extra.get("emoji", "\U0001F98A"),
                 answers_history={"1": extra.get("answer", "4")},
                 scores_history={"1": extra.get("score", 0)},
             )
@@ -282,22 +133,316 @@ def _create_history_quiz(
 
 
 @allure.feature("API")
+@allure.story("Users")
+class TestUsersApi:
+    @allure.title("Create user returns a stored profile and bearer session token")
+    @allure.severity(allure.severity_level.BLOCKER)
+    def test_create_user_success(self, client):
+        response = client.post("/api/v1/users", json=VALID_USER_PAYLOAD)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] > 0
+        assert data["username"] == "Alice"
+        assert data["avatar_emoji"] == "\U0001F431"
+        assert data["device_platform"] == "android"
+        assert data["device_brand"] == "Samsung"
+        assert data["created_at"] is not None
+        assert data["last_login_at"] is not None
+        assert data["public_id"]
+        assert data["session_token"]
+
+    @allure.title("Create user returns installation public id when provided")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_returns_installation_public_id(self, client):
+        installation_public_id = "install-test-0001"
+        response = client.post(
+            "/api/v1/users",
+            json={**VALID_USER_PAYLOAD, "installation_public_id": installation_public_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["installation_public_id"] == installation_public_id
+
+    @allure.title("Users meta returns available avatars")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_get_users_meta(self, client):
+        response = client.get("/api/v1/users/meta")
+        assert response.status_code == 200
+        assert "\U0001F431" in response.json()["avatar_emojis"]
+
+    @allure.title("User profile is available with the owner's bearer token")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_user_by_id(self, client):
+        created = _create_user_via_api(client)
+
+        response = client.get(
+            f"/api/v1/users/{created['id']}",
+            headers=_auth_headers(created["session_token"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["username"] == "Alice"
+
+    @allure.title("User profile rejects missing and invalid session tokens")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_user_requires_session_token(self, client):
+        created = _create_user_via_api(client)
+
+        missing_token = client.get(f"/api/v1/users/{created['id']}")
+        invalid_token = client.get(
+            f"/api/v1/users/{created['id']}",
+            headers=_auth_headers("invalid-token"),
+        )
+
+        assert missing_token.status_code == 401
+        assert invalid_token.status_code == 401
+
+    @allure.title("User profile cannot be read with another user's token")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_user_forbidden_for_other_user(self, client):
+        alice = _create_user_via_api(client)
+        bob = _create_user_via_api(
+            client,
+            username="Bob",
+            avatar_emoji="\U0001F436",
+            device_platform="ios",
+            device_brand="Apple",
+        )
+
+        response = client.get(
+            f"/api/v1/users/{alice['id']}",
+            headers=_auth_headers(bob["session_token"]),
+        )
+
+        assert response.status_code == 403
+
+    @allure.title("Duplicate usernames are allowed in users")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_create_user_allows_duplicate_username(self, client):
+        first = _create_user_via_api(client)
+        second = _create_user_via_api(
+            client,
+            avatar_emoji="\U0001F438",
+            device_platform="ios",
+            device_brand="Apple",
+        )
+
+        assert second["username"] == first["username"]
+        assert second["id"] != first["id"]
+
+    @allure.title("Touch updates last_login_at and device info")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_touch_user(self, client):
+        created = _create_user_via_api(client)
+
+        response = client.post(
+            f"/api/v1/users/{created['id']}/touch",
+            json={"device_platform": "ios", "device_brand": "Apple"},
+            headers=_auth_headers(created["session_token"]),
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["device_platform"] == "ios"
+        assert data["device_brand"] == "Apple"
+        assert data["installation_public_id"] is not None
+        assert data["session_token"]
+
+    @allure.title("Touch rejects missing and foreign session tokens")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_touch_user_rejects_missing_or_foreign_token(self, client):
+        alice = _create_user_via_api(client)
+        bob = _create_user_via_api(
+            client,
+            username="Bob",
+            avatar_emoji="\U0001F436",
+            device_platform="ios",
+            device_brand="Apple",
+        )
+
+        missing_token = client.post(
+            f"/api/v1/users/{alice['id']}/touch",
+            json={"device_platform": "ios", "device_brand": "Apple"},
+        )
+        foreign_token = client.post(
+            f"/api/v1/users/{alice['id']}/touch",
+            json={"device_platform": "ios", "device_brand": "Apple"},
+            headers=_auth_headers(bob["session_token"]),
+        )
+
+        assert missing_token.status_code == 401
+        assert foreign_token.status_code == 403
+
+    @allure.title("User update changes the same row")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_update_user(self, client):
+        created = _create_user_via_api(client)
+
+        response = client.put(
+            f"/api/v1/users/{created['id']}",
+            json={
+                "username": "New Alice",
+                "avatar_emoji": "\U0001F438",
+                "device_platform": "ios",
+                "device_brand": "Apple",
+            },
+            headers=_auth_headers(created["session_token"]),
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == created["id"]
+        assert data["username"] == "New Alice"
+        assert data["avatar_emoji"] == "\U0001F438"
+        assert data["device_platform"] == "ios"
+        assert data["device_brand"] == "Apple"
+        assert data["session_token"]
+
+    @allure.title("User update can reuse an existing username")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_update_user_allows_duplicate_username(self, client):
+        first = _create_user_via_api(client)
+        second = _create_user_via_api(
+            client,
+            username="Bob",
+            avatar_emoji="\U0001F436",
+            device_platform="android",
+            device_brand="Xiaomi",
+        )
+
+        response = client.put(
+            f"/api/v1/users/{second['id']}",
+            json={
+                "username": first["username"],
+                "avatar_emoji": "\U0001F436",
+                "device_platform": "ios",
+                "device_brand": "Apple",
+            },
+            headers=_auth_headers(second["session_token"]),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["username"] == first["username"]
+
+    @allure.title("User update rejects missing and foreign session tokens")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_update_user_rejects_missing_or_foreign_token(self, client):
+        alice = _create_user_via_api(client)
+        bob = _create_user_via_api(
+            client,
+            username="Bob",
+            avatar_emoji="\U0001F436",
+            device_platform="ios",
+            device_brand="Apple",
+        )
+        payload = {
+            "username": "New Alice",
+            "avatar_emoji": "\U0001F438",
+            "device_platform": "ios",
+            "device_brand": "Apple",
+        }
+
+        missing_token = client.put(f"/api/v1/users/{alice['id']}", json=payload)
+        foreign_token = client.put(
+            f"/api/v1/users/{alice['id']}",
+            json=payload,
+            headers=_auth_headers(bob["session_token"]),
+        )
+
+        assert missing_token.status_code == 401
+        assert foreign_token.status_code == 403
+
+    @allure.title("Invalid avatar is rejected")
+    @allure.severity(allure.severity_level.NORMAL)
+    def test_create_user_invalid_avatar(self, client):
+        payload = {**VALID_USER_PAYLOAD, "avatar_emoji": "\U0001F916"}
+        response = client.post("/api/v1/users", json=payload)
+        assert response.status_code == 422
+
+    @allure.title("Legacy installation can exchange into a bearer session")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_exchange_user_session(self, client):
+        created = _create_user_via_api(client, installation_public_id="install-test-0002")
+
+        response = client.post(
+            f"/api/v1/users/{created['id']}/session",
+            json={
+                "device_platform": "ios",
+                "device_brand": "Apple",
+                "installation_public_id": created["installation_public_id"],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == created["id"]
+        assert data["session_token"]
+
+    @allure.title("Session exchange rejects another user's installation binding")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_exchange_user_session_forbidden_for_other_user(self, client):
+        alice = _create_user_via_api(client, installation_public_id="install-test-0101")
+        bob = _create_user_via_api(client, installation_public_id="install-test-0102")
+
+        response = client.post(
+            f"/api/v1/users/{alice['id']}/session",
+            json={
+                "device_platform": "ios",
+                "device_brand": "Apple",
+                "installation_public_id": bob["installation_public_id"],
+            },
+        )
+
+        assert response.status_code == 403
+
+
+@allure.feature("API")
 @allure.story("User History")
 class TestUserHistoryApi:
     @allure.title("User without games gets an empty history list")
     @allure.severity(allure.severity_level.NORMAL)
     def test_get_user_history_empty(self, client, db_session):
-        user = _create_user_record(db_session, username="No Games")
+        user, session_token = _create_user_record(db_session, username="No Games")
 
-        response = client.get(f"/api/v1/users/{user.id}/history")
+        response = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
 
         assert response.status_code == 200
         assert response.json() == []
 
+    @allure.title("History requires the owner's session token")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_user_history_requires_session_token(self, client, db_session):
+        user, session_token = _create_user_record(db_session, username="Guarded History")
+        other_user, other_token = _create_user_record(db_session, username="Other History")
+
+        missing_token = client.get(f"/api/v1/users/{user.id}/history")
+        invalid_token = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers("invalid-token"),
+        )
+        foreign_token = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(other_token),
+        )
+        happy_path = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
+
+        assert missing_token.status_code == 401
+        assert invalid_token.status_code == 401
+        assert foreign_token.status_code == 403
+        assert happy_path.status_code == 200
+        assert other_user.id != user.id
+
     @allure.title("Finished game history includes winners, rank and open-results flag")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_get_user_history_finished_game(self, client, db_session):
-        user = _create_user_record(db_session, username="Champion")
+        user, session_token = _create_user_record(db_session, username="Champion")
         started_at = datetime(2026, 3, 1, 18, 0, 0)
         _create_history_quiz(
             db_session,
@@ -316,12 +461,13 @@ class TestUserHistoryApi:
             ],
         )
 
-        response = client.get(f"/api/v1/users/{user.id}/history")
+        response = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
 
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        entry = data[0]
+        entry = response.json()[0]
         assert entry["quiz_code"] == "PARTY-HFIN1"
         assert entry["title"] == "Friday Final"
         assert entry["game_status"] == "finished"
@@ -335,7 +481,7 @@ class TestUserHistoryApi:
     @allure.title("Cancelled game history keeps the record but disables opening results")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_get_user_history_cancelled_game(self, client, db_session):
-        user = _create_user_record(db_session, username="Cancelled User")
+        user, session_token = _create_user_record(db_session, username="Cancelled User")
         started_at = datetime(2026, 3, 2, 19, 0, 0)
         _create_history_quiz(
             db_session,
@@ -349,7 +495,10 @@ class TestUserHistoryApi:
             cancel_reason="host_timeout",
         )
 
-        response = client.get(f"/api/v1/users/{user.id}/history")
+        response = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
 
         assert response.status_code == 200
         entry = response.json()[0]
@@ -361,7 +510,7 @@ class TestUserHistoryApi:
     @allure.title("History is sorted from newest game to oldest")
     @allure.severity(allure.severity_level.NORMAL)
     def test_get_user_history_sorted_by_freshness(self, client, db_session):
-        user = _create_user_record(db_session, username="Sorted User")
+        user, session_token = _create_user_record(db_session, username="Sorted User")
         older_start = datetime(2026, 3, 1, 10, 0, 0)
         newer_start = datetime(2026, 3, 5, 10, 0, 0)
         _create_history_quiz(
@@ -389,7 +538,10 @@ class TestUserHistoryApi:
             cancel_reason="host_left",
         )
 
-        response = client.get(f"/api/v1/users/{user.id}/history")
+        response = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
 
         assert response.status_code == 200
         codes = [entry["quiz_code"] for entry in response.json()]
@@ -398,7 +550,7 @@ class TestUserHistoryApi:
     @allure.title("History exposes the left status for participants who exited themselves")
     @allure.severity(allure.severity_level.NORMAL)
     def test_get_user_history_left_status(self, client, db_session):
-        user = _create_user_record(db_session, username="Left User")
+        user, session_token = _create_user_record(db_session, username="Left User")
         started_at = datetime(2026, 3, 3, 20, 0, 0)
         _create_history_quiz(
             db_session,
@@ -411,12 +563,13 @@ class TestUserHistoryApi:
             ended_at=started_at + timedelta(minutes=7),
             score=0,
             final_rank=None,
-            extra_players=[
-                {"name": "Winner", "score": 2, "final_rank": 1},
-            ],
+            extra_players=[{"name": "Winner", "score": 2, "final_rank": 1}],
         )
 
-        response = client.get(f"/api/v1/users/{user.id}/history")
+        response = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
 
         assert response.status_code == 200
         entry = response.json()[0]
@@ -428,7 +581,7 @@ class TestUserHistoryApi:
     @allure.title("History exposes the kicked status for excluded participants")
     @allure.severity(allure.severity_level.NORMAL)
     def test_get_user_history_kicked_status(self, client, db_session):
-        user = _create_user_record(db_session, username="Kicked User")
+        user, session_token = _create_user_record(db_session, username="Kicked User")
         started_at = datetime(2026, 3, 4, 21, 0, 0)
         _create_history_quiz(
             db_session,
@@ -441,12 +594,13 @@ class TestUserHistoryApi:
             ended_at=started_at + timedelta(minutes=9),
             score=0,
             final_rank=None,
-            extra_players=[
-                {"name": "Winner", "score": 4, "final_rank": 1},
-            ],
+            extra_players=[{"name": "Winner", "score": 4, "final_rank": 1}],
         )
 
-        response = client.get(f"/api/v1/users/{user.id}/history")
+        response = client.get(
+            f"/api/v1/users/{user.id}/history",
+            headers=_auth_headers(session_token),
+        )
 
         assert response.status_code == 200
         entry = response.json()[0]

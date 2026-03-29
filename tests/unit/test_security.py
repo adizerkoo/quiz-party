@@ -7,9 +7,16 @@ Unit-тесты модуля безопасности (security.py).
 import time
 import allure
 import pytest
+from fastapi import HTTPException
 
+from backend import models
 from backend.security import (
+    AuthenticatedUserContext,
     RateLimiter,
+    ensure_authenticated_identity_matches,
+    hash_session_token,
+    issue_installation_session_token,
+    issue_session_token,
     validate_quiz_code,
     validate_player_name,
     validate_answer,
@@ -99,6 +106,47 @@ class TestRateLimiter:
             rl.is_allowed("trigger")
         with allure.step("Проверяем сброс счётчика"):
             assert rl._call_count == 0
+
+
+@allure.feature("Security")
+@allure.story("Profile Sessions")
+class TestProfileSessions:
+    @allure.title("Session token hashing is deterministic and opaque")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_hash_session_token(self):
+        token = issue_session_token()
+
+        assert hash_session_token(token) == hash_session_token(token)
+        assert hash_session_token(token) != token
+
+    @allure.title("Installation session token is stored as a hash")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_issue_installation_session_token_stores_hash(self):
+        installation = models.UserInstallation(public_id=models._public_id(), platform="web")
+
+        token = issue_installation_session_token(installation)
+
+        assert token
+        assert installation.session_token_hash == hash_session_token(token)
+        assert installation.session_token_hash != token
+        assert installation.session_token_issued_at is not None
+
+    @allure.title("Authenticated identity mismatch raises 403")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_ensure_authenticated_identity_matches(self):
+        user = models.User(id=7, username="Alice", avatar_emoji="x")
+        installation = models.UserInstallation(public_id="install-123", platform="web")
+        auth = AuthenticatedUserContext(user=user, installation=installation)
+
+        ensure_authenticated_identity_matches(auth, user_id=7, installation_public_id="install-123")
+
+        with pytest.raises(HTTPException) as user_error:
+            ensure_authenticated_identity_matches(auth, user_id=8)
+        assert user_error.value.status_code == 403
+
+        with pytest.raises(HTTPException) as installation_error:
+            ensure_authenticated_identity_matches(auth, installation_public_id="install-999")
+        assert installation_error.value.status_code == 403
 
 
 # ═══════════════════════════════════════════════════════════════════════

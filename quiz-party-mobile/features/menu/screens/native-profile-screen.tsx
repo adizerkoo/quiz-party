@@ -307,14 +307,15 @@ export function NativeProfileScreen() {
         return;
       }
 
-      if (!profile?.id) {
+      const activeProfile = profile;
+      if (!activeProfile?.id) {
         setHistoryEntries([]);
         setHistoryErrorMessage(null);
         setHistoryLoading(false);
         return;
       }
 
-      const cachedEntries = readCachedHistoryEntries(profile.id);
+      const cachedEntries = readCachedHistoryEntries(activeProfile.id);
 
       if (cachedEntries) {
         setHistoryEntries(cachedEntries);
@@ -324,7 +325,7 @@ export function NativeProfileScreen() {
       setHistoryErrorMessage(null);
 
       try {
-        const result = await fetchMenuHistory(profile.id);
+        const result = await fetchMenuHistory(activeProfile);
         if (cancelled) {
           return;
         }
@@ -351,7 +352,7 @@ export function NativeProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, profile?.id]);
+  }, [activeTab, profile?.id, profile?.sessionToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,6 +384,7 @@ export function NativeProfileScreen() {
         const result = await fetchMenuFavorites({
           id: profileId,
           installationPublicId,
+          sessionToken: profile?.sessionToken ?? null,
         });
         if (cancelled) {
           return;
@@ -419,7 +421,7 @@ export function NativeProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, installationPublicId, logger, profileId]);
+  }, [activeTab, installationPublicId, logger, profileId, profile?.sessionToken]);
 
   function handleBack() {
     if (isLocked) {
@@ -453,6 +455,7 @@ export function NativeProfileScreen() {
       id: profile?.id ?? null,
       publicId: profile?.publicId ?? null,
       installationPublicId: profile?.installationPublicId ?? null,
+      sessionToken: profile?.sessionToken ?? null,
       name: normalizedName,
       emoji: selectedEmoji,
     };

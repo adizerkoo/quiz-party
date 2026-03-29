@@ -3,16 +3,34 @@ import {
   hydrateMenuHistoryCache,
   setCachedMenuHistory,
 } from '@/features/menu/store/menu-history-cache';
+import {
+  ensureMenuProfileSession,
+  fetchWithMenuProfileAuth,
+} from '@/features/menu/services/menu-profile-api';
 import { createFeatureLogger } from '@/features/shared/services/feature-logger';
-import { MenuHistoryEntry, MenuHistoryFetchResult } from '@/features/menu/types';
+import { MenuHistoryEntry, MenuHistoryFetchResult, MenuProfile } from '@/features/menu/types';
 import { WEB_APP_ORIGIN } from '@/features/web/config/web-app';
 
 const logger = createFeatureLogger('native.menu.history');
 
-export async function fetchMenuHistory(userId: number) {
+export async function fetchMenuHistory(profile: MenuProfile) {
+  const userId = profile.id;
+  if (!userId) {
+    return {
+      entries: [],
+      source: 'cache',
+      cachedAt: null,
+    } satisfies MenuHistoryFetchResult;
+  }
+
   try {
+    const authenticatedProfile = await ensureMenuProfileSession(profile);
     logger.info('history.load.started', { userId });
-    const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/users/${userId}/history`);
+    const { response } = await fetchWithMenuProfileAuth(
+      `${WEB_APP_ORIGIN}/api/v1/users/${userId}/history`,
+      undefined,
+      authenticatedProfile ?? profile,
+    );
 
     if (!response.ok) {
       logger.warn('history.load.failed', { userId, status: response.status });
