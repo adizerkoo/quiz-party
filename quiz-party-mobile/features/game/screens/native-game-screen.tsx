@@ -18,10 +18,11 @@ import { GameRole } from '@/features/game/types';
 type NativeGameScreenProps = {
   role: GameRole;
   roomCode: string;
+  source?: string;
 };
 
-export function NativeGameScreen({ role, roomCode }: NativeGameScreenProps) {
-  const controller = useNativeGameController({ role, roomCode });
+export function NativeGameScreen({ role, roomCode, source }: NativeGameScreenProps) {
+  const controller = useNativeGameController({ role, roomCode, source });
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>

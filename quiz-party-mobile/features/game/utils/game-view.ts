@@ -84,7 +84,7 @@ export function getRankDisplay(rank: number) {
 }
 
 export function buildBlockedState(
-  type: 'room_full' | 'game_started' | 'host_connected' | 'host_auth_failed' | 'player_kicked' | 'missing_room' | 'missing_profile' | 'not_found' | 'network',
+  type: 'room_full' | 'game_started' | 'host_connected' | 'host_auth_failed' | 'player_kicked' | 'missing_room' | 'missing_profile' | 'not_found' | 'network' | 'results_unavailable' | 'results_unavailable_legacy',
 ): GameBlockedState {
   switch (type) {
     case 'room_full':
@@ -134,6 +134,18 @@ export function buildBlockedState(
         icon: '🛰️',
         title: 'Комната не найдена',
         subtitle: 'Проверь код комнаты и попробуй снова. Возможно, игру уже закрыли.',
+      };
+    case 'results_unavailable':
+      return {
+        icon: String.fromCodePoint(0x1F5C2, 0xFE0F),
+        title: '\u0418\u0442\u043e\u0433\u0438 \u043f\u043e\u043a\u0430 \u043d\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b',
+        subtitle: '\u041d\u0430 \u044d\u0442\u043e\u043c \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0435 \u043d\u0435\u0442 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u043a\u043e\u043f\u0438\u0438 \u0438\u0442\u043e\u0433\u043e\u0432. \u041e\u0442\u043a\u0440\u043e\u0439 \u0438\u0445 \u043e\u043d\u043b\u0430\u0439\u043d \u043e\u0434\u0438\u043d \u0440\u0430\u0437, \u0438 \u043f\u043e\u0442\u043e\u043c \u043e\u043d\u0438 \u0431\u0443\u0434\u0443\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b \u043e\u0444\u0444\u043b\u0430\u0439\u043d.',
+      };
+    case 'results_unavailable_legacy':
+      return {
+        icon: 'рџ—‚пёЏ',
+        title: 'РС‚РѕРіРё РїРѕРєР° РЅРµ СЃРѕС…СЂР°РЅРµРЅС‹',
+        subtitle: 'РќР° СЌС‚РѕРј СѓСЃС‚СЂРѕР№СЃС‚РІРµ РЅРµС‚ Р»РѕРєР°Р»СЊРЅРѕР№ РєРѕРїРёРё РёС‚РѕРіРѕРІ. РћС‚РєСЂРѕР№ РёС… РѕРЅР»Р°Р№РЅ РѕРґРёРЅ СЂР°Р·, Рё РїРѕС‚РѕРј РѕРЅРё Р±СѓРґСѓС‚ РґРѕСЃС‚СѓРїРЅС‹ РѕС„С„Р»Р°Р№РЅ.',
       };
     case 'network':
     default:

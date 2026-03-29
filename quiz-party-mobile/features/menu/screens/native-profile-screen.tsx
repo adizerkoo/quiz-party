@@ -1,5 +1,5 @@
 import { FontAwesome6 } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -23,7 +23,10 @@ import {
   removeMenuFavorite,
 } from '@/features/menu/services/menu-favorites-api';
 import { fetchMenuHistory } from '@/features/menu/services/menu-history-api';
-import { saveMenuProfileAndSync } from '@/features/menu/services/menu-profile-api';
+import {
+  saveMenuProfileAndSync,
+  scheduleStoredMenuProfileSync,
+} from '@/features/menu/services/menu-profile-api';
 import {
   getCachedMenuFavorites,
   hydrateMenuFavoritesCache,
@@ -34,6 +37,7 @@ import {
 } from '@/features/menu/store/menu-history-cache';
 import {
   getMenuSessionProfile,
+  getMenuProfileStateSnapshot,
   hydrateMenuSessionProfile,
 } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
@@ -103,6 +107,14 @@ function readCachedFavoriteEntries(userId: number) {
   return Array.isArray(cachedRecord.entries) ? cachedRecord.entries : [];
 }
 
+function resolveReusableFavoriteSourceQuestionPublicId(entry: MenuFavoriteQuestion) {
+  if (entry.source === 'user' && entry.sync_state === 'pending_add') {
+    return null;
+  }
+
+  return entry.source_question_public_id ?? entry.public_id ?? null;
+}
+
 function ProfileTabButton({
   active,
   disabled,
@@ -141,6 +153,7 @@ function ProfileTabButton({
 export function NativeProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const logger = useRef(createFeatureLogger('native.profile.screen')).current;
   const params = useLocalSearchParams<{
     mode?: string | string[];
@@ -156,6 +169,7 @@ export function NativeProfileScreen() {
   const [selectedEmoji, setSelectedEmoji] = useState(initialProfile?.emoji ?? MENU_AVATARS[0] ?? SMILE_EMOJI);
   const [nameError, setNameError] = useState<string | null>(null);
   const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
+  const [submitSuccessMessage, setSubmitSuccessMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileScreenTab>(
     requestedTab === 'history'
       ? (initialProfile ? 'history' : 'profile')
@@ -204,6 +218,18 @@ export function NativeProfileScreen() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!profile?.id || !isFocused) {
+      return;
+    }
+
+    scheduleStoredMenuProfileSync('app_entry');
+  }, [isFocused, profile?.id]);
+
+  useEffect(() => {
+    setSubmitSuccessMessage(null);
+  }, [name, selectedEmoji]);
 
   useEffect(() => {
     if (!isLocked) {
@@ -259,6 +285,33 @@ export function NativeProfileScreen() {
       cancelled = true;
     };
   }, [activeTab, profile?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncFavoritesOnFocus() {
+      if (!isFocused || !profile?.id) {
+        return;
+      }
+
+      await hydrateMenuFavoritesCache();
+      if (cancelled) {
+        return;
+      }
+
+      const hydratedEntries = readCachedFavoriteEntries(profile.id);
+      if (hydratedEntries) {
+        setFavoriteEntries(hydratedEntries);
+        setFavoritesErrorMessage(null);
+      }
+    }
+
+    void syncFavoritesOnFocus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isFocused, profile?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -450,6 +503,7 @@ export function NativeProfileScreen() {
     setIsSubmitting(true);
     setNameError(null);
     setSubmitErrorMessage(null);
+    setSubmitSuccessMessage(null);
 
     const draftProfile: MenuProfile = {
       id: profile?.id ?? null,
@@ -463,12 +517,12 @@ export function NativeProfileScreen() {
     try {
       const savedProfile = await saveMenuProfileAndSync(draftProfile);
       setProfile(savedProfile);
-
-      if (navigation.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/' as Href);
-      }
+      const snapshot = getMenuProfileStateSnapshot();
+      setSubmitSuccessMessage(
+        snapshot.syncStatus === 'pending_create' || snapshot.syncStatus === 'pending_update'
+          ? 'Профиль сохранён. Синхронизируем изменения автоматически, когда будет интернет.'
+          : 'Профиль обновлён.',
+      );
     } catch (error) {
       setProfile(getMenuSessionProfile() ?? draftProfile);
       setSubmitErrorMessage(UI_TEXT.saveError);
@@ -518,7 +572,7 @@ export function NativeProfileScreen() {
         type: entry.type,
         correct: entry.correct,
         options: entry.options ?? null,
-        source_question_public_id: entry.source_question_public_id ?? entry.public_id ?? null,
+        source_question_public_id: resolveReusableFavoriteSourceQuestionPublicId(entry),
       });
     }
 
@@ -554,7 +608,9 @@ export function NativeProfileScreen() {
 
             setFavoriteMutationLoading(true);
             try {
-              await removeMenuFavorite(profile, entry.public_id);
+              await removeMenuFavorite(profile, entry.public_id, {
+                originScreen: 'profile',
+              });
               setFavoriteEntries((current) => current.filter((item) => item.public_id !== entry.public_id));
             } catch (error) {
               setFavoritesErrorMessage('Не удалось удалить вопрос из избранного.');
@@ -576,8 +632,11 @@ export function NativeProfileScreen() {
 
     try {
       const favorite = await addMenuFavorite(profile, {
-        ...question,
-        is_favorite: true,
+        question: {
+          ...question,
+          is_favorite: true,
+        },
+        originScreen: 'profile',
       });
       setFavoriteEntries((current) => [
         favorite,
@@ -668,6 +727,12 @@ export function NativeProfileScreen() {
                       selectedAvatar={selectedEmoji}
                     />
 
+                    {submitSuccessMessage ? (
+                      <View style={styles.successCard}>
+                        <Text style={styles.successCardText}>{submitSuccessMessage}</Text>
+                      </View>
+                    ) : null}
+
                     {submitErrorMessage ? (
                       <View style={styles.errorCard}>
                         <Text style={styles.errorCardText}>{submitErrorMessage}</Text>
@@ -709,7 +774,7 @@ export function NativeProfileScreen() {
                   <ProfileFavoritesSection
                     entries={favoriteEntries}
                     errorMessage={favoritesErrorMessage}
-                    loading={favoritesLoading || favoriteMutationLoading}
+                    loading={favoritesLoading}
                     onAddNew={() => setFavoriteComposerVisible(true)}
                     onRemove={handleRemoveFavoriteQuestion}
                     onReuse={handleReuseFavorite}
@@ -866,6 +931,20 @@ const styles = StyleSheet.create({
   },
   errorCardText: {
     color: menuTheme.colors.dangerText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  successCard: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 204, 113, 0.2)',
+    backgroundColor: 'rgba(240, 255, 244, 0.95)',
+  },
+  successCardText: {
+    color: '#2e7d32',
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',

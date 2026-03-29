@@ -1,3 +1,4 @@
+import { warmCachedGameResultsForHistory } from '@/features/game/services/game-results-data';
 import {
   getCachedMenuHistory,
   hydrateMenuHistoryCache,
@@ -39,6 +40,7 @@ export async function fetchMenuHistory(profile: MenuProfile) {
 
     const entries = (await response.json()) as MenuHistoryEntry[];
     const cachedRecord = await setCachedMenuHistory(userId, Array.isArray(entries) ? entries : []);
+    void warmCachedGameResultsForHistory(cachedRecord?.entries ?? []);
     logger.info('history.load.succeeded', {
       userId,
       resultCount: cachedRecord?.entries.length ?? 0,

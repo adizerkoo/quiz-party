@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
@@ -29,15 +30,19 @@ import { CreateTextField } from '@/features/create/components/create-text-field'
 import { CreateToastStack } from '@/features/create/components/create-toast-stack';
 import { CreateTypeSelector } from '@/features/create/components/create-type-selector';
 import {
-  addFavoriteQuestion,
   createQuizRequest,
   ensureOwnerProfile,
-  fetchCreateLibraryQuestions,
-  fetchFavoriteQuestions,
   fetchTemplateDraft,
-  removeFavoriteQuestion,
 } from '@/features/create/services/create-api';
+import {
+  fetchCreatePublicLibraryWithCache,
+  syncLibraryQuestionsWithFavorites,
+} from '@/features/create/services/create-library-data';
 import { clearCreateDraft, loadCreateDraft, saveCreateDraft } from '@/features/create/services/create-storage';
+import {
+  getCachedCreateLibraryQuestions,
+  hydrateCreateLibraryCache,
+} from '@/features/create/store/create-library-cache';
 import { createTheme } from '@/features/create/theme/create-theme';
 import {
   CreateLibraryCategoryId,
@@ -56,6 +61,16 @@ import {
 } from '@/features/create/utils/create-validation';
 import { saveGameSessionCredentials } from '@/features/game/store/game-session-credentials';
 import {
+  addMenuFavorite,
+  fetchMenuFavorites,
+  removeMenuFavorite,
+} from '@/features/menu/services/menu-favorites-api';
+import {
+  getCachedMenuFavorites,
+  hydrateMenuFavoritesCache,
+  setCachedMenuFavorites,
+} from '@/features/menu/store/menu-favorites-cache';
+import {
   getMenuSessionProfile,
   getOrCreateMenuInstallationPublicId,
   hydrateMenuSessionProfile,
@@ -69,6 +84,7 @@ import { createFeatureLogger } from '@/features/shared/services/feature-logger';
 // черновик, идеи, библиотека, добавление вопросов, редактирование и запуск комнаты.
 export function NativeCreateScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ templatePublicId?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -78,6 +94,7 @@ export function NativeCreateScreen() {
   const optionInputRefs = useRef<Record<number, TextInput | null>>({});
   const focusedInputRef = useRef<TextInput | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const favoriteQuestionsRef = useRef<CreateLibraryQuestion[]>([]);
 
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<CreateQuizQuestion[]>([]);
@@ -175,6 +192,10 @@ export function NativeCreateScreen() {
     let mounted = true;
 
     async function loadLibrary() {
+      if (!isFocused) {
+        return;
+      }
+
       setLibraryLoading(true);
       setFavoritesLoading(Boolean(ownerProfile?.id));
       logger.info('library.load.started', {
@@ -188,22 +209,35 @@ export function NativeCreateScreen() {
         if (mounted && authenticatedOwnerProfile && authenticatedOwnerProfile !== ownerProfile) {
           setOwnerProfile(authenticatedOwnerProfile);
         }
+        let hasCachedData = applyCachedLibraryData(authenticatedOwnerProfile?.id ?? null);
+        if (hasCachedData) {
+          setLibraryLoading(false);
+          setFavoritesLoading(false);
+        }
+
+        await Promise.all([
+          hydrateCreateLibraryCache(),
+          authenticatedOwnerProfile?.id ? hydrateMenuFavoritesCache() : Promise.resolve(null),
+        ]);
+        if (!mounted) {
+          return;
+        }
+
+        hasCachedData = applyCachedLibraryData(authenticatedOwnerProfile?.id ?? null) || hasCachedData;
+        if (hasCachedData) {
+          setLibraryLoading(false);
+          setFavoritesLoading(false);
+        }
         const [publicItemsResult, favoriteItemsResult] = await Promise.allSettled([
-          fetchCreateLibraryQuestions({
-            scope: 'public',
+          fetchCreatePublicLibraryWithCache({
             userId: authenticatedOwnerProfile?.id ?? null,
             installationPublicId: authenticatedOwnerProfile?.installationPublicId ?? null,
             sessionToken: authenticatedOwnerProfile?.sessionToken ?? null,
             originScreen: 'create',
           }),
           authenticatedOwnerProfile?.id
-            ? fetchFavoriteQuestions({
-              userId: authenticatedOwnerProfile.id,
-              installationPublicId: authenticatedOwnerProfile.installationPublicId ?? null,
-              sessionToken: authenticatedOwnerProfile.sessionToken ?? null,
-              originScreen: 'create',
-            })
-            : Promise.resolve([]),
+            ? fetchMenuFavorites(authenticatedOwnerProfile, { originScreen: 'create' })
+            : Promise.resolve({ entries: [], source: 'cache', cachedAt: null }),
         ]);
         if (!mounted) {
           return;
@@ -213,9 +247,9 @@ export function NativeCreateScreen() {
           throw publicItemsResult.reason;
         }
 
-        const publicItems = publicItemsResult.value;
+        const publicItems = publicItemsResult.value.entries;
         const favoriteItems = favoriteItemsResult.status === 'fulfilled'
-          ? favoriteItemsResult.value
+          ? favoriteItemsResult.value.entries
           : [];
 
         if (favoriteItemsResult.status !== 'fulfilled') {
@@ -227,12 +261,20 @@ export function NativeCreateScreen() {
           });
         }
 
-        setLibraryQuestions(publicItems);
-        setFavoriteQuestions(favoriteItems);
-        setCurrentIdea(pickNextIdea(publicItems, null));
+        applyLoadedLibraryData(
+          publicItems,
+          favoriteItems,
+          authenticatedOwnerProfile?.id ?? null,
+          { persistFavoritesToCache: false },
+        );
         logger.info('library.load.succeeded', {
           publicCount: publicItems.length,
           favoriteCount: favoriteItems.length,
+          publicSource: publicItemsResult.value.source,
+          favoriteSource:
+            favoriteItemsResult.status === 'fulfilled'
+              ? favoriteItemsResult.value.source
+              : 'unavailable',
         });
       } catch (error) {
         if (mounted) {
@@ -254,7 +296,11 @@ export function NativeCreateScreen() {
     return () => {
       mounted = false;
     };
-  }, [logger, ownerProfile?.id, ownerProfile?.installationPublicId, ownerProfile?.sessionToken]);
+  }, [isFocused, logger, ownerProfile?.id, ownerProfile?.installationPublicId, ownerProfile?.sessionToken]);
+
+  useEffect(() => {
+    favoriteQuestionsRef.current = favoriteQuestions;
+  }, [favoriteQuestions]);
 
   useEffect(() => {
     if (!libraryQuestions.length) {
@@ -468,11 +514,57 @@ export function NativeCreateScreen() {
     });
   }
 
-  function upsertFavoriteQuestion(question: CreateLibraryQuestion) {
-    setFavoriteQuestions((current) => [
+  function applyLoadedLibraryData(
+    publicItems: CreateLibraryQuestion[],
+    nextFavoriteQuestions: CreateLibraryQuestion[],
+    profileId: number | null = ownerProfile?.id ?? null,
+    options: { persistFavoritesToCache?: boolean } = {},
+  ) {
+    replaceFavoriteQuestions(nextFavoriteQuestions, profileId, {
+      persistToCache: options.persistFavoritesToCache,
+    });
+
+    const mergedLibraryQuestions = syncLibraryQuestionsWithFavorites(publicItems, nextFavoriteQuestions);
+    setLibraryQuestions(mergedLibraryQuestions);
+    setCurrentIdea((previousIdea) => pickNextIdea(mergedLibraryQuestions, previousIdea));
+  }
+
+  function applyCachedLibraryData(profileId: number | null = ownerProfile?.id ?? null) {
+    const cachedPublicItems = getCachedCreateLibraryQuestions()?.entries ?? [];
+    const cachedFavoriteItems = profileId
+      ? (getCachedMenuFavorites(profileId)?.entries ?? [])
+      : [];
+
+    if (!cachedPublicItems.length && !cachedFavoriteItems.length) {
+      return false;
+    }
+
+    applyLoadedLibraryData(cachedPublicItems, cachedFavoriteItems, profileId, {
+      persistFavoritesToCache: false,
+    });
+    return true;
+  }
+
+  function replaceFavoriteQuestions(
+    nextFavoriteQuestions: CreateLibraryQuestion[],
+    profileId: number | null = ownerProfile?.id ?? null,
+    options: { persistToCache?: boolean } = {},
+  ) {
+    favoriteQuestionsRef.current = nextFavoriteQuestions;
+    setFavoriteQuestions(nextFavoriteQuestions);
+
+    if (options.persistToCache === false || !profileId) {
+      return;
+    }
+
+    void setCachedMenuFavorites(profileId, nextFavoriteQuestions);
+  }
+
+  function upsertFavoriteQuestion(question: CreateLibraryQuestion, profileId?: number | null) {
+    replaceFavoriteQuestions([
       { ...question, is_favorite: true },
-      ...current.filter((item) => item.public_id !== question.public_id),
-    ]);
+      ...favoriteQuestionsRef.current.filter((item) => item.public_id !== question.public_id),
+    ], profileId ?? null);
     setLibraryQuestions((current) => current.map((item) => (
       item.public_id === question.public_id
         ? { ...item, is_favorite: true }
@@ -480,8 +572,11 @@ export function NativeCreateScreen() {
     )));
   }
 
-  function removeFavoriteQuestionLocally(questionPublicId: string) {
-    setFavoriteQuestions((current) => current.filter((item) => item.public_id !== questionPublicId));
+  function removeFavoriteQuestionLocally(questionPublicId: string, profileId?: number | null) {
+    replaceFavoriteQuestions(
+      favoriteQuestionsRef.current.filter((item) => item.public_id !== questionPublicId),
+      profileId ?? null,
+    );
     setLibraryQuestions((current) => current.map((item) => (
       item.public_id === questionPublicId
         ? { ...item, is_favorite: false }
@@ -499,8 +594,19 @@ export function NativeCreateScreen() {
       return null;
     }
 
-    const authenticatedProfile = await ensureMenuProfileSession(profile).catch(() => null);
-    if (!authenticatedProfile?.sessionToken) {
+    if (!profile.sessionToken) {
+      void ensureMenuProfileSession(profile)
+        .then((authenticatedProfile) => {
+          if (authenticatedProfile?.id) {
+            setOwnerProfile(authenticatedProfile);
+          }
+        })
+        .catch(() => undefined);
+      return profile;
+    }
+
+    const authenticatedProfile = await ensureMenuProfileSession(profile).catch(() => profile);
+    if (!authenticatedProfile?.id) {
       pushToast('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґС‚РІРµСЂРґРёС‚СЊ РїСЂРѕС„РёР»СЊ. РџРѕРїСЂРѕР±СѓР№ РµС‰С‘ СЂР°Р·.');
       logger.warn('favorite.toggle.denied_local', {
         reason: 'missing_session',
@@ -523,24 +629,18 @@ export function NativeCreateScreen() {
 
     try {
       if (question.is_favorite && question.public_id) {
-        await removeFavoriteQuestion({
-          userId: profile.id,
-          installationPublicId: profile.installationPublicId ?? null,
-          sessionToken: profile.sessionToken ?? null,
-          questionPublicId: question.public_id,
+        await removeMenuFavorite(profile, question.public_id, {
           originScreen: 'create',
         });
-        removeFavoriteQuestionLocally(question.public_id);
+        removeFavoriteQuestionLocally(question.public_id, profile.id);
       } else {
-        const favoriteQuestion = await addFavoriteQuestion({
-          userId: profile.id,
-          installationPublicId: profile.installationPublicId ?? null,
-          sessionToken: profile.sessionToken ?? null,
+        const favoriteQuestion = await addMenuFavorite(profile, {
+          question,
           originScreen: 'create',
           sourceQuestionPublicId:
             question.source_question_public_id ?? question.public_id ?? null,
         });
-        upsertFavoriteQuestion(favoriteQuestion);
+        upsertFavoriteQuestion(favoriteQuestion, profile.id);
       }
     } catch (error) {
       logger.warn('favorite.toggle.failed', {
@@ -567,19 +667,16 @@ export function NativeCreateScreen() {
 
     try {
       const questionPayload = buildQuestionFromDraft(draft);
-      const favoriteQuestion = await addFavoriteQuestion({
-        userId: profile.id,
-        installationPublicId: profile.installationPublicId ?? null,
-        sessionToken: profile.sessionToken ?? null,
+      const favoriteQuestion = await addMenuFavorite(profile, {
+        question: questionPayload,
         originScreen: 'create',
         sourceQuestionPublicId: questionPayload.source_question_public_id ?? null,
-        question: questionPayload.source_question_public_id ? null : questionPayload,
       });
-      upsertFavoriteQuestion(favoriteQuestion);
+      upsertFavoriteQuestion(favoriteQuestion, profile.id);
       updateDraft(
         {
           sourceQuestionPublicId:
-            favoriteQuestion.source_question_public_id ?? favoriteQuestion.public_id ?? null,
+            resolveReusableSourceQuestionPublicId(favoriteQuestion),
         },
         { preserveSourceQuestion: true },
       );
@@ -1056,7 +1153,23 @@ function readSingleParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function buildDraftFromQuestion(question: CreateQuizQuestion): CreateQuestionDraft {
+function isCreateLibraryQuestion(question: CreateQuizQuestion | CreateLibraryQuestion): question is CreateLibraryQuestion {
+  return 'source' in question || 'sync_state' in question || 'public_id' in question;
+}
+
+function resolveReusableSourceQuestionPublicId(question: CreateQuizQuestion | CreateLibraryQuestion) {
+  if (
+    isCreateLibraryQuestion(question)
+    && question.source === 'user'
+    && question.sync_state === 'pending_add'
+  ) {
+    return null;
+  }
+
+  return question.source_question_public_id ?? null;
+}
+
+function buildDraftFromQuestion(question: CreateQuizQuestion | CreateLibraryQuestion): CreateQuestionDraft {
   if (question.type === 'text') {
     return {
       questionText: question.text,
@@ -1064,7 +1177,7 @@ function buildDraftFromQuestion(question: CreateQuizQuestion): CreateQuestionDra
       correctText: question.correct,
       options: createEmptyQuestionDraft().options,
       selectedCorrectIndex: 0,
-      sourceQuestionPublicId: question.source_question_public_id ?? null,
+      sourceQuestionPublicId: resolveReusableSourceQuestionPublicId(question),
     };
   }
 
@@ -1077,7 +1190,7 @@ function buildDraftFromQuestion(question: CreateQuizQuestion): CreateQuestionDra
     correctText: '',
     options,
     selectedCorrectIndex,
-    sourceQuestionPublicId: question.source_question_public_id ?? null,
+    sourceQuestionPublicId: resolveReusableSourceQuestionPublicId(question),
   };
 }
 

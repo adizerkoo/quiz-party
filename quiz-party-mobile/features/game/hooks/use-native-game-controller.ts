@@ -14,12 +14,16 @@ import {
   saveGameSessionCredentials,
 } from '@/features/game/store/game-session-credentials';
 import {
+  fetchGameResultsWithCache,
+  GameResultsUnavailableError,
+} from '@/features/game/services/game-results-data';
+import {
   getMenuSessionProfile,
   getOrCreateMenuInstallationPublicId,
   hydrateMenuSessionProfile,
   mergeMenuSessionProfileIdentity,
 } from '@/features/menu/store/menu-profile-session';
-import { buildGameShareUrl, checkStoredGameResume, fetchGameQuiz, fetchGameResults } from '@/features/game/services/game-api';
+import { buildGameShareUrl, checkStoredGameResume, fetchGameQuiz } from '@/features/game/services/game-api';
 import {
   GameBlockedState,
   GameLobbyPlayer,
@@ -40,13 +44,14 @@ import { WEB_APP_ORIGIN } from '@/features/web/config/web-app';
 type UseNativeGameControllerParams = {
   role: GameRole;
   roomCode: string;
+  source?: string;
 };
 
 function makeToastId() {
   return `${Date.now()}-${Math.random()}`;
 }
 
-export function useNativeGameController({ role, roomCode }: UseNativeGameControllerParams) {
+export function useNativeGameController({ role, roomCode, source }: UseNativeGameControllerParams) {
   const router = useRouter();
   const initialProfile = getMenuSessionProfile();
   const socketRef = useRef<Socket | null>(null);
@@ -229,7 +234,10 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
     });
   }
 
-  async function loadResultsScreen(targetRoomCode = roomCode) {
+  async function loadResultsScreen(
+    targetRoomCode = roomCode,
+    options?: { preferCache?: boolean },
+  ) {
     if (loadedResultsRoomRef.current === targetRoomCode && resultsPayload) {
       return resultsPayload;
     }
@@ -238,7 +246,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
       return resultsLoadPromiseRef.current;
     }
 
-    const nextPromise = fetchGameResults(targetRoomCode)
+    const nextPromise = fetchGameResultsWithCache(targetRoomCode, options)
       .then((payload) => {
         loadedResultsRoomRef.current = targetRoomCode;
         applyResultsPayload(payload);
@@ -521,6 +529,14 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
       setResultsPayload(null);
 
       try {
+        if (source === 'history') {
+          await loadResultsScreen(roomCode, { preferCache: true });
+          if (!cancelled) {
+            setIsBootstrapping(false);
+          }
+          return;
+        }
+
         if (role === 'player' && fallbackHostCredentials?.hostToken) {
           // Если player-экран открывает сам хост со своими сохранёнными токенами,
           // заранее переводим его в host-режим и не даём создать лишнего игрока.
@@ -865,6 +881,11 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
         }
 
         const typedError = error instanceof Error ? error.message : '';
+        if (source === 'history' && error instanceof GameResultsUnavailableError) {
+          showBlocked(buildBlockedState(error.kind === 'not_found' ? 'not_found' : 'results_unavailable'));
+          return;
+        }
+
         if (typedError.includes('HTTP 404')) {
           showBlocked(buildBlockedState('not_found'));
           return;
@@ -880,7 +901,7 @@ export function useNativeGameController({ role, roomCode }: UseNativeGameControl
       cancelled = true;
       disconnectSocket();
     };
-  }, [role, roomCode]);
+  }, [role, roomCode, source]);
 
   const disconnectedNamesSet = useMemo(() => new Set(disconnectedNames), [disconnectedNames]);
   const currentPlayerQuestionData = questions[playerViewQuestion - 1];

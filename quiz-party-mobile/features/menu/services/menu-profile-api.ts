@@ -23,6 +23,10 @@ type ApiUserResponse = {
 
 type SyncTrigger = 'app_entry' | 'profile_save' | 'create_quiz';
 type RemoteOperation = 'create' | 'update' | 'touch';
+const PROFILE_SYNC_RETRY_DELAY_MS = 15000;
+
+let activeScheduledProfileSync: Promise<MenuProfile | null> | null = null;
+let scheduledProfileSyncTimeout: ReturnType<typeof setTimeout> | null = null;
 
 class HttpStatusError extends Error {
   status: number;
@@ -439,11 +443,62 @@ export async function hydrateAndSyncMenuProfileOnAppEntry() {
   }
 }
 
+export function scheduleStoredMenuProfileSync(
+  trigger: SyncTrigger = 'app_entry',
+  options?: { delayMs?: number },
+) {
+  if (scheduledProfileSyncTimeout) {
+    clearTimeout(scheduledProfileSyncTimeout);
+    scheduledProfileSyncTimeout = null;
+  }
+
+  const runSync = async () => {
+    if (activeScheduledProfileSync) {
+      return activeScheduledProfileSync;
+    }
+
+    const nextPromise = (async () => {
+      try {
+        return await syncStoredMenuProfile(trigger);
+      } catch (error) {
+        return getMenuSessionProfile();
+      } finally {
+        activeScheduledProfileSync = null;
+
+        const snapshot = getMenuProfileStateSnapshot();
+        if (snapshot.syncStatus === 'pending_create' || snapshot.syncStatus === 'pending_update') {
+          scheduleStoredMenuProfileSync(trigger, { delayMs: PROFILE_SYNC_RETRY_DELAY_MS });
+        }
+      }
+    })();
+
+    activeScheduledProfileSync = nextPromise;
+    return nextPromise;
+  };
+
+  const delayMs = Math.max(0, options?.delayMs ?? 0);
+  if (!delayMs) {
+    void runSync();
+    return;
+  }
+
+  scheduledProfileSyncTimeout = setTimeout(() => {
+    scheduledProfileSyncTimeout = null;
+    void runSync();
+  }, delayMs);
+}
+
 export async function saveMenuProfileAndSync(profile: MenuProfile) {
   await hydrateMenuSessionProfile();
 
   const normalizedProfile = normalizeMenuProfile(profile);
-  await markProfilePending(normalizedProfile);
+  const pendingProfile = (await markProfilePending(normalizedProfile)) ?? normalizedProfile;
+
+  if (normalizedProfile.id) {
+    scheduleStoredMenuProfileSync('profile_save');
+    return pendingProfile;
+  }
+
   const pendingSnapshot = getMenuProfileStateSnapshot();
   const isCurrentSync = createProfileSyncGuard(
     pendingSnapshot.profile ?? normalizedProfile,

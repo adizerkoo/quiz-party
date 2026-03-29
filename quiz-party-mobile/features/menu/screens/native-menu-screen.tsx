@@ -1,7 +1,7 @@
 import { useIsFocused } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { Href, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,7 +20,11 @@ import {
   listGameSessionCredentials,
 } from '@/features/game/store/game-session-credentials';
 import { GameResumeSessionStatus } from '@/features/game/types';
-import { hydrateAndSyncMenuProfileOnAppEntry } from '@/features/menu/services/menu-profile-api';
+import { refreshStartupAppData } from '@/features/menu/services/menu-startup-data';
+import {
+  hydrateAndSyncMenuProfileOnAppEntry,
+  scheduleStoredMenuProfileSync,
+} from '@/features/menu/services/menu-profile-api';
 import {
   getMenuSessionProfile,
   hydrateMenuSessionProfile,
@@ -54,6 +58,10 @@ export function NativeMenuScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const initialProfile = getMenuSessionProfile();
+  const startupRefreshRef = useRef({
+    at: 0,
+    profileId: initialProfile?.id ?? null,
+  });
 
   const [profile, setProfile] = useState<MenuProfile | null>(initialProfile);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
@@ -68,6 +76,22 @@ export function NativeMenuScreen() {
     [hasProfile],
   );
 
+  function scheduleStartupRefresh(nextProfile: MenuProfile | null) {
+    const now = Date.now();
+    const nextProfileId = nextProfile?.id ?? null;
+    const lastRefresh = startupRefreshRef.current;
+
+    if (lastRefresh.profileId === nextProfileId && now - lastRefresh.at < 30000) {
+      return;
+    }
+
+    startupRefreshRef.current = {
+      at: now,
+      profileId: nextProfileId,
+    };
+    void refreshStartupAppData(nextProfile);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -75,6 +99,8 @@ export function NativeMenuScreen() {
       const localProfile = await hydrateMenuSessionProfile();
       if (!cancelled) {
         setProfile(localProfile);
+        scheduleStoredMenuProfileSync('app_entry');
+        scheduleStartupRefresh(localProfile);
       }
     }
 
@@ -108,6 +134,7 @@ export function NativeMenuScreen() {
 
       const resolvedProfile = hydratedProfile ?? localProfile;
       setProfile(resolvedProfile);
+      scheduleStartupRefresh(resolvedProfile);
 
       const installationPublicId =
         resolvedProfile?.installationPublicId ??

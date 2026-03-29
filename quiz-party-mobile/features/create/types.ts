@@ -19,6 +19,7 @@ export type CreateLibraryQuestion = CreateQuizQuestion & {
   visibility?: 'public' | 'private';
   category_title?: string | null;
   is_favorite?: boolean;
+  sync_state?: 'synced' | 'pending_add';
 };
 
 // Набор фильтров для библиотеки.
