@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 12,
     paddingVertical: 14,
-    backgroundColor: 'rgba(247, 255, 29, 0.3)',
+    backgroundColor: 'rgba(247, 255, 29, 0.41)',
     borderWidth: 2,
     borderColor: 'rgba(255, 217, 0, 0.9)',
     shadowColor: 'rgba(255, 215, 0, 0.24)',
@@ -471,7 +471,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   winnerCardMe: {
-    borderColor: gameTheme.colors.purpleDark,
   },
   winnerLeadingGroup: {
     flexDirection: 'row',

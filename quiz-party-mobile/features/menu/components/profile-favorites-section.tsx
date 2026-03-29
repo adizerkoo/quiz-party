@@ -104,7 +104,6 @@ export function ProfileFavoritesSection({
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>{UI_TEXT.title}</Text>
-          <Text style={styles.subtitle}>{UI_TEXT.subtitle}</Text>
         </View>
 
         <Pressable

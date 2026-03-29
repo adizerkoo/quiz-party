@@ -67,7 +67,7 @@ const UI_TEXT = {
   back: 'Назад',
   myProfile: 'Мой профиль',
   profileTab: 'Профиль',
-  historyTab: 'История игр',
+  historyTab: 'История',
   favoritesTab: 'Избранные',
   yourName: 'Твое имя',
   saving: 'Сохраняем...',
@@ -781,10 +781,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     paddingHorizontal: 92,
     color: menuTheme.colors.title,
-    fontSize: 28,
+    fontSize: 25,
     lineHeight: 32,
     fontWeight: '900',
-    letterSpacing: -0.8,
+    letterSpacing: -0.9,
     textAlign: 'center',
   },
   surface: {
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.55)',
     backgroundColor: menuTheme.colors.card,
     paddingHorizontal: 5,
-    paddingTop: 18,
+    paddingTop: 10,
     paddingBottom: 30,
     shadowColor: menuTheme.colors.joinBorder,
     shadowOpacity: 0.16,
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
   },
   tabsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 5,
   },
   tabButton: {
     flex: 1,
@@ -832,7 +832,7 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: menuTheme.colors.primary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
   tabButtonTextActive: {

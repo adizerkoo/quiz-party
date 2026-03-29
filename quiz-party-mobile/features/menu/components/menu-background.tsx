@@ -148,6 +148,22 @@ export function MenuBackground() {
           },
         ]}
       />
+      <Animated.View
+        style={[
+          styles.balloon,
+          styles.balloonTopPink,
+          {
+            transform: [
+              {
+                translateY: lilacFloat.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -50],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -161,6 +177,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderRadius: 999,
     opacity: 0.38,
+  },
+    balloonTopPink: {
+    width: 390,
+    height: 390,
+    backgroundColor: 'rgba(69, 255, 255, 0.36)',
+    bottom: '50%',
+    left: '40%',
   },
   balloonPink: {
     width: 80,

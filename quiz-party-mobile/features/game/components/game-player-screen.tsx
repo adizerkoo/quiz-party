@@ -231,13 +231,12 @@ export function GamePlayerScreen({
             )}
 
             <Pressable
-              disabled={leaveDisabled}
               onPress={onLeaveGame}
-              style={({ pressed }) => [
-                styles.leaveButton,
-                leaveDisabled && styles.leaveButtonDisabled,
-                pressed && !leaveDisabled && styles.leaveButtonPressed,
-              ]}>
+              style={({ pressed }) => ({
+                alignSelf: 'center',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
               <Text style={styles.leaveButtonText}>Выйти</Text>
             </Pressable>
           </View>
@@ -461,26 +460,12 @@ const styles = StyleSheet.create({
   sendButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: gameTheme.colors.purple },
   sendButtonPressed: { opacity: 0.92 },
   sendButtonText: { color: gameTheme.colors.white, fontSize: 22, fontWeight: '900', lineHeight: 24 },
-  leaveButton: {
-    minHeight: 50,
-    marginTop: 20,
-    borderRadius: gameTheme.radius.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 118, 117, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(214, 48, 49, 0.18)',
-  },
-  leaveButtonDisabled: {
-    opacity: 0.55,
-  },
-  leaveButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
-  },
+
   leaveButtonText: {
-    color: gameTheme.colors.danger,
+    color: 'rgba(117, 117, 117, 0.58)',
     fontSize: 15,
+    marginTop: 25,
     fontWeight: '800',
+    textAlign: 'center',
   },
 });
