@@ -63,7 +63,7 @@ SessionLocal = sessionmaker(
 
 def _seed_system_question_bank() -> None:
     """Ensures developer library questions are present in the database."""
-    from .services import ensure_system_question_bank_seed
+    from .contexts.library import ensure_system_question_bank_seed
 
     db = SessionLocal()
     try:

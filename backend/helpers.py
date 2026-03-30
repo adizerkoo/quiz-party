@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import models
 from .cache import get_cached_quiz, cache_quiz, invalidate_quiz
 from .runtime_state import connection_registry
-from .services import build_participant_payload, load_quiz_graph
+from .service_core import build_participant_payload, load_quiz_graph
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code
 from ..logging_config import build_log_extra, log_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, validate_quiz_code
-from ..services import (
+from ..contexts.resume import (
     build_game_cancelled_payload,
     evaluate_quiz_state,
 )

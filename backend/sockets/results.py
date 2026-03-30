@@ -11,15 +11,17 @@ from ..helpers import get_player_by_sid, get_quiz_by_code, verify_host
 from ..logging_config import build_log_extra, log_event, log_game_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import validate_quiz_code
-from ..services import (
+from ..contexts.results import (
     assign_final_ranks,
-    build_game_cancelled_payload,
     build_results_snapshot_payload,
-    evaluate_quiz_state,
-    log_session_event,
-    mark_quiz_activity,
     sort_result_players,
 )
+from ..contexts.resume import (
+    build_game_cancelled_payload,
+    evaluate_quiz_state,
+    mark_quiz_activity,
+)
+from ..service_core import log_session_event
 
 
 logger = logging.getLogger(__name__)

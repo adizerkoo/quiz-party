@@ -10,13 +10,15 @@ from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, 
 from ..logging_config import build_log_extra, log_event, log_game_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_answer, validate_quiz_code
-from ..services import (
-    apply_score_override,
+from ..contexts.resume import (
     build_game_cancelled_payload,
     evaluate_quiz_state,
+    mark_quiz_activity,
+)
+from ..service_core import (
+    apply_score_override,
     get_question_by_position,
     log_session_event,
-    mark_quiz_activity,
     upsert_answer,
 )
 

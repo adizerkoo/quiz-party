@@ -8,22 +8,24 @@ import logging
 
 from .. import database, models
 from ..config import PLAYER_EMOJIS
+from ..contexts.resume import (
+    HOST_TIMEOUT,
+    build_game_cancelled_payload,
+    evaluate_quiz_state,
+    mark_participant_left,
+    mark_quiz_activity,
+)
 from ..helpers import get_player_by_sid, get_players_in_quiz, get_quiz_by_code, verify_host
 from ..logging_config import build_log_extra, log_event, log_game_event, logged_socket_handler
 from ..runtime_state import connection_registry
 from ..security import rate_limiter, sanitize_text, validate_player_name, validate_quiz_code
-from ..services import (
-    HOST_TIMEOUT,
-    build_game_cancelled_payload,
-    evaluate_quiz_state,
+from ..service_core import (
     DevicePayload,
     ensure_installation,
     hash_secret,
     issue_participant_token,
     issue_secret,
     log_session_event,
-    mark_participant_left,
-    mark_quiz_activity,
     verify_secret,
 )
 

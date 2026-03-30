@@ -18,6 +18,19 @@ from sqlalchemy.orm import Session
 from . import database, models, schemas
 from .cache import cache_quiz
 from .config import DATA_PATH, FRONTEND_PATH, PLAYER_EMOJIS
+from .contexts.favorites import (
+    add_favorite_question,
+    list_favorite_questions,
+    remove_favorite_question,
+)
+from .contexts.library import (
+    ensure_system_question_bank_seed,
+    get_template_draft_for_owner,
+    list_library_categories,
+    list_library_questions,
+)
+from .contexts.results import build_quiz_results_response, list_user_history
+from .contexts.resume import evaluate_quiz_state, evaluate_resume_eligibility
 from .helpers import get_quiz_by_code
 from .logging_config import build_log_extra, log_event, log_game_event
 from .security import (
@@ -29,22 +42,11 @@ from .security import (
     sanitize_text,
     validate_player_name,
 )
-from .services import (
-    add_favorite_question,
+from .service_core import (
     DevicePayload,
-    build_quiz_results_response,
     create_quiz_session,
     ensure_installation,
-    ensure_system_question_bank_seed,
-    evaluate_quiz_state,
-    evaluate_resume_eligibility,
-    get_template_draft_for_owner,
-    list_favorite_questions,
-    list_library_categories,
-    list_library_questions,
-    list_user_history,
     load_quiz_graph,
-    remove_favorite_question,
     serialize_quiz_questions,
 )
 
