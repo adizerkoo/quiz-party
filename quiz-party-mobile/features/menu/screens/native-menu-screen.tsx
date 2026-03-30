@@ -28,6 +28,7 @@ import {
 import {
   getMenuSessionProfile,
   hydrateMenuSessionProfile,
+  subscribeMenuProfileState,
 } from '@/features/menu/store/menu-profile-session';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 import { MenuProfile } from '@/features/menu/types';
@@ -91,6 +92,14 @@ export function NativeMenuScreen() {
     };
     void refreshStartupAppData(nextProfile);
   }
+
+  useEffect(() => {
+    const unsubscribe = subscribeMenuProfileState(() => {
+      setProfile(getMenuSessionProfile());
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

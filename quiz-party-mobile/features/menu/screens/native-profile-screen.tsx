@@ -244,14 +244,14 @@ export function NativeProfileScreen() {
   }, [submitSuccessMessage]);
 
   useEffect(() => {
-    if (!isLocked) {
+    if (!isLocked && !isSubmitting) {
       return undefined;
     }
 
     return navigation.addListener('beforeRemove', (event) => {
       event.preventDefault();
     });
-  }, [isLocked, navigation]);
+  }, [isLocked, isSubmitting, navigation]);
 
   useEffect(() => {
     if (!profile?.id && activeTab !== 'profile') {
@@ -489,7 +489,7 @@ export function NativeProfileScreen() {
   }, [activeTab, installationPublicId, logger, profileId, profile?.sessionToken]);
 
   function handleBack() {
-    if (isLocked) {
+    if (isLocked || isSubmitting) {
       return;
     }
 
@@ -693,6 +693,7 @@ export function NativeProfileScreen() {
               {!isLocked ? (
                 <Pressable
                   accessibilityRole="button"
+                  disabled={isSubmitting}
                   onPress={handleBack}
                   style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
                   <FontAwesome6
@@ -779,6 +780,7 @@ export function NativeProfileScreen() {
 
                     {!isLocked ? (
                       <MenuButton
+                        disabled={isSubmitting}
                         label={UI_TEXT.backToMenu}
                         onPress={handleBack}
                         variant="ghost"

@@ -15,6 +15,7 @@ type MenuProfilePersistedState = {
 
 const PROFILE_DIRECTORY = `${FileSystem.documentDirectory ?? ''}quiz-party-mobile/`;
 const PROFILE_FILE = `${PROFILE_DIRECTORY}menu-profile.json`;
+const menuProfileListeners = new Set<() => void>();
 
 let currentMenuProfile: MenuProfile | null = null;
 let currentInstallationPublicId: string | null = null;
@@ -23,6 +24,16 @@ let currentLastSyncedAt: string | null = null;
 let currentPendingUpdatedAt: string | null = null;
 let menuProfileHydrated = false;
 let menuProfileHydrationPromise: Promise<MenuProfile | null> | null = null;
+
+function notifyMenuProfileListeners() {
+  menuProfileListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      // Один сломанный listener не должен мешать остальным обновиться.
+    }
+  });
+}
 
 function normalizeSessionToken(token: string | null | undefined) {
   if (typeof token !== 'string') {
@@ -123,6 +134,7 @@ function applyPersistedState(state: Partial<MenuProfilePersistedState> | null | 
   currentSyncStatus = state?.syncStatus ?? null;
   currentLastSyncedAt = state?.lastSyncedAt ?? null;
   currentPendingUpdatedAt = state?.pendingUpdatedAt ?? null;
+  notifyMenuProfileListeners();
 }
 
 export function hasHydratedMenuSessionProfile() {
@@ -141,6 +153,14 @@ export function getMenuProfileStateSnapshot() {
     lastSyncedAt: currentLastSyncedAt,
     pendingUpdatedAt: currentPendingUpdatedAt,
     hydrated: menuProfileHydrated,
+  };
+}
+
+export function subscribeMenuProfileState(listener: () => void) {
+  menuProfileListeners.add(listener);
+
+  return () => {
+    menuProfileListeners.delete(listener);
   };
 }
 
@@ -238,6 +258,7 @@ export async function setMenuSessionProfile(
     }
   }
 
+  notifyMenuProfileListeners();
   await persistMenuProfileState();
   return currentMenuProfile;
 }
@@ -292,6 +313,7 @@ export async function mergeMenuSessionProfileIdentity(
         : normalizeSessionToken(currentMenuProfile.sessionToken),
   };
 
+  notifyMenuProfileListeners();
   await persistMenuProfileState();
   return currentMenuProfile;
 }
