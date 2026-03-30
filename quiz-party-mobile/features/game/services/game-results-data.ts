@@ -97,6 +97,16 @@ export async function fetchGameResultsWithCache(
   return nextPromise;
 }
 
+export async function readCachedGameResults(roomCode: string) {
+  const normalizedRoomCode = normalizeRoomCode(roomCode);
+  if (!normalizedRoomCode) {
+    return null;
+  }
+
+  await hydrateGameResultsCache();
+  return getCachedGameResults(normalizedRoomCode);
+}
+
 export async function warmCachedGameResultsForHistory(
   entries: HistoryResultsWarmEntry[],
   options?: { limit?: number },

@@ -232,6 +232,18 @@ export function NativeProfileScreen() {
   }, [name, selectedEmoji]);
 
   useEffect(() => {
+    if (!submitSuccessMessage) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setSubmitSuccessMessage(null);
+    }, 5000);
+
+    return () => clearTimeout(timeoutId);
+  }, [submitSuccessMessage]);
+
+  useEffect(() => {
     if (!isLocked) {
       return undefined;
     }
@@ -553,7 +565,10 @@ export function NativeProfileScreen() {
     });
     router.push({
       pathname: '/create' as Href,
-      params: { templatePublicId: entry.template_public_id },
+      params: {
+        historyRoomCode: entry.quiz_code,
+        templatePublicId: entry.template_public_id,
+      },
     } as Href);
   }
 
@@ -650,6 +665,17 @@ export function NativeProfileScreen() {
     }
   }
 
+  const normalizedName = name.trim();
+  const normalizedProfileName = profile?.name.trim() ?? '';
+  const hasProfileChanges =
+    !profile
+    || normalizedName !== normalizedProfileName
+    || selectedEmoji !== profile.emoji;
+  const isSubmitDisabled =
+    isSubmitting
+    || !normalizedName
+    || (screenMode === 'edit' && !hasProfileChanges);
+
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -742,6 +768,7 @@ export function NativeProfileScreen() {
 
                   <View style={[styles.actions, styles.profileActions]}>
                     <MenuButton
+                      disabled={isSubmitDisabled}
                       label={
                         isSubmitting
                           ? UI_TEXT.saving

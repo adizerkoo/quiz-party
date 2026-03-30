@@ -171,6 +171,8 @@ export function GameHostScreen({
   const actualPlayers = players.filter((player) => !player.is_host);
   // Рейтинг пересчитываем на каждом рендере из живого состояния, не дублируя логику в UI.
   const leaderboard = getSortedLeaderboard(players);
+  const isReviewingOtherQuestion = currentQuestion !== realGameQuestion;
+  const isFinishAction = !isReviewingOtherQuestion && currentQuestion === questions.length;
 
   return (
     <ScrollView
@@ -388,11 +390,27 @@ export function GameHostScreen({
             })}
           </View>
 
-          <Pressable onPress={onNextQuestion} style={({ pressed }) => [styles.primaryButton, styles.nextButton, pressed && styles.primaryButtonPressed]}>
-            <Text style={styles.primaryButtonText}>
-              {currentQuestion !== realGameQuestion
+          <Pressable
+            onPress={onNextQuestion}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              styles.nextButton,
+              isReviewingOtherQuestion && styles.returnButton,
+              isFinishAction && styles.finishButton,
+              pressed && styles.primaryButtonPressed,
+              pressed && isFinishAction && styles.finishButtonPressed,
+            ]}>
+            {isFinishAction ? (
+              <>
+                <View pointerEvents="none" style={styles.finishButtonGlow} />
+                <View pointerEvents="none" style={styles.finishButtonGloss} />
+              </>
+            ) : null}
+
+            <Text style={[styles.primaryButtonText, isFinishAction && styles.finishButtonText]}>
+              {isReviewingOtherQuestion
                 ? 'Вернуться к текущему вопросу'
-                : currentQuestion === questions.length
+                : isFinishAction
                   ? '🏆 ПОДВЕСТИ ИТОГИ'
                   : 'СЛЕДУЮЩИЙ ВОПРОС'}
             </Text>
@@ -633,11 +651,50 @@ const styles = StyleSheet.create({
     opacity: 0.94,
     transform: [{ scale: 0.985 }],
   },
+  returnButton: {
+    backgroundColor: gameTheme.colors.purpleDark,
+  },
   primaryButtonText: {
     color: gameTheme.colors.white,
     fontSize: 16,
     fontWeight: '900',
     textAlign: 'center',
+  },
+  finishButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 192, 72, 0.58)',
+    backgroundColor: '#f3b63b',
+    shadowColor: 'rgba(201, 132, 0, 0.38)',
+    shadowOpacity: 0.34,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 9,
+  },
+  finishButtonPressed: {
+    backgroundColor: '#e2a52b',
+  },
+  finishButtonGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '54%',
+    backgroundColor: 'rgba(255, 246, 191, 0.34)',
+  },
+  finishButtonGloss: {
+    position: 'absolute',
+    top: 0,
+    left: -86,
+    width: 118,
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    transform: [{ skewX: '-20deg' }],
+  },
+  finishButtonText: {
+    color: '#6e4100',
+    textShadowColor: 'rgba(255,255,255,0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   progressScroll: {
     marginBottom: 14,

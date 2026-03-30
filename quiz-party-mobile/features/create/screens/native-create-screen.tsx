@@ -60,6 +60,7 @@ import {
   validateQuizBeforeLaunch,
 } from '@/features/create/utils/create-validation';
 import { saveGameSessionCredentials } from '@/features/game/store/game-session-credentials';
+import { readCachedGameResults } from '@/features/game/services/game-results-data';
 import {
   addMenuFavorite,
   fetchMenuFavorites,
@@ -85,7 +86,10 @@ import { createFeatureLogger } from '@/features/shared/services/feature-logger';
 export function NativeCreateScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const params = useLocalSearchParams<{ templatePublicId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    templatePublicId?: string | string[];
+    historyRoomCode?: string | string[];
+  }>();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const titleInputRef = useRef<TextInput>(null);
@@ -95,6 +99,13 @@ export function NativeCreateScreen() {
   const focusedInputRef = useRef<TextInput | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const favoriteQuestionsRef = useRef<CreateLibraryQuestion[]>([]);
+  const titleRef = useRef('');
+  const questionsRef = useRef<CreateQuizQuestion[]>([]);
+  const optimisticRepeatPrefillRef = useRef<{
+    templatePublicId: string;
+    title: string;
+    questions: CreateQuizQuestion[];
+  } | null>(null);
 
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<CreateQuizQuestion[]>([]);
@@ -113,6 +124,7 @@ export function NativeCreateScreen() {
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const requestedTemplatePublicId = readSingleParam(params.templatePublicId);
+  const requestedHistoryRoomCode = readSingleParam(params.historyRoomCode);
   const handledTemplatePrefillRef = useRef<string | null>(null);
   const inFlightTemplatePrefillRef = useRef<string | null>(null);
 
@@ -132,6 +144,14 @@ export function NativeCreateScreen() {
 
   const currentIdeaText = currentIdea?.text
     ?? (libraryLoading ? 'Загрузка...' : 'Готовые идеи появятся после загрузки библиотеки.');
+
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
 
   useEffect(() => {
     let mounted = true;
@@ -346,8 +366,38 @@ export function NativeCreateScreen() {
     inFlightTemplatePrefillRef.current = templatePublicId;
 
     async function prefillFromTemplate() {
+      const canUseOptimisticCache = !hasLocalCreateConflict();
+      const cachedRepeatDraft = canUseOptimisticCache
+        ? await loadRepeatDraftFromCachedResults(requestedHistoryRoomCode)
+        : null;
+      if (cancelled) {
+        return;
+      }
+
+      if (cachedRepeatDraft) {
+        optimisticRepeatPrefillRef.current = {
+          templatePublicId,
+          title: cachedRepeatDraft.title,
+          questions: cachedRepeatDraft.questions,
+        };
+        applyTemplateDraftPrefill(cachedRepeatDraft.title, cachedRepeatDraft.questions);
+        logger.info('create.prefill.cache_optimistic', {
+          templatePublicId,
+          roomCode: String(requestedHistoryRoomCode ?? '').trim().toUpperCase() || null,
+          questionCount: cachedRepeatDraft.questions.length,
+        });
+      } else {
+        optimisticRepeatPrefillRef.current = null;
+      }
+
       const profile = ownerProfile ?? getMenuSessionProfile();
       if (!profile?.id) {
+        if (cachedRepeatDraft) {
+          handledTemplatePrefillRef.current = templatePublicId;
+          optimisticRepeatPrefillRef.current = null;
+          return;
+        }
+
         logger.warn('create.prefill.denied_local', {
           reason: 'missing_profile',
           templatePublicId,
@@ -383,56 +433,81 @@ export function NativeCreateScreen() {
           return;
         }
 
-        const applyDraft = () => {
-          applyTemplateDraftPrefill(templateDraft.title, templateDraft.questions ?? []);
-          handledTemplatePrefillRef.current = templatePublicId;
-          logger.info('create.prefill.applied', {
-            templatePublicId,
-            questionCount: templateDraft.questions?.length ?? 0,
-          });
-        };
+        const templateQuestions = templateDraft.questions ?? [];
+        const optimisticRepeatPrefill = optimisticRepeatPrefillRef.current;
 
-        if (hasLocalCreateConflict()) {
-          logger.warn('create.prefill.conflicted', {
+        if (optimisticRepeatPrefill?.templatePublicId === templatePublicId) {
+          optimisticRepeatPrefillRef.current = null;
+
+          if (doesCurrentCreateDraftMatchRepeatDraft(
+            optimisticRepeatPrefill.title,
+            optimisticRepeatPrefill.questions,
+          )) {
+            applyTemplateDraftPrefill(templateDraft.title, templateQuestions);
+            handledTemplatePrefillRef.current = templatePublicId;
+            logger.info('create.prefill.cache_upgraded', {
+              templatePublicId,
+              questionCount: templateQuestions.length,
+            });
+            return;
+          }
+
+          handledTemplatePrefillRef.current = templatePublicId;
+          logger.info('create.prefill.cache_kept_after_edit', {
             templatePublicId,
-            existingQuestionCount: questions.length,
           });
-          Alert.alert(
-            'Заменить черновик?',
-            'У тебя уже есть локальный черновик. Повтор игры может заменить его целиком.',
-            [
-              {
-                text: 'Оставить мой черновик',
-                style: 'cancel',
-                onPress: () => {
-                  handledTemplatePrefillRef.current = templatePublicId;
-                },
-              },
-              {
-                text: 'Заменить',
-                style: 'destructive',
-                onPress: applyDraft,
-              },
-            ],
-          );
           return;
         }
 
-        applyDraft();
+        applyResolvedRepeatDraft({
+          source: 'template',
+          templatePublicId,
+          templateQuestions,
+          templateTitle: templateDraft.title,
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'unknown_error';
         logger.warn('create.prefill.failed', {
           templatePublicId,
           message: errorMessage,
         });
-        handledTemplatePrefillRef.current = templatePublicId;
         if (errorMessage.includes('HTTP 403')) {
+          handledTemplatePrefillRef.current = templatePublicId;
           pushToast('Повтор этой игры доступен только ведущему.');
           logger.warn('repeat.denied.local', {
             templatePublicId,
           });
           return;
         }
+
+        if (optimisticRepeatPrefillRef.current?.templatePublicId === templatePublicId) {
+          handledTemplatePrefillRef.current = templatePublicId;
+          optimisticRepeatPrefillRef.current = null;
+          return;
+        }
+
+        try {
+          const delayedCachedRepeatDraft = await loadRepeatDraftFromCachedResults(requestedHistoryRoomCode);
+          if (cancelled || !delayedCachedRepeatDraft) {
+            throw error;
+          }
+
+          logger.info('create.prefill.cache_fallback', {
+            templatePublicId,
+            roomCode: String(requestedHistoryRoomCode ?? '').trim().toUpperCase() || null,
+            questionCount: delayedCachedRepeatDraft.questions.length,
+          });
+          applyResolvedRepeatDraft({
+            source: 'results_cache',
+            templatePublicId,
+            templateQuestions: delayedCachedRepeatDraft.questions,
+            templateTitle: delayedCachedRepeatDraft.title,
+          });
+          return;
+        } catch {
+          handledTemplatePrefillRef.current = templatePublicId;
+        }
+
         pushToast('Не удалось загрузить шаблон для повтора.');
       } finally {
         if (inFlightTemplatePrefillRef.current === templatePublicId) {
@@ -452,6 +527,7 @@ export function NativeCreateScreen() {
     ownerProfile?.id,
     ownerProfile?.installationPublicId,
     ownerProfile?.sessionToken,
+    requestedHistoryRoomCode,
     requestedTemplatePublicId,
   ]);
 
@@ -701,7 +777,115 @@ export function NativeCreateScreen() {
     );
   }
 
+  function areRepeatDraftQuestionsEqual(
+    leftQuestions: CreateQuizQuestion[],
+    rightQuestions: CreateQuizQuestion[],
+  ) {
+    if (leftQuestions.length !== rightQuestions.length) {
+      return false;
+    }
+
+    return leftQuestions.every((question, index) => {
+      const pairedQuestion = rightQuestions[index];
+      if (!pairedQuestion) {
+        return false;
+      }
+
+      const leftOptions = Array.isArray(question.options) ? question.options : [];
+      const rightOptions = Array.isArray(pairedQuestion.options) ? pairedQuestion.options : [];
+
+      return (
+        question.text === pairedQuestion.text
+        && question.type === pairedQuestion.type
+        && question.correct === pairedQuestion.correct
+        && question.source_question_public_id === pairedQuestion.source_question_public_id
+        && leftOptions.length === rightOptions.length
+        && leftOptions.every((option, optionIndex) => option === rightOptions[optionIndex])
+      );
+    });
+  }
+
+  function doesCurrentCreateDraftMatchRepeatDraft(
+    repeatTitle: string,
+    repeatQuestions: CreateQuizQuestion[],
+  ) {
+    return (
+      titleRef.current === repeatTitle
+      && areRepeatDraftQuestionsEqual(questionsRef.current, repeatQuestions)
+    );
+  }
+
+  function applyResolvedRepeatDraft(params: {
+    source: 'template' | 'results_cache';
+    templatePublicId: string;
+    templateQuestions: CreateQuizQuestion[];
+    templateTitle: string;
+  }) {
+    const applyDraft = () => {
+      applyTemplateDraftPrefill(params.templateTitle, params.templateQuestions);
+      handledTemplatePrefillRef.current = params.templatePublicId;
+      logger.info('create.prefill.applied', {
+        templatePublicId: params.templatePublicId,
+        questionCount: params.templateQuestions.length,
+        source: params.source,
+      });
+    };
+
+    if (hasLocalCreateConflict()) {
+      logger.warn('create.prefill.conflicted', {
+        templatePublicId: params.templatePublicId,
+        existingQuestionCount: questions.length,
+        source: params.source,
+      });
+      Alert.alert(
+        'Заменить черновик?',
+        'У тебя уже есть локальный черновик. Повтор игры может заменить его целиком.',
+        [
+          {
+            text: 'Оставить мой черновик',
+            style: 'cancel',
+            onPress: () => {
+              handledTemplatePrefillRef.current = params.templatePublicId;
+            },
+          },
+          {
+            text: 'Заменить',
+            style: 'destructive',
+            onPress: applyDraft,
+          },
+        ],
+      );
+      return;
+    }
+
+    applyDraft();
+  }
+
+  async function loadRepeatDraftFromCachedResults(historyRoomCode?: string | null) {
+    const normalizedRoomCode = String(historyRoomCode ?? '').trim().toUpperCase();
+    if (!normalizedRoomCode) {
+      return null;
+    }
+
+    const cachedResults = await readCachedGameResults(normalizedRoomCode);
+    if (!cachedResults) {
+      return null;
+    }
+
+    return {
+      title: cachedResults.title,
+      questions: cachedResults.questions.map((question) => ({
+        text: question.text,
+        type: question.type,
+        correct: question.correct ?? '',
+        options: Array.isArray(question.options) ? question.options : null,
+      })),
+    };
+  }
+
   function applyTemplateDraftPrefill(templateTitle: string, templateQuestions: CreateQuizQuestion[]) {
+    titleRef.current = templateTitle;
+    questionsRef.current = templateQuestions;
     setTitle(templateTitle);
     setQuestions(templateQuestions);
     setDraft(createEmptyQuestionDraft());

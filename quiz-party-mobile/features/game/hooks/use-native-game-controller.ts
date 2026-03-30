@@ -337,12 +337,11 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   }
 
   function handleJumpToQuestion(nextQuestion: number) {
+    if (nextQuestion < 1 || nextQuestion > questionsCountRef.current) {
+      return;
+    }
+
     setCurrentQuestion(nextQuestion);
-    socketRef.current?.emit('move_to_step', {
-      room: roomCode,
-      question: nextQuestion,
-    });
-    emitGetUpdate();
   }
 
   function handlePlayerNavBack() {

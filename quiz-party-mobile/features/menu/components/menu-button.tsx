@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { menuTheme } from '@/features/menu/theme/menu-theme';
 
 type MenuButtonProps = {
+  disabled?: boolean;
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'ghost';
@@ -12,6 +13,7 @@ type MenuButtonProps = {
 // primary — основная яркая кнопка,
 // ghost — вторичная текстовая кнопка.
 export function MenuButton({
+  disabled = false,
   label,
   onPress,
   variant = 'primary',
@@ -21,14 +23,18 @@ export function MenuButton({
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
         isPrimary ? styles.primary : styles.ghost,
-        pressed && isPrimary && styles.primaryPressed,
-        pressed && !isPrimary && styles.ghostPressed,
+        disabled && styles.baseDisabled,
+        disabled && isPrimary && styles.primaryDisabled,
+        disabled && !isPrimary && styles.ghostDisabled,
+        pressed && !disabled && isPrimary && styles.primaryPressed,
+        pressed && !disabled && !isPrimary && styles.ghostPressed,
       ]}>
-      {isPrimary ? (
+      {isPrimary && !disabled ? (
         <>
           {/* Верхнее свечение, чтобы кнопка не выглядела плоской. */}
           <View style={styles.primaryTopGlow} />
@@ -38,7 +44,11 @@ export function MenuButton({
         </>
       ) : null}
 
-      <Text style={[styles.label, isPrimary ? styles.primaryLabel : styles.ghostLabel]}>
+      <Text style={[
+        styles.label,
+        isPrimary ? styles.primaryLabel : styles.ghostLabel,
+        disabled && (isPrimary ? styles.primaryLabelDisabled : styles.ghostLabelDisabled),
+      ]}>
         {label}
       </Text>
     </Pressable>
@@ -57,6 +67,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     overflow: 'hidden',
   },
+  baseDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 
   // Яркая основная кнопка.
   primary: {
@@ -73,10 +87,16 @@ const styles = StyleSheet.create({
     backgroundColor: menuTheme.colors.primaryPressed,
     transform: [{ scale: 0.98 }],
   },
+  primaryDisabled: {
+    backgroundColor: '#c9c4f3',
+  },
 
   // Прозрачная вторичная кнопка.
   ghost: {
     backgroundColor: 'transparent',
+  },
+  ghostDisabled: {
+    opacity: 0.55,
   },
 
   // Нажатое состояние ghost-кнопки.
@@ -118,11 +138,17 @@ const styles = StyleSheet.create({
   primaryLabel: {
     color: '#ffffff',
   },
+  primaryLabelDisabled: {
+    color: 'rgba(255,255,255,0.92)',
+  },
 
   // Более спокойный текст вторичной кнопки.
   ghostLabel: {
     color: '#b2bec3',
     fontSize: 14,
     fontWeight: '600',
+  },
+  ghostLabelDisabled: {
+    color: '#b7bfd6',
   },
 });
