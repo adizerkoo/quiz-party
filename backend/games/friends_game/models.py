@@ -72,7 +72,7 @@ class Quiz(Base):
     session_events = relationship("SessionEvent", back_populates="quiz")
 
     def __init__(self, **kwargs):
-        """РџРѕРґРґРµСЂР¶РёРІР°РµС‚ Рё РЅРѕРІСѓСЋ СЃС…РµРјСѓ, Рё legacy `questions_data` РїСЂРё СЃРѕР·РґР°РЅРёРё РјРѕРґРµР»Рё."""
+        """Поддерживает и новую схему, и legacy `questions_data` при создании модели."""
         questions_data = kwargs.pop("questions_data", None)
         template = kwargs.pop("template", None)
         for key, value in kwargs.items():
@@ -93,17 +93,17 @@ class Quiz(Base):
 
     @property
     def template_public_id(self) -> str | None:
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ РІРЅРµС€РЅРёР№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ С€Р°Р±Р»РѕРЅР°, РµСЃР»Рё РѕРЅ СѓР¶Рµ СЃРІСЏР·Р°РЅ СЃ СЃРµСЃСЃРёРµР№."""
+        """Возвращает внешний идентификатор шаблона, если он уже связан с сессией."""
         return self.template.public_id if self.template else None
 
     @property
     def questions(self) -> list[QuizQuestion]:
-        """Р”Р°С‘С‚ РґРѕСЃС‚СѓРї Рє РІРѕРїСЂРѕСЃР°Рј С‡РµСЂРµР· С€Р°Р±Р»РѕРЅ, РєР°Рє Р±СѓРґС‚Рѕ РѕРЅРё РІРёСЃСЏС‚ РїСЂСЏРјРѕ РЅР° СЃРµСЃСЃРёРё."""
+        """Даёт доступ к вопросам через шаблон, как будто они висят прямо на сессии."""
         return list(self.template.questions) if self.template else []
 
     @property
     def questions_data(self) -> list[dict]:
-        """РЎРѕР±РёСЂР°РµС‚ legacy-РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµ РІРѕРїСЂРѕСЃРѕРІ РёР· РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹С… С‚Р°Р±Р»РёС†."""
+        """Собирает legacy-представление вопросов из нормализованных таблиц."""
         payload = []
         for question in self.questions:
             item = {
@@ -119,11 +119,11 @@ class Quiz(Base):
 
     @questions_data.setter
     def questions_data(self, value: list[dict] | None) -> None:
-        """РџРѕР·РІРѕР»СЏРµС‚ СЃС‚Р°СЂРѕРјСѓ РєРѕРґСѓ РїСЂРёСЃРІР°РёРІР°С‚СЊ `questions_data` РєР°Рє СЂР°РЅСЊС€Рµ."""
+        """Позволяет старому коду присваивать `questions_data` как раньше."""
         self._apply_questions_data(value or [])
 
     def _apply_questions_data(self, questions_data: list[dict]) -> None:
-        """Р Р°Р·РІРѕСЂР°С‡РёРІР°РµС‚ legacy JSON-РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµ РІРѕРїСЂРѕСЃРѕРІ РІ РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹Рµ СЃС‚СЂРѕРєРё."""
+        """Разворачивает legacy JSON-представление вопросов в нормализованные строки."""
         if self.template is None:
             self.template = QuizTemplate(
                 title=self.title or "Quiz",
@@ -133,7 +133,7 @@ class Quiz(Base):
         self.template.total_questions = len(questions_data)
         self.template.questions = []
         for index, raw_question in enumerate(questions_data, start=1):
-            # РџРѕР·РёС†РёСЋ РІРѕРїСЂРѕСЃР° С„РёРєСЃРёСЂСѓРµРј СЏРІРЅРѕ, С‡С‚РѕР±С‹ РїРѕСЂСЏРґРѕРє Р±С‹Р» РґРµС‚РµСЂРјРёРЅРёСЂРѕРІР°РЅРЅС‹Рј.
+            # Позицию вопроса фиксируем явно, чтобы порядок был детерминированным.
             question = QuizQuestion(
                 position=index,
                 text=raw_question["text"],
@@ -222,7 +222,7 @@ class Player(Base):
     session_events = relationship("SessionEvent", back_populates="participant")
 
     def __init__(self, **kwargs):
-        """РџРѕРґРґРµСЂР¶РёРІР°РµС‚ legacy-РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ СЃ `sid`, `is_host` Рё history-РїРѕР»СЏРјРё."""
+        """Поддерживает legacy-конструктор с `sid`, `is_host` и history-полями."""
         is_host = kwargs.pop("is_host", None)
         sid = kwargs.pop("sid", None)
         answers_history = kwargs.pop("answers_history", None)
@@ -240,17 +240,17 @@ class Player(Base):
 
     @hybrid_property
     def is_host(self) -> bool:
-        """РЎРѕРІРјРµСЃС‚РёРјС‹Р№ С„Р»Р°Рі С…РѕСЃС‚Р° РїРѕРІРµСЂС… РЅРѕРІРѕРіРѕ РїРѕР»СЏ `role`."""
+        """Совместимый флаг хоста поверх нового поля `role`."""
         return self.role == "host"
 
     @is_host.expression
     def is_host(cls):
-        """SQL-РІС‹СЂР°Р¶РµРЅРёРµ РґР»СЏ РІС‹Р±РѕСЂРѕРє РїРѕ СЂРѕР»Рё С…РѕСЃС‚Р°."""
+        """SQL-выражение для выборок по роли хоста."""
         return cls.role == "host"
 
     @property
     def answers_history(self) -> dict[str, str]:
-        """РЎРѕР±РёСЂР°РµС‚ legacy answers_history РёР· РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹С… answer records."""
+        """Собирает legacy answers_history из нормализованных answer records."""
         if not self.answers:
             return dict(getattr(self, "_legacy_answers_history", {}) or {})
         history: dict[str, str] = {}
@@ -263,13 +263,13 @@ class Player(Base):
 
     @answers_history.setter
     def answers_history(self, value: dict[str, str] | None) -> None:
-        """РџСЂРёРЅРёРјР°РµС‚ legacy answers_history Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµС‚ РµРіРѕ РІ answer records."""
+        """Принимает legacy answers_history и синхронизирует его в answer records."""
         self._legacy_answers_history = dict(value or {})
         self._sync_answers_from_legacy()
 
     @property
     def scores_history(self) -> dict[str, int]:
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ legacy scores_history РЅР° Р±Р°Р·Рµ awarded_points РїРѕ РІРѕРїСЂРѕСЃР°Рј."""
+        """Возвращает legacy scores_history на базе awarded_points по вопросам."""
         if not self.answers:
             return dict(getattr(self, "_legacy_scores_history", {}) or {})
         return {
@@ -279,13 +279,13 @@ class Player(Base):
 
     @scores_history.setter
     def scores_history(self, value: dict[str, int] | None) -> None:
-        """РџСЂРёРЅРёРјР°РµС‚ legacy scores_history Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµС‚ РµРіРѕ РІ answer records."""
+        """Принимает legacy scores_history и синхронизирует его в answer records."""
         self._legacy_scores_history = dict(value or {})
         self._sync_answers_from_legacy()
 
     @property
     def answer_times(self) -> dict[str, float]:
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ legacy answer_times РёР· РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹С… answer records."""
+        """Возвращает legacy answer_times из нормализованных answer records."""
         if not self.answers:
             return dict(getattr(self, "_legacy_answer_times", {}) or {})
         return {
@@ -296,18 +296,18 @@ class Player(Base):
 
     @answer_times.setter
     def answer_times(self, value: dict[str, float] | None) -> None:
-        """РџСЂРёРЅРёРјР°РµС‚ legacy answer_times Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµС‚ РµРіРѕ РІ answer records."""
+        """Принимает legacy answer_times и синхронизирует его в answer records."""
         self._legacy_answer_times = dict(value or {})
         self._sync_answers_from_legacy()
 
     @property
     def sid(self) -> str | None:
-        """РћС‚РґР°С‘С‚ Р°РєС‚РёРІРЅС‹Р№ sid РёР· runtime registry РёР»Рё transient fallback."""
+        """Отдаёт активный sid из runtime registry или transient fallback."""
         return getattr(self, "_sid", None) or connection_registry.get_sid(self.id)
 
     @sid.setter
     def sid(self, value: str | None) -> None:
-        """РћР±РЅРѕРІР»СЏРµС‚ runtime-РїСЂРёРІСЏР·РєСѓ sid, РЅРµ С…СЂР°РЅСЏ РµРіРѕ РєР°Рє РїРѕСЃС‚РѕСЏРЅРЅРѕРµ РїРѕР»Рµ Р‘Р”."""
+        """Обновляет runtime-привязку sid, не храня его как постоянное поле БД."""
         current_sid = getattr(self, "_sid", None) or connection_registry.get_sid(self.id)
         if current_sid and current_sid != value:
             if connection_registry.get_sid(self.id) == current_sid:
@@ -318,7 +318,7 @@ class Player(Base):
                 connection_registry.bind(value, self.id, self.quiz_id)
 
     def _sync_answers_from_legacy(self) -> None:
-        """РџСЂРµРѕР±СЂР°Р·СѓРµС‚ legacy history-РїРѕР»СЏ РІ РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹Рµ participant_answers."""
+        """Преобразует legacy history-поля в нормализованные participant_answers."""
         if self.quiz is None or not self.quiz.questions:
             return
 
@@ -344,7 +344,7 @@ class Player(Base):
 
             answer = answer_by_position.get(position)
             if answer is None:
-                # РЎРѕР·РґР°С‘Рј answer record Р»РµРЅРёРІРѕ С‚РѕР»СЊРєРѕ РґР»СЏ СЂРµР°Р»СЊРЅРѕ РІСЃС‚СЂРµС‡Р°СЋС‰РёС…СЃСЏ legacy РєР»СЋС‡РµР№.
+                # Создаём answer record лениво только для реально встречающихся legacy ключей.
                 answer = ParticipantAnswer(
                     participant=self,
                     quiz_id=self.quiz_id,
@@ -375,7 +375,7 @@ class Player(Base):
                     answer.answer_time_seconds = None
 
             if raw_position in scores_map:
-                # Р•СЃР»Рё legacy score РїРµСЂРµРґР°РЅ СЏРІРЅРѕ, СЃС‡РёС‚Р°РµРј РµРіРѕ СЂСѓС‡РЅРѕР№ РѕС†РµРЅРєРѕР№.
+                # Если legacy score передан явно, считаем его ручной оценкой.
                 answer.awarded_points = int(scores_map[raw_position] or 0)
                 answer.is_correct = answer.awarded_points > 0
                 answer.evaluation_status = "manual"

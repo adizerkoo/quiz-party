@@ -1,4 +1,4 @@
-﻿"""HTTP API С‚РµРєСѓС‰РµР№ РёРіСЂС‹ СЃ РґСЂСѓР·СЊСЏРјРё: СЃРµСЃСЃРёРё, resume, history Рё results."""
+﻿"""HTTP API текущей игры с друзьями: сессии, resume, history и results."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
-    """Р“РµРЅРµСЂРёСЂСѓРµС‚ СѓРЅРёРєР°Р»СЊРЅС‹Р№ room code РІ С„РѕСЂРјР°С‚Рµ `PARTY-XXXXX`."""
+    """Генерирует уникальный room code в формате `PARTY-XXXXX`."""
     for _ in range(max_attempts):
         suffix = "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5)
@@ -47,7 +47,7 @@ def _generate_unique_code(db: Session, max_attempts: int = 10) -> str:
 
 
 def register_friends_game_routes(app):
-    """Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ HTTP-РјР°СЂС€СЂСѓС‚С‹ С‚РµРєСѓС‰РµР№ РёРіСЂС‹ СЃ РґСЂСѓР·СЊСЏРјРё."""
+    """Регистрирует HTTP-маршруты текущей игры с друзьями."""
 
     @app.post("/api/v1/quizzes", response_model=schemas.QuizResponse)
     def create_quiz(
@@ -55,7 +55,7 @@ def register_friends_game_routes(app):
         db: Session = Depends(database.get_db),
         auth: AuthenticatedUserContext | None = Depends(get_optional_authenticated_user),
     ):
-        """РЎРѕР·РґР°С‘С‚ РЅРѕРІС‹Р№ quiz template Рё РїРµСЂРІСѓСЋ РёРіСЂРѕРІСѓСЋ СЃРµСЃСЃРёСЋ."""
+        """Создаёт новый quiz template и первую игровую сессию."""
         code = _generate_unique_code(db)
         owner = None
         if quiz_data.owner_id is not None:
@@ -137,7 +137,7 @@ def register_friends_game_routes(app):
         db: Session = Depends(database.get_db),
         auth: AuthenticatedUserContext = Depends(get_current_authenticated_user),
     ):
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ finished/cancelled РёСЃС‚РѕСЂРёСЋ С‚РµРєСѓС‰РµР№ РёРіСЂС‹ РґР»СЏ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."""
+        """Возвращает finished/cancelled историю текущей игры для профиля пользователя."""
         ensure_authenticated_identity_matches(auth, user_id=user_id)
         return list_user_history(db, user_id=auth.user.id)
 
@@ -147,7 +147,7 @@ def register_friends_game_routes(app):
         role: str = Query(default=None),
         db: Session = Depends(database.get_db),
     ):
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РµРєСѓС‰СѓСЋ РёРіСЂРѕРІСѓСЋ СЃРµСЃСЃРёСЋ РІ РєР»РёРµРЅС‚-СЃРѕРІРјРµСЃС‚РёРјРѕРј С„РѕСЂРјР°С‚Рµ."""
+        """Возвращает текущую игровую сессию в клиент-совместимом формате."""
         quiz = get_quiz_by_code(db, code)
         if not quiz:
             raise HTTPException(status_code=404, detail="The quiz was not found")
@@ -180,7 +180,7 @@ def register_friends_game_routes(app):
         response_model_exclude_unset=True,
     )
     def get_quiz_results(code: str, db: Session = Depends(database.get_db)):
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ С„РёРЅР°Р»СЊРЅС‹Рµ СЂРµР·СѓР»СЊС‚Р°С‚С‹ РґР»СЏ Р·Р°РІРµСЂС€С‘РЅРЅРѕР№ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+        """Возвращает финальные результаты для завершённой игровой сессии."""
         quiz = load_quiz_graph(db.query(models.Quiz)).filter(models.Quiz.code == code).first()
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
@@ -194,7 +194,7 @@ def register_friends_game_routes(app):
 
     @app.post("/api/v1/resume/check", response_model=schemas.ResumeCheckResponse)
     def check_resume(payload: schemas.ResumeCheckRequest, db: Session = Depends(database.get_db)):
-        """РџСЂРѕРІРµСЂСЏРµС‚ Р»РѕРєР°Р»СЊРЅРѕ СЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ credentials Рё РёС‰РµС‚ РјР°РєСЃРёРјСѓРј РѕРґРЅСѓ resumable game."""
+        """Проверяет локально сохранённые credentials и ищет максимум одну resumable game."""
         sessions: list[schemas.ResumeSessionStatus] = []
 
         for candidate in payload.sessions:

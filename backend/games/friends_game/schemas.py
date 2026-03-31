@@ -71,7 +71,7 @@ class UserHistoryEntry(BaseModel):
 
 
 class QuizCreate(BaseModel):
-    """Payload РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РЅРѕРІРѕРіРѕ С€Р°Р±Р»РѕРЅР° Рё РїРµСЂРІРѕР№ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+    """Payload для создания нового шаблона и первой игровой сессии."""
 
     title: str = Field(..., min_length=1, max_length=100)
     questions: List[QuestionSchema] = Field(..., min_length=1, max_length=50)
@@ -79,7 +79,7 @@ class QuizCreate(BaseModel):
 
 
 class QuizResponse(BaseModel):
-    """РћС‚РІРµС‚ API РїРѕСЃР»Рµ СЃРѕР·РґР°РЅРёСЏ РёР»Рё С‡С‚РµРЅРёСЏ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+    """Ответ API после создания или чтения игровой сессии."""
 
     id: int
     public_id: Optional[str] = None
@@ -96,7 +96,7 @@ class QuizResponse(BaseModel):
 
 
 class ResumeSessionCandidate(BaseModel):
-    """РћРґРЅР° Р»РѕРєР°Р»СЊРЅРѕ СЃРѕС…СЂР°РЅС‘РЅРЅР°СЏ РёРіСЂРѕРІР°СЏ СЃРµСЃСЃРёСЏ РґР»СЏ СЃРµСЂРІРµСЂРЅРѕР№ resume-РїСЂРѕРІРµСЂРєРё."""
+    """Одна локально сохранённая игровая сессия для серверной resume-проверки."""
 
     room_code: str = Field(..., min_length=1, max_length=20)
     role: Literal["host", "player"]
@@ -107,7 +107,7 @@ class ResumeSessionCandidate(BaseModel):
 
 
 class ResumeCheckRequest(BaseModel):
-    """РџР°РєРµС‚ Р»РѕРєР°Р»СЊРЅС‹С… credentials, РєРѕС‚РѕСЂС‹Рµ РєР»РёРµРЅС‚ С…РѕС‡РµС‚ РїСЂРѕРІРµСЂРёС‚СЊ РЅР° РІР°Р»РёРґРЅРѕСЃС‚СЊ."""
+    """Пакет локальных credentials, которые клиент хочет проверить на валидность."""
 
     sessions: List[ResumeSessionCandidate] = Field(..., min_length=1, max_length=10)
     user_id: Optional[int] = None
@@ -115,7 +115,7 @@ class ResumeCheckRequest(BaseModel):
 
 
 class ResumeSessionStatus(BaseModel):
-    """Р РµР·СѓР»СЊС‚Р°С‚ СЃРµСЂРІРµСЂРЅРѕР№ РїСЂРѕРІРµСЂРєРё РѕРґРЅРѕР№ СЃРѕС…СЂР°РЅС‘РЅРЅРѕР№ СЃРµСЃСЃРёРё."""
+    """Результат серверной проверки одной сохранённой сессии."""
 
     room_code: str
     role: Literal["host", "player"]
@@ -128,7 +128,7 @@ class ResumeSessionStatus(BaseModel):
 
 
 class ResumeCheckResponse(BaseModel):
-    """РћС‚РІРµС‚ API c Р»СѓС‡С€РёРј resume-РєР°РЅРґРёРґР°С‚РѕРј Рё РїСЂРёС‡РёРЅР°РјРё РѕС‚РєР°Р·Р° РїРѕ РѕСЃС‚Р°Р»СЊРЅС‹Рј."""
+    """Ответ API c лучшим resume-кандидатом и причинами отказа по остальным."""
 
     has_resume_game: bool
     resume_game: Optional[ResumeSessionStatus] = None

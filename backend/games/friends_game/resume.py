@@ -1,4 +1,4 @@
-﻿"""РЎРµСЂРІРёСЃС‹ bounded context `resume` Рё Р¶РёРІРѕРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+﻿"""Сервисы bounded context `resume` и живого состояния игровой сессии."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class QuizStateEvaluation:
 
 @dataclass(slots=True)
 class ResumeEligibility:
-    """Р РµР·СѓР»СЊС‚Р°С‚ РїСЂРѕРІРµСЂРєРё, РјРѕР¶РЅРѕ Р»Рё РµС‰С‘ РїСЂРµРґР»Р°РіР°С‚СЊ РєР»РёРµРЅС‚Сѓ resume."""
+    """Результат проверки, можно ли ещё предлагать клиенту resume."""
 
     room_code: str
     role: str
@@ -43,24 +43,24 @@ class ResumeEligibility:
 
 
 def get_quiz_activity_at(quiz: models.Quiz):
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ timestamp РїРѕСЃР»РµРґРЅРµРіРѕ Р·РЅР°С‡РёРјРѕРіРѕ РёРіСЂРѕРІРѕРіРѕ РґРµР№СЃС‚РІРёСЏ."""
+    """Возвращает timestamp последнего значимого игрового действия."""
     return quiz.last_activity_at or quiz.started_at or quiz.created_at
 
 
 def mark_quiz_activity(quiz: models.Quiz, *, occurred_at=None) -> None:
-    """Р¤РёРєСЃРёСЂСѓРµС‚ Р·РЅР°С‡РёРјРѕРµ РёРіСЂРѕРІРѕРµ РґРµР№СЃС‚РІРёРµ РґР»СЏ inactivity/resume Р»РѕРіРёРєРё."""
+    """Фиксирует значимое игровое действие для inactivity/resume логики."""
     quiz.last_activity_at = occurred_at or utc_now_naive()
 
 
 def is_participant_connected(participant: models.Player) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚, СЃС‡РёС‚Р°РµС‚СЃСЏ Р»Рё СѓС‡Р°СЃС‚РЅРёРє Р°РєС‚РёРІРЅС‹Рј РґР»СЏ reconnect/resume Р»РѕРіРёРєРё."""
+    """Проверяет, считается ли участник активным для reconnect/resume логики."""
     return connection_registry.is_connected(participant.id) or bool(
         getattr(participant, "sid", None)
     )
 
 
 def is_quiz_resume_window_expired(quiz: models.Quiz, *, now=None) -> bool:
-    """РћРїСЂРµРґРµР»СЏРµС‚, РёСЃС‚С‘Рє Р»Рё allowed resume window РґР»СЏ РёРіСЂС‹."""
+    """Определяет, истёк ли allowed resume window для игры."""
     if quiz.status in {"finished", "cancelled"}:
         return True
 
@@ -73,7 +73,7 @@ def is_quiz_resume_window_expired(quiz: models.Quiz, *, now=None) -> bool:
 
 
 def _find_host_participant(quiz: models.Quiz) -> models.Player | None:
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ host-participant РёРіСЂС‹, РµСЃР»Рё РѕРЅ РµСЃС‚СЊ Рё РЅРµ Р±С‹Р» kicked."""
+    """Возвращает host-participant игры, если он есть и не был kicked."""
     return next(
         (
             participant
@@ -91,7 +91,7 @@ def cancel_quiz(
     reason: str,
     cancelled_at=None,
 ) -> bool:
-    """РџРµСЂРµРІРѕРґРёС‚ РёРіСЂСѓ РІ `cancelled` Рё РїРёС€РµС‚ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРѕРµ СЃРѕР±С‹С‚РёРµ СЂРѕРІРЅРѕ РѕРґРёРЅ СЂР°Р·."""
+    """Переводит игру в `cancelled` и пишет аналитическое событие ровно один раз."""
     cancelled_at = cancelled_at or utc_now_naive()
     just_cancelled = quiz.status != "cancelled"
 
@@ -135,7 +135,7 @@ def evaluate_quiz_state(
     quiz: models.Quiz,
     now=None,
 ) -> QuizStateEvaluation:
-    """Р›РµРЅРёРІРѕ РїСЂРёРјРµРЅСЏРµС‚ timeout-РїСЂР°РІРёР»Р° Рє РёРіСЂРµ Рё РІРѕР·РІСЂР°С‰Р°РµС‚ РёС‚РѕРіРѕРІРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ."""
+    """Лениво применяет timeout-правила к игре и возвращает итоговое состояние."""
     resolved_now = now or utc_now_naive()
 
     if quiz.status == "cancelled":
@@ -199,7 +199,7 @@ def evaluate_quiz_state(
 
 
 def build_game_cancelled_payload(quiz: models.Quiz) -> dict:
-    """РЎС‚СЂРѕРёС‚ РµРґРёРЅС‹Р№ payload РґР»СЏ blocked/cancelled СЃС†РµРЅР°СЂРёРµРІ РЅР° РєР»РёРµРЅС‚Р°С…."""
+    """Строит единый payload для blocked/cancelled сценариев на клиентах."""
     return {
         "status": quiz.status,
         "reason": quiz.cancel_reason,
@@ -215,7 +215,7 @@ def _participant_matches_resume_identity(
     user_id: int | None,
     installation_public_id: str | None,
 ) -> bool:
-    """РЎРІРµСЂСЏРµС‚ resume credentials СЃ РєРѕРЅРєСЂРµС‚РЅС‹Рј СѓС‡Р°СЃС‚РЅРёРєРѕРј."""
+    """Сверяет resume credentials с конкретным участником."""
     if participant_token and verify_secret(participant_token, participant.reconnect_token_hash):
         return True
     if user_id is not None and participant.user_id == user_id:
@@ -237,7 +237,7 @@ def find_player_resume_candidate(
     user_id: int | None,
     installation_public_id: str | None,
 ) -> models.Player | None:
-    """РќР°С…РѕРґРёС‚ СѓС‡Р°СЃС‚РЅРёРєР°, РґР»СЏ РєРѕС‚РѕСЂРѕРіРѕ Р»РѕРєР°Р»СЊРЅС‹Рµ credentials РµС‰С‘ РјРѕРіСѓС‚ Р±С‹С‚СЊ РІР°Р»РёРґРЅС‹."""
+    """Находит участника, для которого локальные credentials ещё могут быть валидны."""
     active_players = [participant for participant in quiz.players if not participant.is_host]
 
     if participant_public_id:
@@ -291,7 +291,7 @@ def evaluate_resume_eligibility(
     installation_public_id: str | None = None,
     now=None,
 ) -> ResumeEligibility:
-    """РџСЂРѕРІРµСЂСЏРµС‚, РјРѕР¶РЅРѕ Р»Рё РµС‰С‘ РїСЂРµРґР»Р°РіР°С‚СЊ РєР»РёРµРЅС‚Сѓ resume РґР»СЏ РєРѕРЅРєСЂРµС‚РЅРѕР№ РёРіСЂС‹."""
+    """Проверяет, можно ли ещё предлагать клиенту resume для конкретной игры."""
     if quiz is None:
         return ResumeEligibility(
             room_code="",
@@ -387,7 +387,7 @@ def evaluate_resume_eligibility(
 
 
 def mark_participant_left(participant: models.Player, *, left_at=None) -> None:
-    """РџРµСЂРµРІРѕРґРёС‚ СѓС‡Р°СЃС‚РЅРёРєР° РІ `left` Рё СѓР±РёСЂР°РµС‚ РµРіРѕ РёР· resume/reconnect-РєР°РЅРґРёРґР°С‚РѕРІ."""
+    """Переводит участника в `left` и убирает его из resume/reconnect-кандидатов."""
     resolved_left_at = left_at or utc_now_naive()
     participant.status = "left"
     participant.left_at = resolved_left_at

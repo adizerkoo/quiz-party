@@ -1,5 +1,4 @@
-﻿"""Socket.IO РѕР±СЂР°Р±РѕС‚С‡РёРєРё Р»РѕР±Р±Рё, РІС…РѕРґР° РІ РєРѕРјРЅР°С‚Сѓ Рё СЂРµРєРѕРЅРЅРµРєС‚Р°."""
-
+"""Socket.IO-обработчики лобби, входа в комнату и реконнекта."""
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +24,7 @@ from backend.games.friends_game.resume import (
     mark_quiz_activity,
 )
 from backend.games.friends_game.service import (
+    DEFAULT_EMOJI,
     DevicePayload,
     ensure_installation,
     hash_secret,
@@ -42,22 +42,25 @@ logger = logging.getLogger(__name__)
 
 _pending_disconnects: dict[int, asyncio.Task] = {}
 _pending_host_timeouts: dict[int, asyncio.Task] = {}
+DEFAULT_PLAYER_NAME = "Игрок"
+DEFAULT_HOST_NAME = "Ведущий"
+HOST_NAME_PLACEHOLDERS = {"HOST", DEFAULT_HOST_NAME, DEFAULT_PLAYER_NAME}
 
 
 def _normalized_name(raw_name: str) -> str:
-    """РЎР°РЅРёС‚РёР·РёСЂСѓРµС‚ РёРјСЏ РёРіСЂРѕРєР° Рё РїРѕРґСЃС‚Р°РІР»СЏРµС‚ Р±РµР·РѕРїР°СЃРЅС‹Р№ fallback."""
+    """Санитизирует имя игрока и подставляет безопасный fallback."""
     cleaned = sanitize_text(raw_name[:15]).strip()
-    return cleaned if validate_player_name(cleaned) else "РРіСЂРѕРє"
+    return cleaned if validate_player_name(cleaned) else DEFAULT_PLAYER_NAME
 
 
 def _is_placeholder_host_name(name: str) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚, С‡С‚Рѕ РєР»РёРµРЅС‚ РїСЂРёСЃР»Р°Р» С‚РµС…РЅРёС‡РµСЃРєРёР№ placeholder РІРјРµСЃС‚Рѕ РЅРёРєР° С…РѕСЃС‚Р°."""
+    """Проверяет, что клиент прислал технический placeholder вместо ника хоста."""
     normalized = sanitize_text(name).strip()
-    return normalized in {"HOST", "Р’РµРґСѓС‰РёР№", "РРіСЂРѕРє"}
+    return normalized in HOST_NAME_PLACEHOLDERS
 
 
 def _ensure_unique_name(quiz: models.Quiz, requested_name: str) -> str:
-    """Р“Р°СЂР°РЅС‚РёСЂСѓРµС‚ СѓРЅРёРєР°Р»СЊРЅРѕСЃС‚СЊ РѕС‚РѕР±СЂР°Р¶Р°РµРјРѕРіРѕ РёРјРµРЅРё РІРЅСѓС‚СЂРё РѕРґРЅРѕР№ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+    """Гарантирует уникальность отображаемого имени внутри одной игровой сессии."""
     existing_names = {
         participant.name
         for participant in quiz.players
@@ -76,7 +79,7 @@ def _ensure_unique_name(quiz: models.Quiz, requested_name: str) -> str:
 
 
 def _pick_emoji(quiz: models.Quiz, preferred_emoji: str | None) -> str:
-    """РџРѕРґР±РёСЂР°РµС‚ emoji СѓС‡Р°СЃС‚РЅРёРєСѓ СЃ СѓС‡С‘С‚РѕРј СѓР¶Рµ Р·Р°РЅСЏС‚С‹С… Р°РІР°С‚Р°СЂРѕРІ РІ Р»РѕР±Р±Рё."""
+    """Подбирает emoji участнику с учётом уже занятых аватаров в лобби."""
     used_emojis = {
         participant.emoji
         for participant in quiz.players
@@ -90,7 +93,7 @@ def _find_disconnected_participant_by_token(
     quiz: models.Quiz,
     submitted_token: str | None,
 ) -> models.Player | None:
-    """РС‰РµС‚ РѕС‚РєР»СЋС‡РёРІС€РµРіРѕСЃСЏ СѓС‡Р°СЃС‚РЅРёРєР° РїРѕ reconnect token."""
+    """Ищет отключившегося участника по reconnect token."""
     if not submitted_token:
         return None
     for participant in quiz.players:
@@ -110,7 +113,7 @@ def _find_reconnect_candidate(
     resolved_user_id: int | None,
     submitted_token: str | None,
 ) -> models.Player | None:
-    """РџРѕРґР±РёСЂР°РµС‚ РєР°РЅРґРёРґР°С‚Р° РЅР° СЂРµРєРѕРЅРЅРµРєС‚ РїРѕ С‚РѕРєРµРЅСѓ, РёРјРµРЅРё РёР»Рё user_id."""
+    """Подбирает кандидата на реконнект по токену, имени или `user_id`."""
     by_token = _find_disconnected_participant_by_token(quiz, submitted_token)
     if by_token is not None:
         return by_token
@@ -135,7 +138,7 @@ def _find_kicked_participant(
     installation_id: int | None,
     submitted_token: str | None,
 ) -> models.Player | None:
-    """РС‰РµС‚ СѓР¶Рµ РєРёРєРЅСѓС‚РѕРіРѕ РёРіСЂРѕРєР°, С‡С‚РѕР±С‹ РЅРµ СЃРѕР·РґР°РІР°С‚СЊ РµРјСѓ РЅРѕРІСѓСЋ Р·Р°РїРёСЃСЊ РїСЂРё РїРѕРІС‚РѕСЂРЅРѕРј РІС…РѕРґРµ."""
+    """Ищет уже кикнутого игрока, чтобы не создавать ему новую запись при повторном входе."""
     kicked_players = [
         participant
         for participant in quiz.players
@@ -160,7 +163,7 @@ def _find_kicked_participant(
                 return participant
 
     if submitted_token is None and resolved_user_id is None and installation_id is None:
-        # Legacy fallback: РµСЃР»Рё Сѓ РєР»РёРµРЅС‚Р° РЅРµС‚ СЃС‚Р°Р±РёР»СЊРЅРѕР№ identity, РѕСЃС‚Р°С‘С‚СЃСЏ С‚РѕР»СЊРєРѕ РёРјСЏ.
+        # Legacy fallback: если у клиента нет стабильной identity, остаётся только имя.
         for participant in kicked_players:
             if participant.name == name:
                 return participant
@@ -176,7 +179,7 @@ def _find_left_participant(
     installation_id: int | None,
     submitted_token: str | None,
 ) -> models.Player | None:
-    """РС‰РµС‚ СѓС‡Р°СЃС‚РЅРёРєР°, РєРѕС‚РѕСЂС‹Р№ СѓР¶Рµ РїРѕРєРёРЅСѓР» РёРіСЂСѓ РґРѕР±СЂРѕРІРѕР»СЊРЅРѕ."""
+    """Ищет участника, который уже покинул игру добровольно."""
     left_players = [
         participant
         for participant in quiz.players
@@ -209,7 +212,7 @@ def _find_left_participant(
 
 
 def _find_host_participant(quiz: models.Quiz) -> models.Player | None:
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ host-participant РґР»СЏ С‚РµРєСѓС‰РµР№ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё, РµСЃР»Рё РѕРЅ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚."""
+    """Возвращает host-participant для текущей игровой сессии, если он уже существует."""
     return next(
         (
             participant
@@ -226,14 +229,14 @@ def _should_restore_host_mode(
     requested_role: str | None,
     submitted_host_token: str | None,
 ) -> bool:
-    """РџРµСЂРµРІРѕРґРёС‚ player-РІС…РѕРґ РІ host flow С‚РѕР»СЊРєРѕ РїСЂРё РІР°Р»РёРґРЅРѕРј host token СЌС‚РѕР№ РєРѕРјРЅР°С‚С‹."""
+    """Переводит player-вход в host flow только при валидном `host_token` этой комнаты."""
     if requested_role == "host":
         return True
     return verify_secret(submitted_host_token, quiz.host_secret_hash)
 
 
 async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player, host_token: str | None, participant_token: str) -> None:
-    """РћС‚РїСЂР°РІР»СЏРµС‚ РєР»РёРµРЅС‚Сѓ Р°РєС‚СѓР°Р»СЊРЅС‹Рµ reconnect/host credentials РїРѕСЃР»Рµ join."""
+    """Отправляет клиенту актуальные reconnect/host credentials после join."""
     await sio_manager.emit(
         "session_credentials",
         {
@@ -248,7 +251,7 @@ async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player
 
 
 def register_lobby_handlers(sio_manager):
-    """Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ socket-СЃРѕР±С‹С‚РёСЏ Р»РѕР±Р±Рё: join, disconnect Рё kick."""
+    """Регистрирует socket-события лобби: join, disconnect и kick."""
     async def _emit_game_cancelled(room: str, quiz: models.Quiz, *, target_sid: str | None = None):
         await sio_manager.emit("game_cancelled", build_game_cancelled_payload(quiz), room=target_sid or room)
 
@@ -256,7 +259,7 @@ def register_lobby_handlers(sio_manager):
         await sio_manager.emit("resume_unavailable", {"reason": reason}, room=target_sid)
 
     async def _emit_host_connection_state(room: str, *, host_offline: bool, target_sid: str | None = None):
-        """РЁР»С‘С‚ РєР»РёРµРЅС‚Р°Рј С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ С…РѕСЃС‚Р° РґР»СЏ РїРѕСЃС‚РѕСЏРЅРЅРѕРіРѕ РёРЅРґРёРєР°С‚РѕСЂР°."""
+        """Шлёт клиентам текущее состояние подключения хоста для постоянного индикатора."""
         await sio_manager.emit(
             "host_connection_state",
             {"hostOffline": host_offline},
@@ -283,7 +286,7 @@ def register_lobby_handlers(sio_manager):
             _pending_host_timeouts.pop(quiz_id, None)
 
     async def _delayed_disconnect_notify(participant_id: int, participant_name: str, participant_emoji: str, quiz_code: str):
-        """РћС‚Р»РѕР¶РµРЅРЅРѕ РїРѕРґС‚РІРµСЂР¶РґР°РµС‚ РѕС‚РєР»СЋС‡РµРЅРёРµ РёРіСЂРѕРєР°, РµСЃР»Рё СЂРµРєРѕРЅРЅРµРєС‚Р° РЅРµ РїСЂРѕРёР·РѕС€Р»Рѕ."""
+        """Отложенно подтверждает отключение игрока, если реконнекта не произошло."""
         await asyncio.sleep(5)
         if connection_registry.is_connected(participant_id):
             _pending_disconnects.pop(participant_id, None)
@@ -294,7 +297,7 @@ def register_lobby_handlers(sio_manager):
             if participant and participant.status == "disconnected":
                 quiz = db.query(models.Quiz).filter(models.Quiz.id == participant.quiz_id).first()
                 if quiz and quiz.status == "waiting":
-                    # Р’ Р»РѕР±Р±Рё РїСЂРѕСЃС‚Рѕ РїРµСЂРµРѕС‚СЂРёСЃРѕРІС‹РІР°РµРј СЃРїРёСЃРѕРє РёРіСЂРѕРєРѕРІ Р±РµР· РѕС‚РґРµР»СЊРЅРѕРіРѕ toast-СЃРѕР±С‹С‚РёСЏ.
+                    # В лобби просто переотрисовываем список игроков без отдельного toast-события.
                     players = get_players_in_quiz(db, quiz.id)
                     await sio_manager.emit("update_players", players, room=quiz_code)
                 else:
@@ -307,7 +310,7 @@ def register_lobby_handlers(sio_manager):
 
     @logged_socket_handler(sio_manager, "disconnect", logger)
     async def handle_disconnect(sid, *_):
-        """РџРµСЂРµРІРѕРґРёС‚ СѓС‡Р°СЃС‚РЅРёРєР° РІ disconnected/finished Рё РїР»Р°РЅРёСЂСѓРµС‚ РѕС‚Р»РѕР¶РµРЅРЅРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ."""
+        """Переводит участника в `disconnected`/`finished` и планирует отложенное уведомление."""
         connection = connection_registry.unbind_sid(sid)
 
         with database.get_db_session() as db:
@@ -333,7 +336,7 @@ def register_lobby_handlers(sio_manager):
 
             participant.last_seen_at = utc_now_naive()
             if quiz.status == "finished":
-                # РџРѕСЃР»Рµ Р·Р°РІРµСЂС€РµРЅРёСЏ РёРіСЂС‹ РЅРµ РґРµСЂР¶РёРј СѓС‡Р°СЃС‚РЅРёРєР° РІ disconnected-state.
+                # После завершения игры не держим участника в disconnected-state.
                 if participant.status != "kicked":
                     participant.status = "finished"
                 db.commit()
@@ -375,7 +378,7 @@ def register_lobby_handlers(sio_manager):
                 )
 
             if quiz.status in ("waiting", "playing") and not participant.is_host:
-                # Р”Р°С‘Рј РёРіСЂРѕРєСѓ РєРѕСЂРѕС‚РєРѕРµ РѕРєРЅРѕ РЅР° СЂРµРєРѕРЅРЅРµРєС‚, С‡С‚РѕР±С‹ РЅРµ С€СѓРјРµС‚СЊ Р»РёС€РЅРёРјРё СЃРѕР±С‹С‚РёСЏРјРё.
+                # Даём игроку короткое окно на реконнект, чтобы не шуметь лишними событиями.
                 old_task = _pending_disconnects.pop(participant.id, None)
                 if old_task:
                     old_task.cancel()
@@ -383,14 +386,14 @@ def register_lobby_handlers(sio_manager):
                     _delayed_disconnect_notify(
                         participant.id,
                         participant.name,
-                        participant.emoji or "рџ‘¤",
+                        participant.emoji or DEFAULT_EMOJI,
                         quiz.code,
                     )
                 )
 
     @logged_socket_handler(sio_manager, "kick_player", logger)
     async def handle_kick_player(sid, data):
-        """РСЃРєР»СЋС‡Р°РµС‚ РёРіСЂРѕРєР° РёР· Р»РѕР±Р±Рё РїРѕ РєРѕРјР°РЅРґРµ С…РѕСЃС‚Р°."""
+        """Исключает игрока из лобби по команде хоста."""
         if not rate_limiter.is_allowed(sid):
             log_event(
                 logger,
@@ -449,7 +452,7 @@ def register_lobby_handlers(sio_manager):
             pending_disconnect = _pending_disconnects.pop(participant.id, None)
             if pending_disconnect:
                 pending_disconnect.cancel()
-            # РџРѕСЃР»Рµ РєРёРєР° participant Р±РѕР»СЊС€Рµ РЅРµ РґРѕР»Р¶РµРЅ РІСЃРїР»С‹РІР°С‚СЊ РІ fallback-РїРѕРёСЃРєРµ РїРѕ sid.
+            # После кика participant больше не должен всплывать в fallback-поиске по sid.
             participant.sid = None
             log_session_event(
                 db,
@@ -476,7 +479,7 @@ def register_lobby_handlers(sio_manager):
 
     @logged_socket_handler(sio_manager, "leave_game", logger)
     async def handle_leave_game(sid, data):
-        """РџРѕР·РІРѕР»СЏРµС‚ РёРіСЂРѕРєСѓ РґРѕР±СЂРѕРІРѕР»СЊРЅРѕ РїРѕРєРёРЅСѓС‚СЊ РёРіСЂСѓ Р±РµР· РїСЂР°РІР° РЅР° reconnect."""
+        """Позволяет игроку добровольно покинуть игру без права на реконнект."""
         room = data.get("room")
         if not validate_quiz_code(room):
             return
@@ -521,7 +524,7 @@ def register_lobby_handlers(sio_manager):
 
     @logged_socket_handler(sio_manager, "join_room", logger)
     async def handle_join(sid, data):
-        """РћР±СЂР°Р±Р°С‚С‹РІР°РµС‚ РІС…РѕРґ С…РѕСЃС‚Р°/РёРіСЂРѕРєР° РІ РєРѕРјРЅР°С‚Сѓ Рё СЃС†РµРЅР°СЂРёРё СЂРµРєРѕРЅРЅРµРєС‚Р°."""
+        """Обрабатывает вход хоста/игрока в комнату и сценарии реконнекта."""
         if not rate_limiter.is_allowed(sid):
             log_event(
                 logger,
@@ -546,7 +549,7 @@ def register_lobby_handlers(sio_manager):
 
         requested_role = data.get("role")
         is_host = requested_role == "host"
-        requested_name = _normalized_name(str(data.get("name", "РРіСЂРѕРє")))
+        requested_name = _normalized_name(str(data.get("name", DEFAULT_PLAYER_NAME)))
         preferred_emoji = data.get("emoji") if data.get("emoji") in PLAYER_EMOJIS else None
         submitted_host_token = data.get("host_token")
         submitted_participant_token = data.get("participant_token") or data.get("reconnect_token")
@@ -577,8 +580,8 @@ def register_lobby_handlers(sio_manager):
                 await _emit_game_cancelled(room, quiz, target_sid=sid)
                 return
 
-            # Р•СЃР»Рё player-РјР°СЂС€СЂСѓС‚ РѕС‚РєСЂС‹РІР°РµС‚ СЃР°Рј С…РѕСЃС‚ СЃРѕ СЃРІРѕРёРј host token,
-            # РЅРµ СЃРѕР·РґР°С‘Рј РґСѓР±Р»РёРєР°С‚ РёРіСЂРѕРєР°, Р° РІРѕР·РІСЂР°С‰Р°РµРј РІ host flow.
+            # Если player-маршрут открывает сам хост со своим host token,
+            # не создаём дубликат игрока, а возвращаем в host flow.
             role_was_corrected = False
             if _should_restore_host_mode(
                 quiz,
@@ -596,7 +599,7 @@ def register_lobby_handlers(sio_manager):
                     .first()
                 )
             elif quiz.owner_id is not None and is_host:
-                # Р•СЃР»Рё С…РѕСЃС‚ РЅРµ РїСЂРёСЃР»Р°Р» user_id, РїСЂРѕР±СѓРµРј РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЊ РµРіРѕ РёР· owner С‚РµРєСѓС‰РµР№ СЃРµСЃСЃРёРё.
+                # Если хост не прислал user_id, пробуем восстановить его из owner текущей сессии.
                 resolved_user = (
                     db.query(identity_models.User)
                     .filter(identity_models.User.id == quiz.owner_id)
@@ -650,13 +653,13 @@ def register_lobby_handlers(sio_manager):
                     return
 
                 if existing_host is None:
-                    # РџРµСЂРІС‹Р№ РІС…РѕРґ С…РѕСЃС‚Р° СЃРѕР·РґР°С‘С‚ session_participant c role=host.
+                    # Первый вход хоста создаёт session_participant c role=host.
                     if _is_placeholder_host_name(requested_name):
-                        # РЎС‚Р°СЂС‹Рµ РєР»РёРµРЅС‚С‹ РјРѕРіР»Рё РїСЂРёСЃР»Р°С‚СЊ "HOST" РІРјРµСЃС‚Рѕ РЅР°СЃС‚РѕСЏС‰РµРіРѕ РЅРёРєР°.
+                        # Старые клиенты могли прислать "HOST" вместо настоящего ника.
                         requested_name = (
                             _normalized_name(resolved_user.username)
                             if resolved_user is not None
-                            else "Р’РµРґСѓС‰РёР№"
+                            else DEFAULT_HOST_NAME
                         )
 
                     host_name = _ensure_unique_name(quiz, requested_name)
@@ -679,8 +682,8 @@ def register_lobby_handlers(sio_manager):
                     if host_name != requested_name:
                         name_assigned = host_name
                 else:
-                    # РџСЂРё СЂРµРєРѕРЅРЅРµРєС‚Рµ С…РѕСЃС‚Р° РїРµСЂРµРёСЃРїРѕР»СЊР·СѓРµРј РїСЂРµР¶РЅСЋСЋ participant-Р·Р°РїРёСЃСЊ.
-                    # РџСЂРё reconnect СЃРѕС…СЂР°РЅСЏРµРј СѓР¶Рµ РІС‹Р±СЂР°РЅРЅРѕРµ РёРјСЏ С…РѕСЃС‚Р° РґР»СЏ СЃС‚Р°Р±РёР»СЊРЅРѕРіРѕ UX РІ СЂР°РјРєР°С… СЃРµСЃСЃРёРё.
+                    # При реконнекте хоста переиспользуем прежнюю participant-запись.
+                    # При reconnect сохраняем уже выбранное имя хоста для стабильного UX в рамках сессии.
                     participant = existing_host
                     is_reconnect = True
                     if _is_placeholder_host_name(participant.name) and resolved_user is not None:
@@ -698,7 +701,7 @@ def register_lobby_handlers(sio_manager):
                     participant.last_seen_at = utc_now_naive()
                     participant.disconnected_at = None
 
-                # РҐРѕСЃС‚-С‚РѕРєРµРЅ СЂРѕС‚РёСЂСѓРµС‚СЃСЏ РЅР° РєР°Р¶РґРѕРј СѓСЃРїРµС€РЅРѕРј РІС…РѕРґРµ.
+                # Хост-токен ротируется на каждом успешном входе.
                 host_token_to_return = issue_secret()
                 quiz.host_secret_hash = hash_secret(host_token_to_return)
                 quiz.host_left_at = None
@@ -787,7 +790,7 @@ def register_lobby_handlers(sio_manager):
                     return
 
                 if participant is None:
-                    # РќРѕРІС‹Р№ РёРіСЂРѕРє РјРѕР¶РµС‚ РІРѕР№С‚Рё С‚РѕР»СЊРєРѕ РґРѕ СЃС‚Р°СЂС‚Р° РёРіСЂС‹ Рё РїРѕРєР° РЅРµ РїРµСЂРµРїРѕР»РЅРµРЅР° РєРѕРјРЅР°С‚Р°.
+                    # Новый игрок может войти только до старта игры и пока не переполнена комната.
                     active_count = sum(
                         1
                         for item in quiz.players
@@ -826,7 +829,7 @@ def register_lobby_handlers(sio_manager):
                     if assigned_name != requested_name:
                         name_assigned = assigned_name
                 else:
-                    # Р РµРєРѕРЅРЅРµРєС‚ РёРіСЂРѕРєР° РѕР±РЅРѕРІР»СЏРµС‚ device/install info, РЅРѕ РЅРµ СЃРѕР·РґР°С‘С‚ РЅРѕРІСѓСЋ Р·Р°РїРёСЃСЊ.
+                    # Реконнект игрока обновляет device/install info, но не создаёт новую запись.
                     is_reconnect = True
                     participant.user = resolved_user or participant.user
                     participant.installation = installation or participant.installation
@@ -840,7 +843,7 @@ def register_lobby_handlers(sio_manager):
                     participant.last_seen_at = utc_now_naive()
                     participant.disconnected_at = None
 
-            # Participant token С‚Р°РєР¶Рµ СЂРѕС‚РёСЂСѓРµС‚СЃСЏ РЅР° РєР°Р¶РґРѕРј СѓСЃРїРµС€РЅРѕРј join/reconnect.
+            # Participant token также ротируется на каждом успешном join/reconnect.
             mark_quiz_activity(quiz)
             participant_token = issue_participant_token(participant)
             if participant.emoji is None:
@@ -881,13 +884,13 @@ def register_lobby_handlers(sio_manager):
 
             await sio_manager.emit("update_players", get_players_in_quiz(db, quiz.id), room=room)
 
-            # РћС‚РґРµР»СЊРЅРѕРµ СЃРѕР±С‹С‚РёРµ СЂРµРєРѕРЅРЅРµРєС‚Р° С€Р»С‘Рј С‚РѕР»СЊРєРѕ РµСЃР»Рё РёРіСЂРѕРє РІРµСЂРЅСѓР»СЃСЏ СѓР¶Рµ РІ Р°РєС‚РёРІРЅСѓСЋ РёРіСЂСѓ.
+            # Отдельное событие реконнекта шлём только если игрок вернулся уже в активную игру.
             if participant.is_host and quiz.status in ("waiting", "playing"):
                 await _emit_host_connection_state(room, host_offline=False)
             if quiz.status == "playing" and not participant.is_host and old_task is None and submitted_participant_token:
                 await sio_manager.emit(
                     "player_reconnected",
-                    {"name": participant.name, "emoji": participant.emoji or "рџ‘¤"},
+                    {"name": participant.name, "emoji": participant.emoji or DEFAULT_EMOJI},
                     room=room,
                 )
             join_event = "socket.reconnect.completed" if is_reconnect else "socket.join_room.completed"

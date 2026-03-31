@@ -10,16 +10,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dotenv import load_dotenv
+from backend.app import bootstrap_runtime
 
-env_path = Path(__file__).parent / ".env"
-load_dotenv(dotenv_path=env_path)
+bootstrap_runtime()
 
 from backend.app.database import init_db
-from backend.app.logging_config import log_event, mask_database_url, setup_logging
-
-
-setup_logging()
+from backend.app.logging_config import log_event, mask_database_url
 
 logger = logging.getLogger(__name__)
 

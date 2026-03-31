@@ -1,4 +1,4 @@
-﻿"""РћР±С‰РёРµ РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ РёРіСЂРѕРІС‹РјРё СЃРµСЃСЃРёСЏРјРё Рё СѓС‡Р°СЃС‚РЅРёРєР°РјРё."""
+﻿"""Общие вспомогательные функции для работы с игровыми сессиями и участниками."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def get_quiz_by_code(db: Session, room_code: str):
     """РС‰РµС‚ РёРіСЂРѕРІСѓСЋ СЃРµСЃСЃРёСЋ РїРѕ РєРѕРґСѓ РєРѕРјРЅР°С‚С‹ СЃ СѓС‡С‘С‚РѕРј РєСЌС€Р° Рё eager loading."""
     cached = get_cached_quiz(room_code)
     if cached:
-        # Р•СЃР»Рё РІ РєСЌС€Рµ РµСЃС‚СЊ id, СЃРЅР°С‡Р°Р»Р° РїСЂРѕР±СѓРµРј С‚РѕС‡РµС‡РЅС‹Р№ lookup РїРѕ РїРµСЂРІРёС‡РЅРѕРјСѓ РєР»СЋС‡Сѓ.
+        # Если в кэше есть id, сначала пробуем точечный lookup по первичному ключу.
         quiz = (
             load_quiz_graph(db.query(models.Quiz))
             .filter(models.Quiz.id == cached["id"])
@@ -26,7 +26,7 @@ def get_quiz_by_code(db: Session, room_code: str):
         )
         if quiz:
             return quiz
-        # Р•СЃР»Рё РєСЌС€ СѓРєР°Р·С‹РІР°РµС‚ РЅР° СѓР¶Рµ РЅРµСЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ Р·Р°РїРёСЃСЊ, РѕС‡РёС‰Р°РµРј РµРіРѕ.
+        # Если кэш указывает на уже несуществующую запись, очищаем его.
         invalidate_quiz(room_code)
 
     quiz = (
@@ -40,10 +40,10 @@ def get_quiz_by_code(db: Session, room_code: str):
 
 
 def get_player_by_sid(db: Session, sid: str):
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ СѓС‡Р°СЃС‚РЅРёРєР° РїРѕ Р°РєС‚РёРІРЅРѕРјСѓ Socket.IO sid.
+    """Возвращает участника по активному Socket.IO sid.
 
-    РЎРЅР°С‡Р°Р»Р° РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ in-memory runtime registry. Р¤allback РЅР° legacy `sid`
-    РЅСѓР¶РµРЅ РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё С‚РµСЃС‚РѕРІ Рё РїРµСЂРµС…РѕРґРЅРѕРіРѕ РїРµСЂРёРѕРґР° РїРѕСЃР»Рµ РЅРѕСЂРјР°Р»РёР·Р°С†РёРё.
+    Сначала используется in-memory runtime registry. Фallback на legacy `sid`
+    нужен для совместимости тестов и переходного периода после нормализации.
     """
     participant_id = connection_registry.get_participant_id(sid)
     if participant_id is None:
@@ -53,7 +53,7 @@ def get_player_by_sid(db: Session, sid: str):
 
 
 def verify_host(db: Session, quiz_id: int, sid: str) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚, С‡С‚Рѕ СѓРєР°Р·Р°РЅРЅС‹Р№ sid РїСЂРёРЅР°РґР»РµР¶РёС‚ С…РѕСЃС‚Сѓ РєРѕРЅРєСЂРµС‚РЅРѕР№ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+    """Проверяет, что указанный sid принадлежит хосту конкретной игровой сессии."""
     participant_id = connection_registry.get_participant_id(sid)
     if participant_id is not None:
         return (
@@ -72,7 +72,7 @@ def verify_host(db: Session, quiz_id: int, sid: str) -> bool:
 
 
 def get_players_in_quiz(db: Session, quiz_id: int):
-    """РЎРѕР±РёСЂР°РµС‚ СЃРµСЂРёР°Р»РёР·РѕРІР°РЅРЅРѕРµ РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РґР»СЏ socket-РѕС‚РІРµС‚РѕРІ."""
+    """Собирает сериализованное представление участников для socket-ответов."""
     players = (
         db.query(models.Player)
         .filter(
@@ -86,7 +86,7 @@ def get_players_in_quiz(db: Session, quiz_id: int):
     payload = []
     for player in players:
         item = build_participant_payload(player)
-        # Legacy fallback: РІ СЃС‚Р°СЂС‹С… С‚РµСЃС‚Р°С…/СЃС†РµРЅР°СЂРёСЏС… sid РјРѕРі Р¶РёС‚СЊ РїСЂСЏРјРѕ РЅР° РјРѕРґРµР»Рё.
+        # Legacy fallback: в старых тестах/сценариях sid мог жить прямо на модели.
         if not item["connected"] and getattr(player, "sid", None):
             item["connected"] = True
         payload.append(item)

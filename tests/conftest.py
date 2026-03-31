@@ -2,47 +2,47 @@
 Общие фикстуры для всех тестов Quiz Party.
 
 Предоставляет in-memory SQLite базу, TestClient FastAPI и фабрики
-для создания тестовых данных (викторины, игроки, вопросы).
+для создания тестовых данных: викторины, игроки и библиотечные вопросы.
 """
+
+from __future__ import annotations
 
 import os
 from pathlib import Path
-
-# ── Устанавливаем фиктивный DATABASE_URL до импорта backend ──────────
-# database.py создаёт engine при импорте, поэтому нужен валидный postgresql:// URL,
-# чтобы модуль загрузился. Реального подключения в тестах не будет.
-os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test_quiz")
-_TEST_LOG_DIR = Path(__file__).resolve().parent / "logs"
-os.environ["LOG_DIR"] = str(_TEST_LOG_DIR)
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+
+# Фиктивный DATABASE_URL нужен только для явного runtime-bootstrap в тестах.
+# backend.app.database больше не создаёт engine на import-time.
+os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test_quiz")
+_TEST_LOG_DIR = Path(__file__).resolve().parent / "logs"
+os.environ["LOG_DIR"] = str(_TEST_LOG_DIR)
+
 from backend.app.database import Base, get_db, load_model_modules
 from backend.games.friends_game.models import Player, Quiz
 from backend.games.friends_game.runtime_state import connection_registry
 
-# ── Мокаем init_db ДО импорта main (он вызывает init_db на уровне модуля) ──
+# Мокаем init_db до импорта main, потому что backend.app.main создаёт app на уровне модуля.
 import backend.app.database as _db_module
 
 _original_init_db = _db_module.init_db
-_db_module.init_db = lambda: None  # no-op при импорте main
+_db_module.init_db = lambda: None
 
-# Теперь безопасно импортировать main, init_db не попытается подключиться к PG.
 import backend.app.main as _main_module  # noqa: E402
 
 _app = _main_module.app
 
-# Восстанавливаем оригинал и подгружаем ORM-модули для metadata.
 _db_module.init_db = _original_init_db
 load_model_modules()
 
 
-# ── In-memory SQLite engine (один экземпляр, shared между потоками) ──
 @pytest.fixture(scope="session")
 def engine():
+    """Общий in-memory SQLite engine для тестового набора."""
     eng = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -55,11 +55,10 @@ def engine():
 
 @pytest.fixture()
 def db_session(engine):
-    """Изолированная сессия БД, таблицы пересоздаются для чистоты."""
+    """Изолированная сессия БД с полным пересозданием схемы перед тестом."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    session = sessionmaker(bind=engine)()
 
     yield session
 
@@ -68,6 +67,7 @@ def db_session(engine):
 
 @pytest.fixture(autouse=True)
 def clear_runtime_registry():
+    """Очищает in-memory runtime registry между тестами."""
     connection_registry._sid_to_connection.clear()
     connection_registry._participant_to_sid.clear()
     connection_registry._quiz_to_participants.clear()
@@ -77,14 +77,18 @@ def clear_runtime_registry():
     connection_registry._quiz_to_participants.clear()
 
 
-# ── FastAPI TestClient с подменой БД ─────────────────────────────────
 @pytest.fixture()
 def client(db_session):
-    """HTTP-клиент для тестирования API маршрутов."""
+    """HTTP-клиент для тестирования API с подменой БД на тестовую сессию."""
     from fastapi.testclient import TestClient
+
+    from backend.platform.content.service import ensure_system_question_bank_seed
 
     def _override_get_db():
         yield db_session
+
+    ensure_system_question_bank_seed(db_session)
+    db_session.commit()
 
     _app.dependency_overrides[get_db] = _override_get_db
     with TestClient(_app) as c:
@@ -92,7 +96,6 @@ def client(db_session):
     _app.dependency_overrides.clear()
 
 
-# ── Фабрики тестовых данных ──────────────────────────────────────────
 SAMPLE_QUESTIONS = [
     {
         "text": "Столица Франции?",
@@ -184,7 +187,7 @@ def playing_quiz(db_session, sample_quiz, sample_host, sample_player) -> Quiz:
 
 @pytest.fixture()
 def finished_quiz(db_session, sample_quiz, sample_host, sample_player) -> Quiz:
-    """Завершённая викторина с ответами и очками."""
+    """Завершённая викторина с ответами и очками игрока."""
     sample_player.answers_history = {"1": "Париж", "2": "4", "3": "Юпитер"}
     sample_player.scores_history = {"1": 1, "2": 1, "3": 1}
     sample_player.score = 3

@@ -7,14 +7,12 @@ from sqlalchemy.orm import Session
 
 from backend.app import database
 from backend.platform.content import schemas
-from backend.platform.content import models
 from backend.platform.content.repository import (
     add_favorite_question,
     list_favorite_questions,
     remove_favorite_question,
 )
 from backend.platform.content.service import (
-    ensure_system_question_bank_seed,
     get_template_draft_for_owner,
     list_library_categories,
     list_library_questions,
@@ -27,26 +25,12 @@ from backend.platform.identity.service import (
 )
 
 
-def _ensure_system_library_seeded(db: Session) -> None:
-    """Идемпотентно гарантирует наличие системных вопросов перед чтением library API."""
-    existing_system_question = (
-        db.query(models.QuestionBankQuestion.id)
-        .filter(models.QuestionBankQuestion.origin == "system")
-        .first()
-    )
-    if existing_system_question is not None:
-        return
-    ensure_system_question_bank_seed(db)
-    db.commit()
-
-
 def register_content_routes(app):
     """Регистрирует HTTP-маршруты content-домена на приложении."""
 
     @app.get("/api/v1/library/categories", response_model=list[schemas.LibraryCategoryResponse])
     def get_library_categories(db: Session = Depends(database.get_db)):
         """Возвращает активные серверные question-bank категории для library UI."""
-        _ensure_system_library_seeded(db)
         return list_library_categories(db)
 
     @app.get("/api/v1/library/questions", response_model=list[schemas.LibraryQuestionResponse])
@@ -61,7 +45,6 @@ def register_content_routes(app):
         auth: AuthenticatedUserContext | None = Depends(get_optional_authenticated_user),
     ):
         """Возвращает public или favorite reusable-вопросы для create/profile UI."""
-        _ensure_system_library_seeded(db)
         if scope == "favorites":
             if auth is None:
                 raise HTTPException(status_code=401, detail="Session token is required")

@@ -1,4 +1,4 @@
-﻿"""РћР±С‰РёРµ СЃРµСЂРІРёСЃС‹ backend, РєРѕС‚РѕСЂС‹Рµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ СЂР°Р·РЅС‹РјРё bounded context."""
+﻿"""Общие сервисы backend, которые используются разными bounded context."""
 
 from __future__ import annotations
 
@@ -27,24 +27,24 @@ DEFAULT_EMOJI = "👤"
 
 
 def hash_secret(secret: str) -> str:
-    """Р’РѕР·РІСЂР°С‰Р°РµС‚ SHA-256 С…СЌС€ СЃРµРєСЂРµС‚Р° РґР»СЏ С…СЂР°РЅРµРЅРёСЏ РІ Р‘Р”."""
+    """Возвращает SHA-256 хэш секрета для хранения в БД."""
     return sha256(secret.encode("utf-8")).hexdigest()
 
 
 def verify_secret(secret: str | None, secret_hash: str | None) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚ СЃРµРєСЂРµС‚ РїСЂРѕС‚РёРІ СЃРѕС…СЂР°РЅС‘РЅРЅРѕРіРѕ С…СЌС€Р° Р±РµР·РѕРїР°СЃРЅС‹Рј СЃСЂР°РІРЅРµРЅРёРµРј."""
+    """Проверяет секрет против сохранённого хэша безопасным сравнением."""
     if not secret or not secret_hash:
         return False
     return secrets.compare_digest(hash_secret(secret), secret_hash)
 
 
 def issue_secret() -> str:
-    """Р“РµРЅРµСЂРёСЂСѓРµС‚ РЅРѕРІС‹Р№ СЃРµРєСЂРµС‚ РґР»СЏ host token РёР»Рё reconnect token."""
+    """Генерирует новый секрет для host token или reconnect token."""
     return secrets.token_urlsafe(24)
 
 
 def load_quiz_graph(query: Query) -> Query:
-    """Р”РѕР±Р°РІР»СЏРµС‚ eager loading РґР»СЏ С‚РёРїРѕРІРѕРіРѕ РіСЂР°С„Р° РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё."""
+    """Добавляет eager loading для типового графа игровой сессии."""
     return query.options(
         selectinload(models.Quiz.template)
         .selectinload(content_models.QuizTemplate.questions)
@@ -57,7 +57,7 @@ def load_quiz_graph(query: Query) -> Query:
 
 
 def serialize_question(question: content_models.QuizQuestion, include_correct: bool) -> dict:
-    """РџСЂРµРѕР±СЂР°Р·СѓРµС‚ РІРѕРїСЂРѕСЃ ORM-РјРѕРґРµР»Рё РІ JSON-СЃРѕРІРјРµСЃС‚РёРјС‹Р№ payload РґР»СЏ API/socket."""
+    """Преобразует вопрос ORM-модели в JSON-совместимый payload для API/socket."""
     payload = {"text": question.text, "type": question.kind}
     options = [option.option_text for option in question.options] or None
     if options is not None:
@@ -68,7 +68,7 @@ def serialize_question(question: content_models.QuizQuestion, include_correct: b
 
 
 def serialize_quiz_questions(quiz: models.Quiz, include_correct: bool) -> list[dict]:
-    """РЎРµСЂРёР°Р»РёР·СѓРµС‚ РІСЃРµ РІРѕРїСЂРѕСЃС‹ РёРіСЂРѕРІРѕР№ СЃРµСЃСЃРёРё РІ РєР»РёРµРЅС‚СЃРєРёР№ С„РѕСЂРјР°С‚."""
+    """Сериализует все вопросы игровой сессии в клиентский формат."""
     return [
         serialize_question(question, include_correct=include_correct)
         for question in quiz.questions
@@ -88,7 +88,7 @@ def get_question_by_position(
 
 @dataclass
 class DevicePayload:
-    """РќРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹Р№ device/installations payload РёР· HTTP Рё socket РІС…РѕРґРѕРІ."""
+    """Нормализованный device/installations payload из HTTP и socket входов."""
 
     platform: str | None = None
     device_family: str | None = None
@@ -102,7 +102,7 @@ class DevicePayload:
 
     @classmethod
     def from_socket(cls, data: dict) -> "DevicePayload":
-        """РЎРѕР±РёСЂР°РµС‚ СЃРІРµРґРµРЅРёСЏ РѕР± СѓСЃС‚СЂРѕР№СЃС‚РІРµ РёР· socket payload."""
+        """Собирает сведения об устройстве из socket payload."""
         return cls(
             platform=data.get("device_platform") or data.get("platform") or data.get("device"),
             device_family=data.get("device"),
@@ -122,7 +122,7 @@ class DevicePayload:
         brand: str | None,
         installation_public_id: str | None = None,
     ) -> "DevicePayload":
-        """РЎРѕР±РёСЂР°РµС‚ РјРёРЅРёРјР°Р»СЊРЅС‹Р№ device payload РёР· HTTP API Р·Р°РїСЂРѕСЃР°."""
+        """Собирает минимальный device payload из HTTP API запроса."""
         return cls(
             platform=platform,
             device_brand=brand,
@@ -130,7 +130,7 @@ class DevicePayload:
         )
 
     def has_signal(self) -> bool:
-        """РџСЂРѕРІРµСЂСЏРµС‚, СЃРѕРґРµСЂР¶РёС‚ Р»Рё payload С…РѕС‚СЊ РєР°РєРёРµ-С‚Рѕ РїРѕР»РµР·РЅС‹Рµ device/installation РґР°РЅРЅС‹Рµ."""
+        """Проверяет, содержит ли payload хоть какие-то полезные device/installation данные."""
         return any(
             [
                 self.platform,
@@ -152,7 +152,7 @@ def ensure_installation(
     user: identity_models.User | None,
     device: DevicePayload,
 ) -> identity_models.UserInstallation | None:
-    """РќР°С…РѕРґРёС‚ РёР»Рё СЃРѕР·РґР°С‘С‚ installation/device Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."""
+    """Находит или создаёт installation/device запись пользователя."""
     if not device.has_signal():
         return None
 
@@ -243,7 +243,7 @@ def ensure_installation(
 
 
 def build_participant_payload(participant: models.Player) -> dict:
-    """РЎС‚СЂРѕРёС‚ socket/API payload СѓС‡Р°СЃС‚РЅРёРєР° РІ СЃРѕРІРјРµСЃС‚РёРјРѕРј СЃ legacy РєР»РёРµРЅС‚Р°РјРё РІРёРґРµ."""
+    """Строит socket/API payload участника в совместимом с legacy клиентами виде."""
     return {
         "name": participant.name,
         "is_host": participant.is_host,
@@ -257,30 +257,30 @@ def build_participant_payload(participant: models.Player) -> dict:
 
 
 def refresh_participant_score(participant: models.Player) -> int:
-    """РџРµСЂРµСЃС‡РёС‚С‹РІР°РµС‚ СЃСѓРјРјР°СЂРЅС‹Р№ СЃС‡С‘С‚ СѓС‡Р°СЃС‚РЅРёРєР° РїРѕ РµРіРѕ answer records."""
+    """Пересчитывает суммарный счёт участника по его answer records."""
     participant.score = sum(answer.awarded_points or 0 for answer in participant.answers)
     return participant.score
 
 
 def normalize_answer(value: str) -> str:
-    """РќРѕСЂРјР°Р»РёР·СѓРµС‚ РѕС‚РІРµС‚ РґР»СЏ case-insensitive СЃСЂР°РІРЅРµРЅРёСЏ."""
+    """Нормализует ответ для case-insensitive сравнения."""
     return normalize_answer_value(value)
 
 
 def validate_quiz_code(code: str) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚, С‡С‚Рѕ РєРѕРґ РєРѕРјРЅР°С‚С‹ РЅРµРїСѓСЃС‚РѕР№ Рё СЃРѕРґРµСЂР¶РёС‚ С‚РѕР»СЊРєРѕ Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРёРјРІРѕР»С‹."""
+    """Проверяет, что код комнаты непустой и содержит только безопасные символы."""
     if not code or len(code) > 20:
         return False
     return all(char.isalnum() or char == "-" for char in code)
 
 
 def validate_player_name(name: str) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚ РґРѕРїСѓСЃС‚РёРјСѓСЋ РґР»РёРЅСѓ РѕС‚РѕР±СЂР°Р¶Р°РµРјРѕРіРѕ РёРјРµРЅРё РёРіСЂРѕРєР°."""
+    """Проверяет допустимую длину отображаемого имени игрока."""
     return bool(name) and 1 <= len(name) <= 15
 
 
 def validate_answer(answer: str) -> bool:
-    """РџСЂРѕРІРµСЂСЏРµС‚, С‡С‚Рѕ РѕС‚РІРµС‚ РЅРµРїСѓСЃС‚РѕР№ Рё РЅРµ РїСЂРµРІС‹С€Р°РµС‚ РґРѕРїСѓСЃС‚РёРјСѓСЋ РґР»РёРЅСѓ."""
+    """Проверяет, что ответ непустой и не превышает допустимую длину."""
     return bool(answer) and len(str(answer)) <= 500
 
 
@@ -305,7 +305,7 @@ def upsert_answer(
     answer_time_seconds: float | None,
     submitted_at=None,
 ) -> tuple[models.ParticipantAnswer, bool]:
-    """РЎРѕР·РґР°С‘С‚ РёР»Рё РѕР±РЅРѕРІР»СЏРµС‚ РѕС‚РІРµС‚ СѓС‡Р°СЃС‚РЅРёРєР° РЅР° РєРѕРЅРєСЂРµС‚РЅС‹Р№ РІРѕРїСЂРѕСЃ."""
+    """Создаёт или обновляет ответ участника на конкретный вопрос."""
     answer = next((item for item in participant.answers if item.question_id == question.id), None)
     created = False
     if answer is None:
@@ -344,7 +344,7 @@ def apply_score_override(
     desired_points: int,
     created_by: models.Player | None,
 ) -> models.ScoreAdjustment | None:
-    """РџСЂРёРјРµРЅСЏРµС‚ СЂСѓС‡РЅСѓСЋ РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєСѓ РѕС‡РєРѕРІ РѕС‚ С…РѕСЃС‚Р°."""
+    """Применяет ручную корректировку очков от хоста."""
     answer = next((item for item in participant.answers if item.question_id == question.id), None)
     if answer is None:
         answer = models.ParticipantAnswer(
@@ -397,7 +397,7 @@ def log_session_event(
     question: content_models.QuizQuestion | None = None,
     payload: dict | None = None,
 ) -> models.SessionEvent:
-    """РЎРѕР·РґР°С‘С‚ Р°РЅР°Р»РёС‚РёС‡РµСЃРєРѕРµ СЃРѕР±С‹С‚РёРµ СЃРµСЃСЃРёРё Рё РґРѕР±Р°РІР»СЏРµС‚ РµРіРѕ РІ С‚РµРєСѓС‰СѓСЋ С‚СЂР°РЅР·Р°РєС†РёСЋ."""
+    """Создаёт аналитическое событие сессии и добавляет его в текущую транзакцию."""
     normalized_payload = payload or {}
     event = models.SessionEvent(
         quiz=quiz,
@@ -429,7 +429,7 @@ def _resolve_template_source_question_map(
     owner: identity_models.User | None,
     questions_payload: list[dict],
 ) -> dict[str, content_models.QuestionBankQuestion]:
-    """РЎРѕР±РёСЂР°РµС‚ РґРѕСЃС‚СѓРїРЅС‹Рµ source-question СЃСЃС‹Р»РєРё РґР»СЏ РЅРѕРІРѕРіРѕ С€Р°Р±Р»РѕРЅР° РєРІРёР·Р°."""
+    """Собирает доступные source-question ссылки для нового шаблона квиза."""
     source_public_ids = sorted(
         {
             str(raw_question.get("source_question_public_id") or "").strip()
@@ -464,7 +464,7 @@ def create_quiz_session(
     owner: identity_models.User | None,
     questions_payload: list[dict],
 ) -> tuple[models.Quiz, str]:
-    """РЎРѕР·РґР°С‘С‚ С€Р°Р±Р»РѕРЅ РєРІРёР·Р°, РІРѕРїСЂРѕСЃС‹ Рё РїРµСЂРІСѓСЋ РёРіСЂРѕРІСѓСЋ СЃРµСЃСЃРёСЋ."""
+    """Создаёт шаблон квиза, вопросы и первую игровую сессию."""
     template = content_models.QuizTemplate(
         owner=owner,
         title=title,
@@ -530,7 +530,7 @@ def create_quiz_session(
 
 
 def issue_participant_token(participant: models.Player) -> str:
-    """Р’С‹РїСѓСЃРєР°РµС‚ РЅРѕРІС‹Р№ reconnect token РґР»СЏ СѓС‡Р°СЃС‚РЅРёРєР° Рё СЃРѕС…СЂР°РЅСЏРµС‚ С‚РѕР»СЊРєРѕ РµРіРѕ С…СЌС€."""
+    """Выпускает новый reconnect token для участника и сохраняет только его хэш."""
     token = issue_secret()
     participant.reconnect_token_hash = hash_secret(token)
     return token

@@ -47,7 +47,7 @@ def _create_table_if_missing(inspector, table_name: str, factory):
 
 
 def _add_columns_if_missing(inspector, table_name: str, columns: list[tuple[str, sa.Column]]) -> None:
-    """Р”РѕР±Р°РІР»СЏРµС‚ РѕС‚СЃСѓС‚СЃС‚РІСѓСЋС‰РёРµ РєРѕР»РѕРЅРєРё РІ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ С‚Р°Р±Р»РёС†Сѓ."""
+    """Добавляет отсутствующие колонки в уже существующую таблицу."""
     if not inspector.has_table(table_name):
         return
 

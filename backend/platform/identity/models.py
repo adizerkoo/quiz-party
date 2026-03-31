@@ -60,12 +60,12 @@ class User(Base):
 
     @property
     def latest_installation(self) -> UserInstallation | None:
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ СЃР°РјСѓСЋ СЃРІРµР¶СѓСЋ installation-Р·Р°РїРёСЃСЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."""
+        """Возвращает самую свежую installation-запись пользователя."""
         return self.installations[0] if self.installations else None
 
     @property
     def installation_public_id(self) -> str | None:
-        """Р’РѕР·РІСЂР°С‰Р°РµС‚ public_id РїРѕСЃР»РµРґРЅРµР№ РёР·РІРµСЃС‚РЅРѕР№ СѓСЃС‚Р°РЅРѕРІРєРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."""
+        """Возвращает public_id последней известной установки пользователя."""
         installation = self.latest_installation
         return installation.public_id if installation else None
 

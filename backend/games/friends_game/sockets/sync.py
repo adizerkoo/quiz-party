@@ -12,7 +12,7 @@ from backend.games.friends_game.resume import (
     build_game_cancelled_payload,
     evaluate_quiz_state,
 )
-from backend.games.friends_game.service import validate_quiz_code
+from backend.games.friends_game.service import DEFAULT_EMOJI, validate_quiz_code
 
 
 logger = logging.getLogger(__name__)
@@ -105,8 +105,8 @@ def register_sync_handlers(sio_manager):
                 ),
                 None,
             )
-            # Р”Р»СЏ player UI РѕС‚РґР°С‘Рј С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ С…РѕСЃС‚Р°,
-            # С‡С‚РѕР±С‹ Р±Р°РЅРЅРµСЂ РєРѕСЂСЂРµРєС‚РЅРѕ РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°Р»СЃСЏ РїРѕСЃР»Рµ refresh/reconnect.
+            # Для player UI отдаём текущее состояние подключения хоста,
+            # чтобы баннер корректно восстанавливался после refresh/reconnect.
             host_offline = bool(
                 host_participant is not None
                 and not connection_registry.is_connected(host_participant.id)
@@ -124,7 +124,7 @@ def register_sync_handlers(sio_manager):
                     "answersHistory": answers_history,
                     "hostOffline": host_offline,
                     "score": participant.score if participant else 0,
-                    "emoji": participant.emoji if participant else "рџ‘¤",
+                    "emoji": participant.emoji if participant else DEFAULT_EMOJI,
                 },
                 room=sid,
             )

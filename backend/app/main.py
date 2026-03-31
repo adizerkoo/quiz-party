@@ -13,6 +13,10 @@ import fastapi_socketio as socketio
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from backend.app import bootstrap_runtime
+
+bootstrap_runtime()
+
 from backend.app import database
 from backend.app.config import ALLOWED_ORIGINS, DATA_PATH, FRONTEND_PATH
 from backend.app.logging_config import bind_log_context, generate_request_id, log_event

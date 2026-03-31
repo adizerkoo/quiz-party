@@ -5,10 +5,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 import logging
 import os
-from pathlib import Path
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -19,47 +17,16 @@ logger = logging.getLogger(__name__)
 Base = declarative_base()
 _MODELS_LOADED = False
 
-env_path = Path(__file__).resolve().parents[1] / ".env"
-load_dotenv(dotenv_path=env_path)
+DATABASE_URL: str | None = None
+engine = None
+SessionLocal = None
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL is required. Set a PostgreSQL connection string in backend/.env"
-    )
-
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-if not DATABASE_URL.startswith("postgresql://"):
-    raise RuntimeError(f"Only PostgreSQL is supported. Got: {DATABASE_URL}")
-
-log_event(
-    logger,
-    logging.INFO,
-    "db.engine.created",
-    "Database engine configured",
-    database=mask_database_url(DATABASE_URL),
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=300,
-)
-
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=300,
-)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    expire_on_commit=False,
-    bind=engine,
-)
+_ENGINE_SETTINGS = {
+    "pool_pre_ping": True,
+    "pool_size": 5,
+    "max_overflow": 10,
+    "pool_recycle": 300,
+}
 
 
 def load_model_modules() -> None:
@@ -75,11 +42,71 @@ def load_model_modules() -> None:
     _MODELS_LOADED = True
 
 
+def _normalize_database_url(database_url: str | None) -> str:
+    """Проверяет и нормализует строку подключения к PostgreSQL."""
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is required. Set a PostgreSQL connection string in backend/.env"
+        )
+
+    normalized_url = database_url
+    if normalized_url.startswith("postgres://"):
+        normalized_url = normalized_url.replace("postgres://", "postgresql://", 1)
+
+    if not normalized_url.startswith("postgresql://"):
+        raise RuntimeError(f"Only PostgreSQL is supported. Got: {normalized_url}")
+
+    return normalized_url
+
+
+def configure_database_runtime(database_url: str | None = None) -> str:
+    """Лениво создаёт engine и session factory только во время реального bootstrap backend."""
+    global DATABASE_URL
+    global SessionLocal
+    global engine
+
+    resolved_url = _normalize_database_url(database_url or os.getenv("DATABASE_URL"))
+    if DATABASE_URL == resolved_url and engine is not None and SessionLocal is not None:
+        return resolved_url
+
+    if engine is not None and DATABASE_URL != resolved_url:
+        engine.dispose()
+
+    DATABASE_URL = resolved_url
+    engine = create_engine(DATABASE_URL, **_ENGINE_SETTINGS)
+    SessionLocal = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+        bind=engine,
+    )
+    log_event(
+        logger,
+        logging.INFO,
+        "db.engine.created",
+        "Database engine configured",
+        database=mask_database_url(DATABASE_URL),
+        pool_size=_ENGINE_SETTINGS["pool_size"],
+        max_overflow=_ENGINE_SETTINGS["max_overflow"],
+        pool_recycle=_ENGINE_SETTINGS["pool_recycle"],
+    )
+    return DATABASE_URL
+
+
+def _require_database_runtime():
+    """Гарантирует, что engine и session factory уже инициализированы перед использованием БД."""
+    configure_database_runtime()
+    if engine is None or SessionLocal is None:
+        raise RuntimeError("Database runtime is not configured")
+    return engine, SessionLocal
+
+
 def _seed_system_question_bank() -> None:
     """Гарантирует наличие системных вопросов библиотеки в базе данных."""
     from backend.platform.content.service import ensure_system_question_bank_seed
 
-    db = SessionLocal()
+    _, session_factory = _require_database_runtime()
+    db = session_factory()
     try:
         ensure_system_question_bank_seed(db)
         db.commit()
@@ -92,15 +119,17 @@ def _seed_system_question_bank() -> None:
 
 def _verify_database_connection() -> None:
     """Выполняет лёгкую проверку доступности БД перед миграциями и трафиком."""
+    database_url = configure_database_runtime()
+    active_engine, _ = _require_database_runtime()
     try:
-        with engine.connect() as connection:
+        with active_engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         log_event(
             logger,
             logging.INFO,
             "db.connection.ready",
             "Database connection verified",
-            database=mask_database_url(DATABASE_URL),
+            database=mask_database_url(database_url),
         )
     except Exception:
         log_event(
@@ -108,7 +137,7 @@ def _verify_database_connection() -> None:
             logging.ERROR,
             "db.connection.failed",
             "Database connection check failed",
-            database=mask_database_url(DATABASE_URL),
+            database=mask_database_url(database_url),
             exc_info=True,
         )
         raise
@@ -116,7 +145,8 @@ def _verify_database_connection() -> None:
 
 def _repair_schema_after_fallback():
     """Чинит PostgreSQL-схему, если локальный fallback использовал create_all()."""
-    with engine.begin() as connection:
+    active_engine, _ = _require_database_runtime()
+    with active_engine.begin() as connection:
         inspector = inspect(connection)
         repaired_columns: dict[str, list[str]] = {}
 
@@ -390,14 +420,17 @@ def init_db():
         return
 
     load_model_modules()
+    database_url = configure_database_runtime()
     log_event(
         logger,
         logging.INFO,
         "db.init.started",
         "Database initialisation started",
-        database=mask_database_url(DATABASE_URL),
+        database=mask_database_url(database_url),
     )
     _verify_database_connection()
+
+    from pathlib import Path
 
     alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
     if alembic_ini.exists():
@@ -406,7 +439,7 @@ def init_db():
             from alembic.config import Config
 
             config = Config(str(alembic_ini))
-            config.set_main_option("sqlalchemy.url", DATABASE_URL)
+            config.set_main_option("sqlalchemy.url", database_url)
             log_event(
                 logger,
                 logging.INFO,
@@ -432,7 +465,8 @@ def init_db():
                 exc_info=True,
             )
 
-    Base.metadata.create_all(bind=engine)
+    active_engine, _ = _require_database_runtime()
+    Base.metadata.create_all(bind=active_engine)
     _repair_schema_after_fallback()
     _seed_system_question_bank()
     log_event(
@@ -446,7 +480,8 @@ def init_db():
 @contextmanager
 def get_db_session():
     """Открывает короткоживущую SQLAlchemy-сессию для внутреннего backend-кода."""
-    db = SessionLocal()
+    _, session_factory = _require_database_runtime()
+    db = session_factory()
     try:
         yield db
     finally:
@@ -455,7 +490,8 @@ def get_db_session():
 
 def get_db():
     """FastAPI-зависимость, которая отдаёт сессию БД для текущего запроса."""
-    db = SessionLocal()
+    _, session_factory = _require_database_runtime()
+    db = session_factory()
     try:
         yield db
     finally:

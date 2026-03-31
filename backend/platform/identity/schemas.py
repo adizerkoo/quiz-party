@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.app.config import PLAYER_EMOJIS
 
 class UserCreate(BaseModel):
-    """Payload СЃРѕР·РґР°РЅРёСЏ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ Рё РµРіРѕ installation layer."""
+    """Payload создания профиля пользователя и его installation layer."""
 
     username: str = Field(..., min_length=1, max_length=15)
     avatar_emoji: str
@@ -21,7 +21,7 @@ class UserCreate(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, value: str) -> str:
-        """РћРіСЂР°РЅРёС‡РёРІР°РµС‚ username РїРѕ РґР»РёРЅРµ РїРѕСЃР»Рµ trim."""
+        """Ограничивает username по длине после trim."""
         cleaned = value.strip()
         if len(cleaned) < 1 or len(cleaned) > 15:
             raise ValueError("username must contain 1..15 characters")
@@ -30,20 +30,20 @@ class UserCreate(BaseModel):
     @field_validator("avatar_emoji")
     @classmethod
     def validate_avatar_emoji(cls, value: str) -> str:
-        """Р Р°Р·СЂРµС€Р°РµС‚ С‚РѕР»СЊРєРѕ emoji РёР· СЃРµСЂРІРµСЂРЅРѕРіРѕ whitelist."""
+        """Разрешает только emoji из серверного whitelist."""
         if value not in PLAYER_EMOJIS:
             raise ValueError("avatar_emoji is not allowed")
         return value
 
 
 class UserUpdate(UserCreate):
-    """Payload РѕР±РЅРѕРІР»РµРЅРёСЏ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."""
+    """Payload обновления профиля пользователя."""
 
     pass
 
 
 class UserTouch(BaseModel):
-    """Payload РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ last_login_at Рё С‚РµРєСѓС‰РµР№ installation РёРЅС„РѕСЂРјР°С†РёРё."""
+    """Payload для обновления last_login_at и текущей installation информации."""
 
     device_platform: Optional[str] = Field(default=None, max_length=20)
     device_brand: Optional[str] = Field(default=None, max_length=50)
@@ -57,7 +57,7 @@ class UserSessionExchangeRequest(UserTouch):
 
 
 class UserResponse(BaseModel):
-    """РџСѓР±Р»РёС‡РЅРѕРµ РїСЂРµРґСЃС‚Р°РІР»РµРЅРёРµ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РІ РѕС‚РІРµС‚Р°С… API."""
+    """Публичное представление профиля пользователя в ответах API."""
 
     id: int
     public_id: Optional[str] = None

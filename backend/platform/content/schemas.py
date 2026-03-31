@@ -8,7 +8,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 class QuestionSchema(BaseModel):
-    """РЎС…РµРјР° РѕРґРЅРѕРіРѕ РІРѕРїСЂРѕСЃР°, РїСЂРёС…РѕРґСЏС‰РµРіРѕ РїСЂРё СЃРѕР·РґР°РЅРёРё РєРІРёР·Р°."""
+    """Схема одного вопроса, приходящего при создании квиза."""
 
     text: str = Field(..., min_length=1, max_length=500)
     type: str
@@ -19,7 +19,7 @@ class QuestionSchema(BaseModel):
     @field_validator("type")
     @classmethod
     def validate_type(cls, value: str) -> str:
-        """Р Р°Р·СЂРµС€Р°РµС‚ С‚РѕР»СЊРєРѕ РїРѕРґРґРµСЂР¶РёРІР°РµРјС‹Рµ С‚РёРїС‹ РІРѕРїСЂРѕСЃРѕРІ."""
+        """Разрешает только поддерживаемые типы вопросов."""
         if value not in ("text", "options"):
             raise ValueError('type must be "text" or "options"')
         return value
@@ -36,7 +36,7 @@ class QuestionSchema(BaseModel):
     @field_validator("options")
     @classmethod
     def validate_options(cls, value: Optional[List[str]]) -> Optional[List[str]]:
-        """РџСЂРѕРІРµСЂСЏРµС‚ РґРѕРїСѓСЃС‚РёРјРѕРµ С‡РёСЃР»Рѕ Рё РґР»РёРЅСѓ РІР°СЂРёР°РЅС‚РѕРІ РѕС‚РІРµС‚Р°."""
+        """Проверяет допустимое число и длину вариантов ответа."""
         if value is not None:
             if len(value) < 2:
                 raise ValueError("Minimum 2 options required")

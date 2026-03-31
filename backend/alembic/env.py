@@ -12,6 +12,10 @@ PROJECT_ROOT = BASE_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from backend.app import bootstrap_runtime  # noqa: E402
+
+bootstrap_runtime(configure_logging=False)
+
 from backend.app.database import Base, load_model_modules  # noqa: E402
 
 config = context.config
