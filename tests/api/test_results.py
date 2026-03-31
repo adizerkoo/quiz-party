@@ -6,7 +6,7 @@ GET /api/v1/quizzes/{code}/results
 
 import allure
 
-from backend.models import Player
+from backend.games.friends_game.models import Player
 
 
 @allure.feature("API")

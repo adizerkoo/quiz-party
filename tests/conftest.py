@@ -9,37 +9,38 @@ import os
 from pathlib import Path
 
 # ── Устанавливаем фиктивный DATABASE_URL до импорта backend ──────────
-# database.py создаёт engine при импорте — нужен валидный postgresql:// URL,
+# database.py создаёт engine при импорте, поэтому нужен валидный postgresql:// URL,
 # чтобы модуль загрузился. Реального подключения в тестах не будет.
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/test_quiz")
 _TEST_LOG_DIR = Path(__file__).resolve().parent / "logs"
 os.environ["LOG_DIR"] = str(_TEST_LOG_DIR)
 
 import pytest
-from unittest.mock import patch as _patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.models import Base, Quiz, Player
-from backend.runtime_state import connection_registry
+from backend.app.database import Base, get_db, load_model_modules
+from backend.games.friends_game.models import Player, Quiz
+from backend.games.friends_game.runtime_state import connection_registry
 
 # ── Мокаем init_db ДО импорта main (он вызывает init_db на уровне модуля) ──
-import backend.database as _db_module
+import backend.app.database as _db_module
+
 _original_init_db = _db_module.init_db
 _db_module.init_db = lambda: None  # no-op при импорте main
 
-from backend.database import get_db
+# Теперь безопасно импортировать main, init_db не попытается подключиться к PG.
+import backend.app.main as _main_module  # noqa: E402
 
-# Теперь безопасно импортировать main — init_db не попытается подключиться к PG
-import backend.main as _main_module  # noqa: E402
 _app = _main_module.app
 
-# Восстанавливаем оригинал (не критично, но чисто)
+# Восстанавливаем оригинал и подгружаем ORM-модули для metadata.
 _db_module.init_db = _original_init_db
+load_model_modules()
 
 
-# ── In-memory SQLite engine (один экземпляр, shared между потоками) ───
+# ── In-memory SQLite engine (один экземпляр, shared между потоками) ──
 @pytest.fixture(scope="session")
 def engine():
     eng = create_engine(
@@ -54,7 +55,7 @@ def engine():
 
 @pytest.fixture()
 def db_session(engine):
-    """Изолированная сессия БД — таблицы пересоздаются для чистоты."""
+    """Изолированная сессия БД, таблицы пересоздаются для чистоты."""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)

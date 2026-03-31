@@ -9,11 +9,12 @@ import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.models import Quiz, Player, User, UserInstallation
-from backend.sockets.lobby import register_lobby_handlers
-from backend.cache import _quiz_cache
-from backend.runtime_state import connection_registry
-from backend.services import hash_secret
+from backend.games.friends_game.cache import _quiz_cache
+from backend.games.friends_game.models import Player, Quiz
+from backend.games.friends_game.runtime_state import connection_registry
+from backend.games.friends_game.service import hash_secret
+from backend.games.friends_game.sockets.lobby import register_lobby_handlers
+from backend.platform.identity.models import User, UserInstallation
 
 
 class FakeSioManager:
@@ -70,7 +71,7 @@ class TestJoinRoom:
     async def test_new_player_joins(self, sio, db_session, sample_quiz, sample_host):
         """Новый игрок создаётся в БД, получает sid и emoji, emit вызывается."""
         with allure.step("Отправляем join_room от нового игрока"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -100,7 +101,7 @@ class TestJoinRoom:
         db_session.commit()
         db_session.refresh(user)
 
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -123,7 +124,7 @@ class TestJoinRoom:
     async def test_host_joins(self, sio, db_session, sample_quiz):
         """Подключение с role=host создаёт игрока с is_host=True."""
         with allure.step("Отправляем join_room с role=host"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -147,7 +148,7 @@ class TestJoinRoom:
         db_session.commit()
         db_session.refresh(host_user)
 
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -168,7 +169,7 @@ class TestJoinRoom:
     async def test_duplicate_host_blocked(self, sio, db_session, sample_quiz, sample_host):
         """Попытка подключения второго хоста → emit('host_already_connected')."""
         with allure.step("Пытаемся подключить второго хоста"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -187,7 +188,7 @@ class TestJoinRoom:
     @pytest.mark.asyncio
     async def test_name_conflict_resolved(self, sio, db_session, sample_quiz, sample_host, sample_player):
         """Дублирующееся имя → emit('name_assigned') с изменённым именем."""
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -210,7 +211,7 @@ class TestJoinRoom:
             db_session.commit()
 
         with allure.step("Повторно подключаем игрока"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -240,7 +241,7 @@ class TestJoinRoom:
     @pytest.mark.asyncio
     async def test_late_join_blocked(self, sio, db_session, playing_quiz):
         """status=playing → emit('game_already_started')."""
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -258,7 +259,7 @@ class TestJoinRoom:
     @pytest.mark.asyncio
     async def test_name_sanitized(self, sio, db_session, sample_quiz, sample_host):
         """Имя '<b>Evil</b>' санитизируется — теги удаляются."""
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -282,7 +283,7 @@ class TestJoinRoom:
         connection_registry.unbind_sid("host-sid-001")
         db_session.commit()
 
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -316,7 +317,7 @@ class TestJoinRoomCredentials:
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_join_emits_participant_credentials(self, sio, db_session, sample_quiz, sample_host):
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -335,7 +336,7 @@ class TestJoinRoomCredentials:
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_join_emits_host_credentials(self, sio, db_session, sample_quiz):
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -361,7 +362,7 @@ class TestDisconnect:
     async def test_disconnect_clears_sid(self, sio, db_session, sample_quiz, sample_player):
         """disconnect → player.sid = None в БД."""
         with allure.step("Отправляем событие disconnect"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -376,7 +377,7 @@ class TestDisconnect:
     @pytest.mark.asyncio
     async def test_disconnect_unknown_sid(self, sio, db_session):
         """disconnect с несуществующим sid не вызывает ошибок."""
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -387,7 +388,7 @@ class TestDisconnect:
     @pytest.mark.asyncio
     async def test_disconnect_accepts_reason_argument(self, sio, db_session, sample_quiz, sample_player):
         """Новая сигнатура обработчика совместима с `disconnect(sid, reason)`."""
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -400,7 +401,7 @@ class TestDisconnect:
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_host_disconnect_emits_host_offline_state(self, sio, db_session, sample_quiz, sample_host, sample_player):
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -421,7 +422,7 @@ class TestKickPlayer:
     async def test_host_kicks_player(self, sio, db_session, sample_quiz, sample_host, sample_player):
         """Хост кикает игрока → игрок удаляется из БД."""
         with allure.step("Хост отправляет kick_player"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -449,7 +450,7 @@ class TestKickPlayer:
         sample_player.name = "\u0420\x98\u0420\u0456\u0421\u0402\u0420\u0455\u0420\u04541"
         db_session.commit()
 
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -466,7 +467,7 @@ class TestKickPlayer:
         sio.enter_room.reset_mock()
         sio.leave_room.reset_mock()
 
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -501,7 +502,7 @@ class TestKickPlayer:
             db_session.commit()
 
         with allure.step("Обычный игрок пытается кикнуть P2"):
-            with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+            with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
                 mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
                 mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -522,7 +523,7 @@ class TestLeaveGame:
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_player_leave_marks_left_and_blocks_rejoin(self, sio, db_session, sample_quiz, sample_host, sample_player):
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -544,7 +545,7 @@ class TestLeaveGame:
         sio.emit.reset_mock()
         sio.enter_room.reset_mock()
 
-        with patch("backend.sockets.lobby.database.get_db_session") as mock_ctx:
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
             mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 

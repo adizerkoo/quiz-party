@@ -1,7 +1,7 @@
-"""
-Тесты Socket.IO — обработчики синхронизации (sync.py).
+﻿"""
+РўРµСЃС‚С‹ Socket.IO вЂ” РѕР±СЂР°Р±РѕС‚С‡РёРєРё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё (sync.py).
 
-Тестирует request_sync и get_update — отправку состояния при реконнекте.
+РўРµСЃС‚РёСЂСѓРµС‚ request_sync Рё get_update вЂ” РѕС‚РїСЂР°РІРєСѓ СЃРѕСЃС‚РѕСЏРЅРёСЏ РїСЂРё СЂРµРєРѕРЅРЅРµРєС‚Рµ.
 """
 
 from datetime import timedelta
@@ -10,11 +10,11 @@ import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend import models
-from backend.models import Player
-from backend.runtime_state import connection_registry
-from backend.sockets.sync import register_sync_handlers
-from backend.cache import _quiz_cache
+from backend.games.friends_game.cache import _quiz_cache
+from backend.games.friends_game.runtime_state import connection_registry
+from backend.games.friends_game.models import Player
+from backend.games.friends_game.sockets.sync import register_sync_handlers
+from backend.shared.utils import utc_now_naive
 
 
 class FakeSioManager:
@@ -49,7 +49,7 @@ def clear_cache():
 
 
 def _patch_db(db_session):
-    mock = patch("backend.sockets.sync.database.get_db_session")
+    mock = patch("backend.games.friends_game.sockets.sync.database.get_db_session")
     ctx = mock.start()
     ctx.return_value.__enter__ = MagicMock(return_value=db_session)
     ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -58,21 +58,21 @@ def _patch_db(db_session):
 @allure.feature("Socket.IO")
 @allure.story("Request Sync")
 class TestRequestSync:
-    """Тесты синхронизации состояния при реконнекте."""
+    """РўРµСЃС‚С‹ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё СЃРѕСЃС‚РѕСЏРЅРёСЏ РїСЂРё СЂРµРєРѕРЅРЅРµРєС‚Рµ."""
 
-    @allure.title("Sync для waiting-викторины возвращает базовое состояние")
+    @allure.title("Sync РґР»СЏ waiting-РІРёРєС‚РѕСЂРёРЅС‹ РІРѕР·РІСЂР°С‰Р°РµС‚ Р±Р°Р·РѕРІРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_sync_waiting_quiz(self, sio, db_session, sample_quiz, sample_host, sample_player):
-        """status=waiting → sync_state с currentQuestion=0."""
-        with allure.step("Отправляем request_sync"):
+        """status=waiting в†’ sync_state СЃ currentQuestion=0."""
+        with allure.step("РћС‚РїСЂР°РІР»СЏРµРј request_sync"):
             mock = _patch_db(db_session)
             try:
                 await sio.call("request_sync", "player-sid-001", {"room": "PARTY-TEST1"})
             finally:
                 mock.stop()
 
-        with allure.step("Проверяем sync_state для waiting"):
+        with allure.step("РџСЂРѕРІРµСЂСЏРµРј sync_state РґР»СЏ waiting"):
             sio.emit.assert_called()
             call = sio.emit.call_args_list[0]
             assert call.args[0] == "sync_state"
@@ -81,37 +81,37 @@ class TestRequestSync:
             assert state["status"] == "waiting"
             assert state["currentQuestion"] == 0
 
-    @allure.title("Sync для playing-викторины отправляет текущий вопрос")
+    @allure.title("Sync РґР»СЏ playing-РІРёРєС‚РѕСЂРёРЅС‹ РѕС‚РїСЂР°РІР»СЏРµС‚ С‚РµРєСѓС‰РёР№ РІРѕРїСЂРѕСЃ")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_sync_playing_quiz(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """status=playing → sync_state с currentQuestion=1."""
-        with allure.step("Отправляем request_sync для идущей игры"):
+        """status=playing в†’ sync_state СЃ currentQuestion=1."""
+        with allure.step("РћС‚РїСЂР°РІР»СЏРµРј request_sync РґР»СЏ РёРґСѓС‰РµР№ РёРіСЂС‹"):
             mock = _patch_db(db_session)
             try:
                 await sio.call("request_sync", "player-sid-001", {"room": playing_quiz.code})
             finally:
                 mock.stop()
 
-        with allure.step("Проверяем текущий вопрос"):
+        with allure.step("РџСЂРѕРІРµСЂСЏРµРј С‚РµРєСѓС‰РёР№ РІРѕРїСЂРѕСЃ"):
             call = sio.emit.call_args_list[0]
             state = call.args[1]
             assert state["status"] == "playing"
             assert state["currentQuestion"] == 1
 
-    @allure.title("Sync для finished-викторины дополнительно отправляет show_results")
+    @allure.title("Sync РґР»СЏ finished-РІРёРєС‚РѕСЂРёРЅС‹ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕ РѕС‚РїСЂР°РІР»СЏРµС‚ show_results")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_sync_finished_sends_results(self, sio, db_session, finished_quiz, sample_host, sample_player):
-        """status=finished → sync_state + show_results."""
-        with allure.step("Отправляем request_sync для завершённой игры"):
+        """status=finished в†’ sync_state + show_results."""
+        with allure.step("РћС‚РїСЂР°РІР»СЏРµРј request_sync РґР»СЏ Р·Р°РІРµСЂС€С‘РЅРЅРѕР№ РёРіСЂС‹"):
             mock = _patch_db(db_session)
             try:
                 await sio.call("request_sync", "player-sid-001", {"room": finished_quiz.code})
             finally:
                 mock.stop()
 
-        with allure.step("Проверяем наличие sync_state и show_results"):
+        with allure.step("РџСЂРѕРІРµСЂСЏРµРј РЅР°Р»РёС‡РёРµ sync_state Рё show_results"):
             events = [c.args[0] for c in sio.emit.call_args_list]
             assert "sync_state" in events
             assert "show_results" in events
@@ -123,36 +123,36 @@ class TestRequestSync:
             show_call = next(call for call in sio.emit.call_args_list if call.args[0] == "show_results")
             assert show_call.args[1] == {"code": finished_quiz.code, "status": "finished"}
 
-    @allure.title("Sync содержит данные конкретного игрока")
+    @allure.title("Sync СЃРѕРґРµСЂР¶РёС‚ РґР°РЅРЅС‹Рµ РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РёРіСЂРѕРєР°")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_sync_includes_player_data(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Ответ содержит score, emoji, answersHistory конкретного игрока."""
-        with allure.step("Устанавливаем данные игрока"):
+        """РћС‚РІРµС‚ СЃРѕРґРµСЂР¶РёС‚ score, emoji, answersHistory РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РёРіСЂРѕРєР°."""
+        with allure.step("РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РґР°РЅРЅС‹Рµ РёРіСЂРѕРєР°"):
             sample_player.scores_history = {"1": 1}
             sample_player.score = 1
-            sample_player.emoji = "🐱"
+            sample_player.emoji = "рџђ±"
             sample_player.answers_history = {"1": "test"}
             db_session.commit()
 
-        with allure.step("Отправляем request_sync"):
+        with allure.step("РћС‚РїСЂР°РІР»СЏРµРј request_sync"):
             mock = _patch_db(db_session)
             try:
                 await sio.call("request_sync", "player-sid-001", {"room": playing_quiz.code})
             finally:
                 mock.stop()
 
-        with allure.step("Проверяем данные игрока в sync_state"):
+        with allure.step("РџСЂРѕРІРµСЂСЏРµРј РґР°РЅРЅС‹Рµ РёРіСЂРѕРєР° РІ sync_state"):
             state = sio.emit.call_args_list[0].args[1]
             assert state["score"] == 1
-            assert state["emoji"] == "🐱"
+            assert state["emoji"] == "рџђ±"
             assert state["answersHistory"] == {"1": "test"}
 
-    @allure.title("Хост при sync получает список отключённых игроков")
+    @allure.title("РҐРѕСЃС‚ РїСЂРё sync РїРѕР»СѓС‡Р°РµС‚ СЃРїРёСЃРѕРє РѕС‚РєР»СЋС‡С‘РЅРЅС‹С… РёРіСЂРѕРєРѕРІ")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_sync_host_gets_disconnected_list(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """Хост получает emit('init_disconnected') со списком офлайн-игроков."""
+        """РҐРѕСЃС‚ РїРѕР»СѓС‡Р°РµС‚ emit('init_disconnected') СЃРѕ СЃРїРёСЃРєРѕРј РѕС„Р»Р°Р№РЅ-РёРіСЂРѕРєРѕРІ."""
         sample_player.sid = None
         db_session.commit()
 
@@ -165,7 +165,7 @@ class TestRequestSync:
         events = [c.args[0] for c in sio.emit.call_args_list]
         assert "init_disconnected" in events
 
-    @allure.title("Sync для несуществующей комнаты — ничего не отправляется")
+    @allure.title("Sync РґР»СЏ РЅРµСЃСѓС‰РµСЃС‚РІСѓСЋС‰РµР№ РєРѕРјРЅР°С‚С‹ вЂ” РЅРёС‡РµРіРѕ РЅРµ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ")
     @allure.severity(allure.severity_level.MINOR)
     @pytest.mark.asyncio
     @allure.title("Sync for player includes host offline flag")
@@ -190,7 +190,7 @@ class TestRequestSync:
     @allure.severity(allure.severity_level.MINOR)
     @pytest.mark.asyncio
     async def test_sync_missing_quiz(self, sio, db_session):
-        """Несуществующий room → emit не вызывается."""
+        """РќРµСЃСѓС‰РµСЃС‚РІСѓСЋС‰РёР№ room в†’ emit РЅРµ РІС‹Р·С‹РІР°РµС‚СЃСЏ."""
         mock = _patch_db(db_session)
         try:
             await sio.call("request_sync", "sid-x", {"room": "PARTY-NOPE0"})
@@ -199,11 +199,11 @@ class TestRequestSync:
 
         sio.emit.assert_not_called()
 
-    @allure.title("Пустой код комнаты — ничего не отправляется")
+    @allure.title("РџСѓСЃС‚РѕР№ РєРѕРґ РєРѕРјРЅР°С‚С‹ вЂ” РЅРёС‡РµРіРѕ РЅРµ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ")
     @allure.severity(allure.severity_level.MINOR)
     @pytest.mark.asyncio
     async def test_sync_ignored_without_active_participant(self, sio, db_session, sample_quiz, sample_host, sample_player):
-        """Защищает от фантомной комнаты, если join_room был отклонён или ещё не завершился."""
+        """Р—Р°С‰РёС‰Р°РµС‚ РѕС‚ С„Р°РЅС‚РѕРјРЅРѕР№ РєРѕРјРЅР°С‚С‹, РµСЃР»Рё join_room Р±С‹Р» РѕС‚РєР»РѕРЅС‘РЅ РёР»Рё РµС‰С‘ РЅРµ Р·Р°РІРµСЂС€РёР»СЃСЏ."""
         sample_player.sid = None
         db_session.commit()
 
@@ -215,11 +215,11 @@ class TestRequestSync:
 
         sio.emit.assert_not_called()
 
-    @allure.title("Sync не отправляется, если sid не привязан к участнику комнаты")
+    @allure.title("Sync РЅРµ РѕС‚РїСЂР°РІР»СЏРµС‚СЃСЏ, РµСЃР»Рё sid РЅРµ РїСЂРёРІСЏР·Р°РЅ Рє СѓС‡Р°СЃС‚РЅРёРєСѓ РєРѕРјРЅР°С‚С‹")
     @allure.severity(allure.severity_level.CRITICAL)
     @pytest.mark.asyncio
     async def test_sync_invalid_room(self, sio):
-        """Пустой room → emit не вызывается."""
+        """РџСѓСЃС‚РѕР№ room в†’ emit РЅРµ РІС‹Р·С‹РІР°РµС‚СЃСЏ."""
         await sio.call("request_sync", "sid-x", {"room": ""})
         sio.emit.assert_not_called()
 
@@ -228,7 +228,7 @@ class TestRequestSync:
     @pytest.mark.asyncio
     async def test_sync_cancels_game_after_host_timeout(self, sio, db_session, playing_quiz, sample_host, sample_player):
         sample_host.sid = None
-        playing_quiz.host_left_at = models._utc_now() - timedelta(minutes=16)
+        playing_quiz.host_left_at = utc_now_naive() - timedelta(minutes=16)
         connection_registry.unbind_sid("host-sid-001")
         db_session.commit()
 
@@ -249,13 +249,13 @@ class TestRequestSync:
 @allure.feature("Socket.IO")
 @allure.story("Get Update")
 class TestGetUpdate:
-    """Тесты получения обновлений состояния."""
+    """РўРµСЃС‚С‹ РїРѕР»СѓС‡РµРЅРёСЏ РѕР±РЅРѕРІР»РµРЅРёР№ СЃРѕСЃС‚РѕСЏРЅРёСЏ."""
 
-    @allure.title("get_update отправляет update_answers с данными игроков")
+    @allure.title("get_update РѕС‚РїСЂР°РІР»СЏРµС‚ update_answers СЃ РґР°РЅРЅС‹РјРё РёРіСЂРѕРєРѕРІ")
     @allure.severity(allure.severity_level.NORMAL)
     @pytest.mark.asyncio
     async def test_get_update_returns_players(self, sio, db_session, playing_quiz, sample_host, sample_player):
-        """get_update → emit('update_answers') с полями игроков."""
+        """get_update в†’ emit('update_answers') СЃ РїРѕР»СЏРјРё РёРіСЂРѕРєРѕРІ."""
         mock = _patch_db(db_session)
         try:
             await sio.call("get_update", "host-sid-001", playing_quiz.code)
@@ -275,3 +275,4 @@ class TestGetUpdate:
             mock.stop()
 
         sio.emit.assert_not_called()
+

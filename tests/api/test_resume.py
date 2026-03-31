@@ -1,10 +1,10 @@
-from datetime import timedelta
+﻿from datetime import timedelta
 
 import allure
 
-from backend import models
-from backend.runtime_state import connection_registry
-from backend.services import hash_secret
+from backend.games.friends_game.runtime_state import connection_registry
+from backend.games.friends_game.service import hash_secret
+from backend.shared.utils import utc_now_naive
 
 
 @allure.feature("API")
@@ -15,7 +15,7 @@ class TestResumeCheck:
     def test_resume_check_returns_resumable_player_session(self, client, db_session, playing_quiz, sample_player):
         sample_player.sid = None
         sample_player.reconnect_token_hash = hash_secret("player-secret")
-        playing_quiz.last_activity_at = models._utc_now()
+        playing_quiz.last_activity_at = utc_now_naive()
         connection_registry.unbind_sid("player-sid-001")
         db_session.commit()
 
@@ -42,7 +42,7 @@ class TestResumeCheck:
     @allure.title("Resume is suppressed after more than 10 minutes without activity")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_resume_check_suppresses_expired_resume_window(self, client, db_session, playing_quiz):
-        playing_quiz.last_activity_at = models._utc_now() - timedelta(minutes=11)
+        playing_quiz.last_activity_at = utc_now_naive() - timedelta(minutes=11)
         db_session.commit()
 
         response = client.post(
@@ -68,7 +68,7 @@ class TestResumeCheck:
     def test_resume_check_blocks_cancelled_game(self, client, db_session, sample_quiz, sample_player):
         sample_quiz.status = "cancelled"
         sample_quiz.cancel_reason = "host_timeout"
-        sample_quiz.cancelled_at = models._utc_now()
+        sample_quiz.cancelled_at = utc_now_naive()
         sample_quiz.host_secret_hash = hash_secret("host-secret")
         sample_player.reconnect_token_hash = hash_secret("player-secret")
         db_session.commit()
@@ -103,7 +103,7 @@ class TestResumeCheck:
     def test_resume_check_blocks_left_and_kicked_player_statuses(self, client, db_session, playing_quiz, sample_player):
         sample_player.sid = None
         sample_player.reconnect_token_hash = hash_secret("player-secret")
-        playing_quiz.last_activity_at = models._utc_now()
+        playing_quiz.last_activity_at = utc_now_naive()
         connection_registry.unbind_sid("player-sid-001")
         db_session.commit()
 
@@ -155,3 +155,4 @@ class TestResumeCheck:
         assert session["can_resume"] is False
         assert session["reason"] == "finished"
         assert session["clear_credentials"] is True
+

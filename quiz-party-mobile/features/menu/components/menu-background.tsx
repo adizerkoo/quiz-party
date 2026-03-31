@@ -123,8 +123,8 @@ export function MenuBackground() {
             transform: [
               {
                 translateY: pinkFloat.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -20],
+                  inputRange: [0, 0.85],
+                  outputRange: [30, -30],
                 }),
               },
             ],
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     left: '40%',
   },
   balloonPink: {
-    width: 80,
+    width: 100,
     height: 100,
     backgroundColor: menuTheme.colors.balloonPink,
     top: '75%',

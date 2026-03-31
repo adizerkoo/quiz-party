@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgb(255, 255, 255)',
   },
   title: {
-    fontSize: 40,
+    fontSize: 45,
     lineHeight: 54,
     color: menuTheme.colors.title,
     fontWeight: '800',

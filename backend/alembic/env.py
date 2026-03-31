@@ -12,13 +12,14 @@ PROJECT_ROOT = BASE_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.models import Base  # noqa: E402
+from backend.app.database import Base, load_model_modules  # noqa: E402
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+load_model_modules()
 target_metadata = Base.metadata
 
 

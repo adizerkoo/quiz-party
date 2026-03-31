@@ -9,7 +9,8 @@ import allure
 import pytest
 from datetime import datetime
 
-from backend.models import Quiz, Player, User
+from backend.games.friends_game.models import Player, Quiz
+from backend.platform.identity.models import User
 
 
 @allure.feature("Models")

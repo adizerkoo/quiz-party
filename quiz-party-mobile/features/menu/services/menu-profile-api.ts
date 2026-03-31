@@ -130,6 +130,28 @@ function toMenuProfile(apiUser: ApiUserResponse, fallback: MenuProfile) {
   } satisfies MenuProfile;
 }
 
+function toMenuProfileWithRefreshedSession(apiUser: ApiUserResponse, fallback: MenuProfile) {
+  const currentProfile = getMenuSessionProfile();
+  const baseProfile =
+    currentProfile?.id === fallback.id
+      ? normalizeMenuProfile(currentProfile)
+      : normalizeMenuProfile(fallback);
+
+  return {
+    id: apiUser.id,
+    publicId: apiUser.public_id ?? baseProfile.publicId ?? null,
+    installationPublicId:
+      apiUser.installation_public_id ??
+      baseProfile.installationPublicId ??
+      getOrCreateMenuInstallationPublicId(),
+    sessionToken:
+      normalizeSessionToken(apiUser.session_token) ??
+      normalizeSessionToken(baseProfile.sessionToken),
+    name: baseProfile.name,
+    emoji: baseProfile.emoji,
+  } satisfies MenuProfile;
+}
+
 function isRetryableError(error: unknown) {
   if (error instanceof HttpStatusError) {
     return error.status >= 500 || error.status === 429;
@@ -214,7 +236,7 @@ export async function ensureMenuProfileSession(
 
   let refreshedProfile: MenuProfile;
   try {
-    refreshedProfile = toMenuProfile(
+    refreshedProfile = toMenuProfileWithRefreshedSession(
       await exchangeRemoteProfileSession(activeProfile),
       activeProfile,
     );
@@ -237,6 +259,9 @@ export async function ensureMenuProfileSession(
   }
 
   const snapshot = getMenuProfileStateSnapshot();
+  if (snapshot.profile?.id != null && snapshot.profile.id !== activeProfile.id) {
+    return snapshot.profile;
+  }
 
   return (
     (await setMenuSessionProfile(refreshedProfile, {

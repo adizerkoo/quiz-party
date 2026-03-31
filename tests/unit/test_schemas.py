@@ -10,15 +10,14 @@ import pytest
 from pydantic import ValidationError
 from datetime import datetime
 
-from backend.schemas import (
-    QuestionSchema,
-    QuizCreate,
-    QuizResponse,
+from backend.games.friends_game.schemas import QuizCreate, QuizResponse
+from backend.platform.content.schemas import QuestionSchema
+from backend.platform.identity.schemas import (
     UserCreate,
-    UserSessionExchangeRequest,
-    UserUpdate,
     UserResponse,
+    UserSessionExchangeRequest,
     UserTouch,
+    UserUpdate,
 )
 
 

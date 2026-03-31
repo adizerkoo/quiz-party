@@ -5,8 +5,10 @@ from uuid import uuid4
 
 import allure
 
-from backend.models import Player, QuestionBankQuestion, Quiz, User, UserFavoriteQuestion, UserInstallation
-from backend.security import issue_installation_session_token
+from backend.games.friends_game.models import Player, Quiz
+from backend.platform.content.models import QuestionBankQuestion, UserFavoriteQuestion
+from backend.platform.identity.models import User, UserInstallation
+from backend.platform.identity.service import issue_installation_session_token
 
 
 def _auth_headers(session_token: str | None) -> dict[str, str]:
