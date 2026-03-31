@@ -568,3 +568,31 @@ class TestLeaveGame:
         payload = _get_emitted_payload(sio, "resume_unavailable")
         assert payload["reason"] == "participant_left"
         sio.enter_room.assert_not_called()
+
+
+@allure.feature("Socket.IO")
+@allure.story("Cancel Game")
+class TestCancelGame:
+    @allure.title("Host cancel marks active game as cancelled and emits game_cancelled")
+    @allure.severity(allure.severity_level.BLOCKER)
+    @pytest.mark.asyncio
+    async def test_host_cancel_marks_game_cancelled(self, sio, db_session, playing_quiz, sample_host, sample_player):
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx:
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("cancel_game_signal", "host-sid-001", {
+                "room": playing_quiz.code,
+            })
+
+        db_session.refresh(playing_quiz)
+        assert playing_quiz.status == "cancelled"
+        assert playing_quiz.cancelled_at is not None
+        assert playing_quiz.cancel_reason == "host_left"
+
+        events = [call.args[0] for call in sio.emit.call_args_list]
+        assert "game_cancelled" in events
+
+        payload = _get_emitted_payload(sio, "game_cancelled")
+        assert payload["status"] == "cancelled"
+        assert payload["reason"] == "host_left"

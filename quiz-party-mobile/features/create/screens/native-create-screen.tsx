@@ -1,5 +1,6 @@
 import { useIsFocused } from '@react-navigation/native';
 import { FontAwesome6 } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -23,6 +24,7 @@ import { CreateActionButton } from '@/features/create/components/create-action-b
 import { CreateBackground } from '@/features/create/components/create-background';
 import { CreateHeader } from '@/features/create/components/create-header';
 import { CreateIdeaBanner } from '@/features/create/components/create-idea-banner';
+import { CreateLaunchButtonArt } from '@/features/create/components/create-launch-button-art';
 import { CreateLibraryModal } from '@/features/create/components/create-library-modal';
 import { CreateOptionRow } from '@/features/create/components/create-option-row';
 import { CreateQuestionCard } from '@/features/create/components/create-question-card';
@@ -144,6 +146,12 @@ export function NativeCreateScreen() {
 
   const currentIdeaText = currentIdea?.text
     ?? (libraryLoading ? 'Загрузка...' : 'Готовые идеи появятся после загрузки библиотеки.');
+
+  const trimmedTitle = title.trim();
+  const hasTitle = Boolean(trimmedTitle);
+  const hasQuestions = questions.length > 0;
+  const launchSubtitle = hasTitle ? trimmedTitle : 'Без названия';
+  const headerBadgeLabel = hasQuestions ? formatQuestionCount(questions.length) : 'Черновик пуст';
 
   useEffect(() => {
     titleRef.current = title;
@@ -1004,10 +1012,16 @@ export function NativeCreateScreen() {
     setEditIndex(null);
   }
 
+  function handleCancelEdit() {
+    resetDraftAfterSave();
+    void Haptics.selectionAsync();
+  }
+
   function handleAddQuestion() {
     const validationError = validateQuestionDraft(draft);
 
     if (validationError) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       pushToast(validationError);
       return;
     }
@@ -1023,6 +1037,7 @@ export function NativeCreateScreen() {
     });
 
     pushToast(editIndex === null ? 'Вопрос добавлен!' : 'Вопрос обновлен!');
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     resetDraftAfterSave();
   }
 
@@ -1032,6 +1047,7 @@ export function NativeCreateScreen() {
       return;
     }
 
+    void Haptics.selectionAsync();
     setEditIndex(index);
     setDraft(buildDraftFromQuestion(question));
     scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -1070,6 +1086,7 @@ export function NativeCreateScreen() {
     const validationError = validateQuizBeforeLaunch(title, questions);
 
     if (validationError) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       pushToast(validationError);
 
       if (!title.trim()) {
@@ -1087,6 +1104,7 @@ export function NativeCreateScreen() {
     setIsLaunching(true);
 
     try {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const ownerProfile = await ensureOwnerProfile(getMenuSessionProfile());
       const createdQuiz = await createQuizRequest({
         title: title.trim(),
@@ -1103,6 +1121,7 @@ export function NativeCreateScreen() {
       });
 
       await clearCreateDraft();
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       router.push({
         pathname: '/host-game' as Href,
@@ -1116,7 +1135,7 @@ export function NativeCreateScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+    <SafeAreaView edges={['left', 'right']} style={styles.safeArea}>
       <StatusBar style="dark" />
 
       <View style={styles.screen}>
@@ -1135,12 +1154,13 @@ export function NativeCreateScreen() {
               // Держим его компактнее, чтобы между списком вопросов и кнопкой не было лишней пустоты.
               // Главная настройка расстояния между последним контентом и нижней CTA-кнопкой.
               // Чем меньше число, тем ближе кнопка будет к списку вопросов.
-              { paddingBottom: 98 + insets.bottom },
+              { paddingTop: insets.top + 10, paddingBottom: 82 + insets.bottom },
             ]}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             <View style={styles.mainCard}>
-              <CreateHeader onBackPress={() => router.back()} />
+              <CreateHeader badgeLabel={headerBadgeLabel} onBackPress={() => router.back()} />
 
               <View style={styles.titleGroup}>
                 <CreateTextField
@@ -1157,6 +1177,26 @@ export function NativeCreateScreen() {
               </View>
 
               <View style={styles.creationZone}>
+                {editIndex !== null ? (
+                  <View style={styles.editingBanner}>
+                    <View style={styles.editingBannerIcon}>
+                      <FontAwesome6 color={createTheme.colors.white} iconStyle="solid" name="pen" size={13} />
+                    </View>
+
+                    <View style={styles.editingBannerTextBlock}>
+                      <Text style={styles.editingBannerTitle}>Редактируешь вопрос {editIndex + 1}</Text>
+                      <Text style={styles.editingBannerHint}>После сохранения карточка обновится в списке.</Text>
+                    </View>
+
+                    <Pressable onPress={handleCancelEdit} style={({ pressed }) => [
+                      styles.editingBannerCancel,
+                      pressed && styles.editingBannerCancelPressed,
+                    ]}>
+                      <Text style={styles.editingBannerCancelText}>Сбросить</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
                 <View style={styles.sectionLabelRow}>
                   <Text style={styles.sectionLabel}>Твой вопрос</Text>
 
@@ -1208,7 +1248,7 @@ export function NativeCreateScreen() {
                   onRefresh={handleRefreshIdea}
                 />
 
-                <Text style={styles.sectionLabel}>Тип ответа:</Text>
+                <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>Тип ответа:</Text>
                 <CreateTypeSelector onChange={handleTypeChange} value={draft.questionType} />
 
                 {draft.questionType === 'options' ? (
@@ -1275,7 +1315,10 @@ export function NativeCreateScreen() {
               {questions.length ? (
                 <View style={styles.listZone}>
                   <View style={styles.questionsHeader}>
-                    <Text style={styles.questionsTitle}>Вопросы</Text>
+                    <View style={styles.questionsHeaderTextBlock}>
+                      <Text style={styles.questionsTitle}>Вопросы</Text>
+                      <Text style={styles.questionsSubtitle}>Свайпни карточку, чтобы быстро изменить или удалить вопрос.</Text>
+                    </View>
 
                     <View style={styles.questionsCount}>
                       <Text style={styles.questionsCountText}>{questions.length}</Text>
@@ -1296,11 +1339,13 @@ export function NativeCreateScreen() {
             </View>
           </ScrollView>
 
-          <View style={[styles.launchWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={[styles.launchWrap, { bottom: Math.max(insets.bottom, 14) }]}>
             <CreateActionButton
+              badgeText={String(questions.length)}
               disabled={isLaunching}
-              icon={isLaunching ? <ActivityIndicator color="#ffffff" /> : undefined}
-              label={isLaunching ? 'Создаём игру...' : '🚀 ЗАЖЕЧЬ ВЕЧЕРИНКУ!'}
+              helperText={launchSubtitle}
+              icon={isLaunching ? <ActivityIndicator color="#ffffff" /> : <CreateLaunchButtonArt />}
+              label={isLaunching ? 'Создаём игру...' : 'ЗАЖЕЧЬ ВЕЧЕРИНКУ'}
               onPress={handleLaunchQuiz}
               tone="launch"
             />
@@ -1344,6 +1389,26 @@ function pickNextIdea(
 
 function readSingleParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function formatQuestionCount(count: number) {
+  const absCount = Math.abs(count);
+  const lastDigit = absCount % 10;
+  const lastTwoDigits = absCount % 100;
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return `${count} вопросов`;
+  }
+
+  if (lastDigit === 1) {
+    return `${count} вопрос`;
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return `${count} вопроса`;
+  }
+
+  return `${count} вопросов`;
 }
 
 function isCreateLibraryQuestion(question: CreateQuizQuestion | CreateLibraryQuestion): question is CreateLibraryQuestion {
@@ -1421,7 +1486,7 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     // Дополнительный запас внутри основного контента.
     // Уменьшаем его, чтобы снизу не было лишнего пустого воздуха.
-    paddingBottom: 40,
+    paddingBottom: 16,
     backgroundColor: 'transparent',
   },
 
@@ -1451,6 +1516,62 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
 
+  editingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+
+  editingBannerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: createTheme.colors.purple,
+  },
+
+  editingBannerTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  editingBannerTitle: {
+    color: createTheme.colors.purpleDark,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  editingBannerHint: {
+    marginTop: 2,
+    color: createTheme.colors.textSoft,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+
+  editingBannerCancel: {
+    borderRadius: createTheme.radius.pill,
+    backgroundColor: 'rgba(108, 92, 231, 0.10)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  editingBannerCancelPressed: {
+    backgroundColor: 'rgba(108, 92, 231, 0.16)',
+    transform: [{ scale: 0.97 }],
+  },
+
+  editingBannerCancelText: {
+    color: createTheme.colors.purple,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
   // Строка заголовка секции и дополнительной кнопки справа.
   sectionLabelRow: {
     flexDirection: 'row',
@@ -1470,18 +1591,24 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: createTheme.colors.purple,
     fontSize: 14,
+    lineHeight: 18,
     fontWeight: '700',
+  },
+
+  sectionLabelStandalone: {
     marginBottom: 10,
   },
 
   // Небольшая кнопка "Все идеи".
   inlineLibraryButton: {
     flexShrink: 0,
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 0,
     borderWidth: 1.5,
     borderColor: 'rgba(108, 92, 231, 0.20)',
     borderRadius: createTheme.radius.pill,
@@ -1526,11 +1653,13 @@ const styles = StyleSheet.create({
 
   // Кнопка очистки всех вариантов ответа.
   clearOptionsButton: {
+    minHeight: 34,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 0,
     borderWidth: 1.5,
     borderColor: 'rgba(108, 92, 231, 0.20)',
     borderRadius: createTheme.radius.pill,
@@ -1598,6 +1727,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  questionsHeaderTextBlock: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 10,
+  },
+
+  questionsSubtitle: {
+    marginTop: 3,
+    color: createTheme.colors.textSoft,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+
   questionsCount: {
     minWidth: 26,
     height: 26,
@@ -1619,9 +1761,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 20,
-    // Поднимаем кнопку чуть выше от нижней кромки экрана,
-    // чтобы она была ближе к контенту и не выглядела "утонувшей" внизу.
-    // Чем больше это число, тем выше кнопка поднимается от нижнего края экрана.
-    bottom: 28,
+    bottom: 14,
   },
+
 });

@@ -12,6 +12,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { GameLobbyHero } from '@/features/game/components/game-lobby-hero';
+import { GameLobbyPlayerTile } from '@/features/game/components/game-lobby-player-tile';
+import { GameLobbyRosterHeader } from '@/features/game/components/game-lobby-roster-card';
 import { LobbyPlayerEmoji } from '@/features/game/components/lobby-player-emoji';
 import { gameTheme } from '@/features/game/theme/game-theme';
 import { GameLobbyPlayer, GameQuestion, GameStatus } from '@/features/game/types';
@@ -30,9 +33,9 @@ type GameHostScreenProps = {
   roomCode: string;
   onBackToCreate: () => void;
   onChangeScore: (targetName: string, points: 1 | -1) => void;
-  onCopyRoom: () => void;
   onJumpToQuestion: (question: number) => void;
   onKickPlayer: (targetName: string) => void;
+  onLeaveGame: () => void;
   onNextQuestion: () => void;
   onShareRoom: () => void;
   onStartGame: () => void;
@@ -155,9 +158,9 @@ export function GameHostScreen({
   maxReachedQuestion,
   onBackToCreate,
   onChangeScore,
-  onCopyRoom,
   onJumpToQuestion,
   onKickPlayer,
+  onLeaveGame,
   onNextQuestion,
   onShareRoom,
   onStartGame,
@@ -179,21 +182,10 @@ export function GameHostScreen({
       bounces={false}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}>
-      <View style={styles.headerRow}>
-        {/* Кнопку "Назад" оформляем так же легко, как на create-экране, чтобы навигация в игре выглядела единообразно. */}
-        <Pressable onPress={onBackToCreate} style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}>
-          <FontAwesome6 color={gameTheme.colors.purple} iconStyle="solid" name="chevron-left" size={18} />
-          <Text style={styles.backButtonText}>Назад</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.quizHeader}>
-        <Text style={styles.quizSub}>QUIZ PARTY</Text>
-        <Text style={styles.quizTitle}>{quizTitle}</Text>
-      </View>
-
       {gameStatus === 'waiting' ? (
         <View style={styles.sectionCard}>
+          <GameLobbyHero integrated onBackPress={onBackToCreate} title={quizTitle} />
+
           <View style={styles.roomCard}>
             <Text style={styles.roomLabel}>Код комнаты</Text>
             <Text style={styles.roomCode}>{roomCode}</Text>
@@ -206,18 +198,10 @@ export function GameHostScreen({
                   <Text style={styles.secondaryActionText}>Поделиться</Text>
                 </View>
               </Pressable>
-
-              <Pressable onPress={onCopyRoom} style={({ pressed }) => [styles.secondaryAction, pressed && styles.secondaryActionPressed]}>
-                {/* Для копирования используем отдельную иконку, чтобы действия визуально не путались между собой. */}
-                <View style={styles.secondaryActionContent}>
-                  <FontAwesome6 color={gameTheme.colors.purple} iconStyle="solid" name="copy" size={14} />
-                  <Text style={styles.secondaryActionText}>Скопировать</Text>
-                </View>
-              </Pressable>
             </View>
           </View>
 
-          <Text style={styles.miniLabel}>УЧАСТНИКИ</Text>
+          <GameLobbyRosterHeader count={actualPlayers.length} label="Участники" />
 
           {!actualPlayers.length ? (
             <View style={styles.emptyState}>
@@ -228,29 +212,20 @@ export function GameHostScreen({
                 isInteractive={false}
                 style={styles.emptyEmoji}
               />
-              <Text style={styles.emptyTitle}>Пока тут пусто...</Text>
-              <Text style={styles.emptyHint}>Отправь код комнаты друзьям, чтобы они присоединились.</Text>
+              <Text style={styles.emptyTitle}>Лобби ждёт первых гостей</Text>
+              <Text style={styles.emptyHint}>Отправь код комнаты друзьям, чтобы компания собралась быстрее.</Text>
             </View>
           ) : (
             <View style={styles.playerGrid}>
               {actualPlayers.map((player, index) => (
-                <View key={player.name} style={[styles.playerCard, player.connected === false && styles.playerCardOffline]}>
-                  {/* Крестик держим строго внутри карточки, чтобы он не выглядел "оторванным" от игрока. */}
-                  <Pressable onPress={() => onKickPlayer(player.name)} style={({ pressed }) => [styles.kickButton, pressed && styles.kickButtonPressed]}>
-                    <Text style={styles.kickButtonText}>×</Text>
-                  </Pressable>
-
-                  {/* Эмодзи теперь не только живёт в idle-анимации, но и реагирует на тап вибрацией и pop-эффектом. */}
-                  <LobbyPlayerEmoji
-                    idleDelay={(index % 4) * 180}
-                    emoji={player.emoji ?? '👤'}
-                    isOffline={player.connected === false}
-                    style={styles.playerEmoji}
-                  />
-
-                  <Text style={styles.playerName}>{player.name}</Text>
-                  {player.connected === false ? <Text style={styles.offlineBadge}>offline</Text> : null}
-                </View>
+                <GameLobbyPlayerTile
+                  key={player.name}
+                  emoji={player.emoji ?? '👤'}
+                  idleDelay={(index % 4) * 180}
+                  isOffline={player.connected === false}
+                  name={player.name}
+                  onKick={() => onKickPlayer(player.name)}
+                />
               ))}
             </View>
           )}
@@ -415,6 +390,10 @@ export function GameHostScreen({
                   : 'СЛЕДУЮЩИЙ ВОПРОС'}
             </Text>
           </Pressable>
+
+          <Pressable onPress={onLeaveGame} style={({ pressed }) => [styles.exitGameButton, pressed && styles.exitGameButtonPressed]}>
+            <Text style={styles.exitGameButtonText}>Выйти</Text>
+          </Pressable>
         </View>
       )}
     </ScrollView>
@@ -427,50 +406,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingTop: 4,
     paddingBottom: 32,
-  },
-  headerRow: {
-    position: 'relative',
-    justifyContent: 'center',
-    minHeight: 44,
-    marginBottom: 8,
-  },
-  backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    zIndex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingRight: 10,
-  },
-  backButtonPressed: {
-    opacity: 0.65,
-    transform: [{ scale: 0.97 }],
-  },
-  backButtonText: {
-    color: gameTheme.colors.purple,
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  quizHeader: {
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  quizSub: {
-    color: gameTheme.colors.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.6,
-  },
-  quizTitle: {
-    marginTop: 4,
-    color: gameTheme.colors.pinkDark,
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: '900',
-    textAlign: 'center',
   },
   sectionCard: {
     borderRadius: gameTheme.radius.card,
@@ -550,7 +485,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 20,
     alignItems: 'center',
-    backgroundColor: gameTheme.colors.chip,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(108, 92, 231, 0.18)',
+    backgroundColor: 'rgba(108, 92, 231, 0.06)',
   },
   emptyEmoji: {
     fontSize: 34,
@@ -570,74 +508,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   playerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  playerCard: {
-    width: '48%',
-    minHeight: 92,
-    borderRadius: gameTheme.radius.section,
-    paddingTop: 14,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    backgroundColor: gameTheme.colors.panelStrong,
-    borderWidth: 1,
-    borderColor: gameTheme.colors.panelBorder,
-    shadowColor: gameTheme.colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  playerCardOffline: {
-    opacity: 0.72,
-  },
-  playerEmoji: {
-    fontSize: 34,
-  },
-  kickButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: gameTheme.colors.danger,
-  },
-  kickButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.94 }],
-  },
-  kickButtonText: {
-    color: gameTheme.colors.white,
-    fontSize: 16,
-    fontWeight: '900',
-    lineHeight: 18,
-  },
-  playerName: {
-    marginTop: 8,
-    color: gameTheme.colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  offlineBadge: {
-    marginTop: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: gameTheme.radius.pill,
-    overflow: 'hidden',
-    color: gameTheme.colors.textSoft,
-    fontSize: 11,
-    fontWeight: '800',
-    backgroundColor: gameTheme.colors.offlineSoft,
+    gap: 10,
   },
   primaryButton: {
     minHeight: 56,
@@ -695,6 +566,21 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255,255,255,0.25)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  exitGameButton: {
+    alignSelf: 'center',
+    marginTop: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  exitGameButtonPressed: {
+    opacity: 0.68,
+  },
+  exitGameButtonText: {
+    color: gameTheme.colors.textMuted,
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   progressScroll: {
     marginBottom: 14,

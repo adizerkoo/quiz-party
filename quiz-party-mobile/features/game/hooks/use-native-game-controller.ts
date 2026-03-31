@@ -1,5 +1,4 @@
-import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
+﻿import * as Haptics from 'expo-haptics';
 import { Href, useRouter } from 'expo-router';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Share } from 'react-native';
@@ -56,7 +55,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   const initialProfile = getMenuSessionProfile();
   const socketRef = useRef<Socket | null>(null);
   const questionShownAtRef = useRef<number | null>(null);
-  const playerNameRef = useRef(initialProfile?.name ?? (role === 'host' ? 'Ведущий' : 'Игрок'));
+  const playerNameRef = useRef(initialProfile?.name ?? (role === 'host' ? 'Р’РµРґСѓС‰РёР№' : 'РРіСЂРѕРє'));
   const realGameQuestionRef = useRef(0);
   const currentQuestionRef = useRef(0);
   const questionsCountRef = useRef(0);
@@ -77,12 +76,13 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   const [playerViewQuestion, setPlayerViewQuestion] = useState(0);
   const [myAnswersHistory, setMyAnswersHistory] = useState<Record<string, string>>({});
   const [playerName, setPlayerName] = useState(playerNameRef.current);
-  const [myEmoji, setMyEmoji] = useState(initialProfile?.emoji ?? '👤');
+  const [myEmoji, setMyEmoji] = useState(initialProfile?.emoji ?? 'рџ‘¤');
   const [resultsPayload, setResultsPayload] = useState<GameResultsPayload | null>(null);
   const [startIntroPlayers, setStartIntroPlayers] = useState<GameLobbyPlayer[] | null>(null);
   const [winnerIntroPlayers, setWinnerIntroPlayers] = useState(resultsPayload?.results ? getResultWinners(resultsPayload.results) : null);
   const [nextLocked, setNextLocked] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
+  const [hostCancelConfirmVisible, setHostCancelConfirmVisible] = useState(false);
   const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
   const [leavePending, setLeavePending] = useState(false);
   const [toasts, setToasts] = useState<GameToastItem[]>([]);
@@ -106,8 +106,8 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   }, [currentQuestion]);
 
   useEffect(() => {
-    // Количество вопросов храним в ref, чтобы socket-обработчики с длинным жизненным циклом
-    // всегда читали актуальное значение, а не старое значение из замыкания.
+    // РљРѕР»РёС‡РµСЃС‚РІРѕ РІРѕРїСЂРѕСЃРѕРІ С…СЂР°РЅРёРј РІ ref, С‡С‚РѕР±С‹ socket-РѕР±СЂР°Р±РѕС‚С‡РёРєРё СЃ РґР»РёРЅРЅС‹Рј Р¶РёР·РЅРµРЅРЅС‹Рј С†РёРєР»РѕРј
+    // РІСЃРµРіРґР° С‡РёС‚Р°Р»Рё Р°РєС‚СѓР°Р»СЊРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ, Р° РЅРµ СЃС‚Р°СЂРѕРµ Р·РЅР°С‡РµРЅРёРµ РёР· Р·Р°РјС‹РєР°РЅРёСЏ.
     questionsCountRef.current = questions.length;
   }, [questions]);
 
@@ -146,7 +146,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     clearGameSessionCredentials(roomCode, role);
   }
 
-  // Собирает маршрут нужного игрового режима, чтобы безопасно переключать player <-> host экран.
+  // РЎРѕР±РёСЂР°РµС‚ РјР°СЂС€СЂСѓС‚ РЅСѓР¶РЅРѕРіРѕ РёРіСЂРѕРІРѕРіРѕ СЂРµР¶РёРјР°, С‡С‚РѕР±С‹ Р±РµР·РѕРїР°СЃРЅРѕ РїРµСЂРµРєР»СЋС‡Р°С‚СЊ player <-> host СЌРєСЂР°РЅ.
   function buildRoleRoute(targetRole: GameRole) {
     return `/${targetRole === 'host' ? 'host-game' : 'player-game'}?room=${encodeURIComponent(roomCode)}` as Href;
   }
@@ -156,17 +156,11 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     setIsConnected(false);
     setIsHostOffline(false);
     setConfirmVisible(false);
+    setHostCancelConfirmVisible(false);
     setLeaveConfirmVisible(false);
     setLeavePending(false);
     setBlockedState(nextState);
     setIsBootstrapping(false);
-  }
-
-  async function handleCopyRoom() {
-    const shareUrl = buildGameShareUrl(roomCode);
-    await Clipboard.setStringAsync(shareUrl);
-    pushToast('Ссылка на комнату скопирована ✨', 2200);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
 
   async function handleShareRoom() {
@@ -174,11 +168,11 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     try {
       await Share.share({
         title: 'Quiz Party',
-        message: `Заходи в мою игру! Код комнаты: ${roomCode}\n${shareUrl}`,
+        message: `Р—Р°С…РѕРґРё РІ РјРѕСЋ РёРіСЂСѓ! РљРѕРґ РєРѕРјРЅР°С‚С‹: ${roomCode}\n${shareUrl}`,
         url: shareUrl,
       });
     } catch (error) {
-      await handleCopyRoom();
+      pushToast('Не удалось открыть системное шеринговое окно.', 2200);
     }
   }
 
@@ -213,8 +207,8 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   }
 
   function syncQuestions(nextQuestions: GameQuestion[]) {
-    // Держим state и ref синхронными через одну функцию, чтобы и UI, и socket-логика
-    // опирались на один и тот же актуальный список вопросов.
+    // Р”РµСЂР¶РёРј state Рё ref СЃРёРЅС…СЂРѕРЅРЅС‹РјРё С‡РµСЂРµР· РѕРґРЅСѓ С„СѓРЅРєС†РёСЋ, С‡С‚РѕР±С‹ Рё UI, Рё socket-Р»РѕРіРёРєР°
+    // РѕРїРёСЂР°Р»РёСЃСЊ РЅР° РѕРґРёРЅ Рё С‚РѕС‚ Р¶Рµ Р°РєС‚СѓР°Р»СЊРЅС‹Р№ СЃРїРёСЃРѕРє РІРѕРїСЂРѕСЃРѕРІ.
     questionsCountRef.current = nextQuestions.length;
     setQuestions(nextQuestions);
   }
@@ -261,8 +255,8 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   }
 
   function proceedToNextQuestion() {
-    // Это защитный слой от преждевременного завершения игры:
-    // здесь нельзя опираться на questions.length из старого замыкания socket-обработчика.
+    // Р­С‚Рѕ Р·Р°С‰РёС‚РЅС‹Р№ СЃР»РѕР№ РѕС‚ РїСЂРµР¶РґРµРІСЂРµРјРµРЅРЅРѕРіРѕ Р·Р°РІРµСЂС€РµРЅРёСЏ РёРіСЂС‹:
+    // Р·РґРµСЃСЊ РЅРµР»СЊР·СЏ РѕРїРёСЂР°С‚СЊСЃСЏ РЅР° questions.length РёР· СЃС‚Р°СЂРѕРіРѕ Р·Р°РјС‹РєР°РЅРёСЏ socket-РѕР±СЂР°Р±РѕС‚С‡РёРєР°.
     const totalQuestions = questionsCountRef.current;
     setConfirmVisible(false);
 
@@ -318,6 +312,19 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
 
   function handleCancelProceed() {
     setConfirmVisible(false);
+  }
+
+  function handleHostCancelGame() {
+    setHostCancelConfirmVisible(true);
+  }
+
+  function handleCancelHostCancelGame() {
+    setHostCancelConfirmVisible(false);
+  }
+
+  function handleConfirmHostCancelGame() {
+    setHostCancelConfirmVisible(false);
+    socketRef.current?.emit('cancel_game_signal', { room: roomCode });
   }
 
   function handleKickPlayer(targetName: string) {
@@ -430,8 +437,8 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     sendAnswer(option);
   }
 
-  // Проверяет сохранённые credentials на сервере для указанной роли
-  // и при необходимости очищает именно их, а не только текущий экран.
+  // РџСЂРѕРІРµСЂСЏРµС‚ СЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ credentials РЅР° СЃРµСЂРІРµСЂРµ РґР»СЏ СѓРєР°Р·Р°РЅРЅРѕР№ СЂРѕР»Рё
+  // Рё РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё РѕС‡РёС‰Р°РµС‚ РёРјРµРЅРЅРѕ РёС…, Р° РЅРµ С‚РѕР»СЊРєРѕ С‚РµРєСѓС‰РёР№ СЌРєСЂР°РЅ.
   async function validateResumeEligibilityForRole(
     targetRole: GameRole,
     params: {
@@ -512,13 +519,13 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
         return;
       }
 
-      // После холодного старта профиль восстанавливается асинхронно из локального файла.
-      // Сразу синхронизируем ref/state, чтобы join_room ушёл с корректным именем и emoji.
-      // Имя хоста в БД должно быть реальным nickname, а не техническим placeholder.
-      const resolvedPlayerName = activeProfile?.name ?? (role === 'host' ? 'Ведущий' : 'Игрок');
+      // РџРѕСЃР»Рµ С…РѕР»РѕРґРЅРѕРіРѕ СЃС‚Р°СЂС‚Р° РїСЂРѕС„РёР»СЊ РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµС‚СЃСЏ Р°СЃРёРЅС…СЂРѕРЅРЅРѕ РёР· Р»РѕРєР°Р»СЊРЅРѕРіРѕ С„Р°Р№Р»Р°.
+      // РЎСЂР°Р·Сѓ СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј ref/state, С‡С‚РѕР±С‹ join_room СѓС€С‘Р» СЃ РєРѕСЂСЂРµРєС‚РЅС‹Рј РёРјРµРЅРµРј Рё emoji.
+      // РРјСЏ С…РѕСЃС‚Р° РІ Р‘Р” РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ СЂРµР°Р»СЊРЅС‹Рј nickname, Р° РЅРµ С‚РµС…РЅРёС‡РµСЃРєРёРј placeholder.
+      const resolvedPlayerName = activeProfile?.name ?? (role === 'host' ? 'Р’РµРґСѓС‰РёР№' : 'РРіСЂРѕРє');
       playerNameRef.current = resolvedPlayerName;
       setPlayerName(resolvedPlayerName);
-      setMyEmoji(activeProfile?.emoji ?? '👤');
+      setMyEmoji(activeProfile?.emoji ?? 'рџ‘¤');
 
       setIsBootstrapping(true);
       setBlockedState(null);
@@ -537,8 +544,8 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
         }
 
         if (role === 'player' && fallbackHostCredentials?.hostToken) {
-          // Если player-экран открывает сам хост со своими сохранёнными токенами,
-          // заранее переводим его в host-режим и не даём создать лишнего игрока.
+          // Р•СЃР»Рё player-СЌРєСЂР°РЅ РѕС‚РєСЂС‹РІР°РµС‚ СЃР°Рј С…РѕСЃС‚ СЃРѕ СЃРІРѕРёРјРё СЃРѕС…СЂР°РЅС‘РЅРЅС‹РјРё С‚РѕРєРµРЅР°РјРё,
+          // Р·Р°СЂР°РЅРµРµ РїРµСЂРµРІРѕРґРёРј РµРіРѕ РІ host-СЂРµР¶РёРј Рё РЅРµ РґР°С‘Рј СЃРѕР·РґР°С‚СЊ Р»РёС€РЅРµРіРѕ РёРіСЂРѕРєР°.
           const hostResumeAccess = await validateResumeEligibilityForRole('host', {
             participantId: fallbackHostCredentials.participantId ?? null,
             participantToken: fallbackHostCredentials.participantToken ?? null,
@@ -706,7 +713,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
           }
 
           setPlayerName(data.name);
-          pushToast(`Твоё имя в комнате: ${data.name}`);
+          pushToast(`РўРІРѕС‘ РёРјСЏ РІ РєРѕРјРЅР°С‚Рµ: ${data.name}`);
         });
 
         socket.on('update_players', (nextPlayers: GameLobbyPlayer[]) => {
@@ -769,7 +776,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
           }
 
           setDisconnectedNames((current) => Array.from(new Set([...current, data.name ?? ''])));
-          pushToast(`${data.emoji ?? '👤'} ${data.name} отключился`);
+          pushToast(`${data.emoji ?? 'рџ‘¤'} ${data.name} РѕС‚РєР»СЋС‡РёР»СЃСЏ`);
           emitGetUpdate();
         });
 
@@ -779,7 +786,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
           }
 
           setDisconnectedNames((current) => current.filter((item) => item !== data.name));
-          pushToast(`${data.emoji ?? '👤'} ${data.name} вернулся`);
+          pushToast(`${data.emoji ?? 'рџ‘¤'} ${data.name} РІРµСЂРЅСѓР»СЃСЏ`);
           emitGetUpdate();
         });
 
@@ -921,13 +928,15 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     handleAnswerDraftChange,
     handleBackToCreate,
     handleBackToMenu,
+    handleCancelHostCancelGame,
     handleCancelProceed,
     handleCancelLeaveGame,
     handleChangeScore,
+    handleConfirmHostCancelGame,
     handleConfirmProceed,
     handleConfirmLeaveGame,
-    handleCopyRoom,
     handleGoToCurrentQuestion,
+    handleHostCancelGame,
     handleJumpToQuestion,
     handleKickPlayer,
     handleLeaveGame,
@@ -941,6 +950,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     hasAnsweredCurrentQuestion,
     hasAnsweredRealQuestion,
     hostNoPlayersWarningVisible,
+    hostCancelConfirmVisible,
     isBootstrapping,
     isConnected,
     isHostOffline,
@@ -970,3 +980,4 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
     winnerIntroPlayers,
   };
 }
+

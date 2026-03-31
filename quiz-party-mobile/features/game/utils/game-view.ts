@@ -197,6 +197,14 @@ export function buildBlockedStateFromResumeReason(reason: string | null | undefi
 }
 
 export function buildBlockedStateFromCancelReason(reason: string | null | undefined): GameBlockedState {
+  if (reason === 'host_left' || reason === 'host_cancelled') {
+    return {
+      icon: '🛑',
+      title: 'Игра отменена',
+      subtitle: 'Хост отменил игру, поэтому текущая сессия завершена для всех участников.',
+    };
+  }
+
   if (reason === 'host_timeout') {
     return {
       icon: '🛑',

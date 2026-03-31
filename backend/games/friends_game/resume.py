@@ -106,15 +106,16 @@ def cancel_quiz(
         host_participant = _find_host_participant(quiz)
         event_type = {
             "host_timeout": "game_cancelled_host_timeout",
+            "host_left": "game_cancelled_host_left",
             "inactivity_timeout": "game_cancelled_inactivity",
         }.get(reason, "game_cancelled")
         log_session_event(
             db,
             quiz=quiz,
-            participant=host_participant if reason == "host_timeout" else None,
+            participant=host_participant if reason in {"host_timeout", "host_left"} else None,
             installation=(
                 host_participant.installation
-                if (reason == "host_timeout" and host_participant)
+                if (reason in {"host_timeout", "host_left"} and host_participant)
                 else None
             ),
             event_type=event_type,

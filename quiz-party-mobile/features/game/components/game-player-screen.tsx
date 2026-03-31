@@ -1,5 +1,7 @@
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { GameLobbyPlayerTile } from '@/features/game/components/game-lobby-player-tile';
+import { GameLobbyRosterHeader } from '@/features/game/components/game-lobby-roster-card';
 import { LobbyPlayerEmoji } from '@/features/game/components/lobby-player-emoji';
 import { gameTheme } from '@/features/game/theme/game-theme';
 import { GameLobbyPlayer, GameQuestion, GameStatus } from '@/features/game/types';
@@ -77,16 +79,12 @@ export function GamePlayerScreen({
   const myAnswer = myAnswersHistory[String(playerViewQuestion)];
   const canGoBack = playerViewQuestion > 1;
   const canGoForward = playerViewQuestion < realGameQuestion;
+  const normalizedQuizTitle = quizTitle.trim() || 'Вечеринка без названия';
   const showNav = realGameQuestion > 1;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <ScrollView bounces={false} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.quizHeader}>
-          <Text style={styles.quizSub}>QUIZ PARTY</Text>
-          <Text style={styles.quizTitle}>{quizTitle}</Text>
-        </View>
-
         {isHostOffline ? (
           <View style={styles.hostOfflineBanner}>
             <Text style={styles.hostOfflineTitle}>Хост оффлайн</Text>
@@ -96,40 +94,63 @@ export function GamePlayerScreen({
 
         {gameStatus === 'waiting' ? (
           <View style={styles.sectionCard}>
-            <View style={styles.waitStatusCard}>
-              <Text style={styles.waitTitle}>ТЫ В ИГРЕ!</Text>
-              <Text style={styles.waitSubtitle}>Ждём, пока организатор начнёт раунд...</Text>
+            <View style={styles.playerLobbyIntro}>
+              <View style={styles.playerLobbyChip}>
+                <View style={styles.playerLobbyChipDot} />
+                <Text style={styles.playerLobbyChipText}>Комната ожидания</Text>
+              </View>
+
+              <Text style={styles.playerLobbyTitle}>
+                {normalizedQuizTitle}
+              </Text>
+
+              <View style={styles.playerLobbyReadyPill}>
+                <Text style={styles.playerLobbyReadyEmoji}>{myEmoji}</Text>
+                <Text style={styles.playerLobbyReadyText}>Ты в игре</Text>
+              </View>
+
+              <Text style={styles.playerLobbySubtitle}>Ждём, пока организатор начнёт раунд...</Text>
             </View>
 
-            <Text style={styles.miniLabel}>В КОМНАТЕ</Text>
-            <View style={styles.playerGrid}>
-              {actualPlayers.map((player, index) => {
-                const isMe = player.name === playerName;
+            <GameLobbyRosterHeader count={actualPlayers.length} label="Участники" />
 
-                return (
-                  <View key={player.name} style={[styles.playerCard, isMe && styles.playerCardMe, player.connected === false && styles.playerCardOffline]}>
-                    {/* Бейдж "ВЫ" выносим на верхний контур карточки, чтобы он читался как внешний маркер текущего игрока. */}
-                    {isMe ? <Text style={styles.meBadge}>ВЫ</Text> : null}
-                    {/* Эмодзи участника реагирует на нажатие так же, как у хоста: с pop-анимацией и вибро-откликом. */}
-                    <LobbyPlayerEmoji
+            {!actualPlayers.length ? (
+              <View style={styles.emptyState}>
+                <LobbyPlayerEmoji
+                  emoji="✨"
+                  idleDelay={0}
+                  isInteractive={false}
+                  style={styles.emptyEmoji}
+                />
+                <Text style={styles.emptyTitle}>Комната собирается</Text>
+                <Text style={styles.emptyHint}>Как только кто-то подключится, карточки появятся здесь.</Text>
+              </View>
+            ) : (
+              <View style={styles.playerGrid}>
+                {actualPlayers.map((player, index) => {
+                  const isMe = player.name === playerName;
+
+                  return (
+                    <GameLobbyPlayerTile
+                      key={player.name}
                       emoji={player.emoji ?? '👤'}
                       idleDelay={(index % 4) * 180}
+                      isMe={isMe}
                       isOffline={player.connected === false}
-                      style={styles.playerEmoji}
+                      name={player.name}
                     />
-                    <Text style={styles.playerNameLabel}>{player.name}</Text>
-                    {player.connected === false ? <Text style={styles.offlineBadge}>offline</Text> : null}
-                  </View>
-                );
-              })}
-            </View>
+                  );
+                })}
+              </View>
+            )}
 
             <View style={styles.waitHintCard}>
               <Text style={styles.waitHint}>Приготовься, скоро начнётся! 🔥</Text>
             </View>
           </View>
         ) : (
-          <View style={styles.sectionCard}>
+          <View style={styles.activeScreenWrap}>
+            <View style={styles.sectionCard}>
             <View style={styles.headerRow}>
               <View style={styles.playerBadge}>
                 <Text style={styles.playerBadgeEmoji}>{myEmoji}</Text>
@@ -169,6 +190,7 @@ export function GamePlayerScreen({
               </View>
             </View>
 
+            <View style={styles.questionStage}>
             <View style={styles.questionCard}>
               {/* Вопрос центрируем, чтобы экран ответа воспринимался собранно и спокойно. */}
               <Text style={styles.questionText}>{currentQuestionData?.text ?? 'Готовим вопрос...'}</Text>
@@ -230,6 +252,8 @@ export function GamePlayerScreen({
               </View>
             )}
 
+            </View>
+
             <Pressable
               onPress={onLeaveGame}
               style={({ pressed }) => ({
@@ -240,6 +264,7 @@ export function GamePlayerScreen({
               <Text style={styles.leaveButtonText}>Выйти</Text>
             </Pressable>
           </View>
+          </View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -249,9 +274,6 @@ export function GamePlayerScreen({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, paddingHorizontal: 10, paddingTop: 18, paddingBottom: 30 },
-  quizHeader: { alignItems: 'center', marginBottom: 14 },
-  quizSub: { color: gameTheme.colors.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: 1.6 },
-  quizTitle: { marginTop: 4, color: gameTheme.colors.pinkDark, fontSize: 28, lineHeight: 34, fontWeight: '900', textAlign: 'center' },
   hostOfflineBanner: {
     marginBottom: 14,
     borderRadius: gameTheme.radius.section,
@@ -276,69 +298,106 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
-  waitStatusCard: {
-    borderRadius: gameTheme.radius.section,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  waitTitle: { color: gameTheme.colors.purpleDark, fontSize: 20, lineHeight: 36, fontWeight: '900', textAlign: 'center' },
-  waitSubtitle: { marginTop: 10, color: gameTheme.colors.textSoft, fontSize: 15, lineHeight: 22, textAlign: 'center' },
-  miniLabel: { marginTop: 18, marginBottom: 10, color: gameTheme.colors.textMuted, fontSize: 12, fontWeight: '900', letterSpacing: 1.4, textAlign: 'center' },
-  playerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 8,
-  },
-  playerCard: {
-    width: '48.2%',
-    minHeight: 96,
-    borderRadius: gameTheme.radius.section,
-    paddingTop: 18,
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    alignItems: 'center',
+  activeScreenWrap: {
+    flexGrow: 1,
     justifyContent: 'center',
-    position: 'relative',
-    backgroundColor: gameTheme.colors.panelStrong,
+  },
+  questionStage: {
+    width: '100%',
+  },
+  playerLobbyIntro: {
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  playerLobbyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: gameTheme.radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
     borderWidth: 1,
-    borderColor: gameTheme.colors.panelBorder,
-    shadowColor: gameTheme.colors.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderColor: 'rgba(108, 92, 231, 0.08)',
   },
-  playerCardMe: { borderWidth: 1.5, borderColor: gameTheme.colors.pink },
-  playerCardOffline: { opacity: 0.72 },
-  meBadge: {
-    position: 'absolute',
-    top: -10,
-    alignSelf: 'center',
-    zIndex: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: gameTheme.radius.pill,
-    overflow: 'hidden',
-    color: gameTheme.colors.white,
-    fontSize: 11,
-    fontWeight: '900',
-    backgroundColor: gameTheme.colors.pink,
+  playerLobbyChipDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: gameTheme.colors.pinkDark,
   },
-  playerEmoji: { fontSize: 34 },
-  playerNameLabel: { marginTop: 8, color: gameTheme.colors.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
-  offlineBadge: {
-    marginTop: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: gameTheme.radius.pill,
-    overflow: 'hidden',
-    color: gameTheme.colors.textSoft,
+  playerLobbyChipText: {
+    color: gameTheme.colors.textMuted,
     fontSize: 11,
     fontWeight: '800',
-    backgroundColor: gameTheme.colors.offlineSoft,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  playerLobbyTitle: {
+    marginTop: 14,
+    color: gameTheme.colors.purpleDark,
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  playerLobbyReadyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    borderRadius: gameTheme.radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 133, 161, 0.14)',
+  },
+  playerLobbyReadyEmoji: {
+    fontSize: 16,
+  },
+  playerLobbyReadyText: {
+    color: gameTheme.colors.pinkDark,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  playerLobbySubtitle: {
+    marginTop: 12,
+    color: gameTheme.colors.textSoft,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyState: {
+    borderRadius: gameTheme.radius.section,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(108, 92, 231, 0.18)',
+    backgroundColor: 'rgba(108, 92, 231, 0.06)',
+  },
+  emptyEmoji: { fontSize: 34 },
+  emptyTitle: {
+    marginTop: 10,
+    color: gameTheme.colors.text,
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  emptyHint: {
+    marginTop: 8,
+    color: gameTheme.colors.textSoft,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  playerGrid: {
+    gap: 10,
   },
   waitHintCard: {
     marginTop: 18,
@@ -361,14 +420,13 @@ const styles = StyleSheet.create({
   counterText: { color: gameTheme.colors.text, fontSize: 14, fontWeight: '800' },
   counterTextMuted: { color: gameTheme.colors.textMuted },
   questionCard: {
-    marginTop: 16,
     borderRadius: gameTheme.radius.section,
     paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingVertical: 16,
     backgroundColor: gameTheme.colors.panelStrong,
   },
   questionText: { color: gameTheme.colors.text, fontSize: 26, lineHeight: 33, fontWeight: '900', textAlign: 'center' },
-  questionLine: { width: 72, height: 4, marginTop: 14, borderRadius: 2, alignSelf: 'center', backgroundColor: gameTheme.colors.pink },
+  questionLine: { width: 72, height: 4, marginTop: 12, borderRadius: 2, alignSelf: 'center', backgroundColor: gameTheme.colors.pink },
   answerPreviewCard: { marginTop: 18 },
   answerPreviewCardPast: {
     paddingHorizontal: 0,

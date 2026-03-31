@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CreateToastItem } from '@/features/create/types';
 import { createTheme } from '@/features/create/theme/create-theme';
@@ -9,12 +10,17 @@ type CreateToastStackProps = {
 
 // Небольшой стек всплывающих сообщений в верхней части экрана.
 export function CreateToastStack({ items }: CreateToastStackProps) {
+  const insets = useSafeAreaInsets();
+
   if (!items.length) {
     return null;
   }
 
   return (
-    <View pointerEvents="none" style={styles.container}>
+    <View
+      pointerEvents="none"
+      style={[styles.container, { top: Math.max(insets.top, 18) + 8 }]}
+    >
       {items.map((item) => (
         <View key={item.id} style={styles.toast}>
           <Text style={styles.toastText}>{item.message}</Text>
@@ -28,7 +34,6 @@ const styles = StyleSheet.create({
   // Контейнер тостов закреплён сверху и не мешает нажимать на основной UI.
   container: {
     position: 'absolute',
-    top: 10,
     left: 14,
     right: 14,
     zIndex: 50,

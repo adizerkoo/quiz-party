@@ -9,6 +9,9 @@ type CreateActionButtonProps = {
   tone?: 'primary' | 'launch';
   icon?: ReactNode;
   disabled?: boolean;
+  eyebrow?: string;
+  helperText?: string;
+  badgeText?: string;
 };
 
 // Универсальная кнопка для экрана создания.
@@ -20,8 +23,12 @@ export function CreateActionButton({
   tone = 'primary',
   icon,
   disabled = false,
+  eyebrow,
+  helperText,
+  badgeText,
 }: CreateActionButtonProps) {
   const isLaunch = tone === 'launch';
+  const hasDetails = Boolean(eyebrow || helperText || badgeText);
 
   return (
     <Pressable
@@ -33,10 +40,48 @@ export function CreateActionButton({
         pressed && !disabled ? styles.buttonPressed : null,
         disabled ? styles.buttonDisabled : null,
       ]}>
-      <View style={styles.content}>
-        {icon}
-        <Text style={[styles.label, isLaunch ? styles.launchLabel : styles.primaryLabel]}>{label}</Text>
-      </View>
+      {hasDetails ? (
+        <View style={styles.contentDetailed}>
+          <View style={styles.leadingCluster}>
+            {icon ? <View style={styles.iconWrap}>{icon}</View> : null}
+
+            <View style={styles.textBlock}>
+              {eyebrow ? (
+                <Text numberOfLines={1} style={[styles.eyebrow, isLaunch ? styles.launchEyebrow : styles.primaryEyebrow]}>
+                  {eyebrow}
+                </Text>
+              ) : null}
+
+              <Text
+                numberOfLines={1}
+                style={[styles.label, styles.detailLabel, isLaunch ? styles.launchLabel : styles.primaryLabel]}>
+                {label}
+              </Text>
+
+              {helperText ? (
+                <Text
+                  numberOfLines={2}
+                  style={[styles.helperText, isLaunch ? styles.launchHelperText : styles.primaryHelperText]}>
+                  {helperText}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {badgeText ? (
+            <View style={[styles.badge, isLaunch ? styles.launchBadge : styles.primaryBadge]}>
+              <Text style={[styles.badgeText, isLaunch ? styles.launchBadgeText : styles.primaryBadgeText]}>
+                {badgeText}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.content}>
+          {icon}
+          <Text style={[styles.label, isLaunch ? styles.launchLabel : styles.primaryLabel]}>{label}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -93,9 +138,41 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
 
+  contentDetailed: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+
+  leadingCluster: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  textBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   label: {
     textAlign: 'center',
     fontWeight: '800',
+  },
+
+  detailLabel: {
+    textAlign: 'left',
   },
 
   primaryLabel: {
@@ -107,5 +184,65 @@ const styles = StyleSheet.create({
     color: createTheme.colors.white,
     fontSize: 18,
     letterSpacing: 0.2,
+  },
+
+  eyebrow: {
+    marginBottom: 2,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+
+  primaryEyebrow: {
+    color: 'rgba(255, 255, 255, 0.78)',
+  },
+
+  launchEyebrow: {
+    color: 'rgba(255, 255, 255, 0.78)',
+  },
+
+  helperText: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+
+  primaryHelperText: {
+    color: 'rgba(255, 255, 255, 0.88)',
+  },
+
+  launchHelperText: {
+    color: 'rgba(255, 255, 255, 0.84)',
+  },
+
+  badge: {
+    minWidth: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+
+  launchBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+
+  primaryBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+
+  badgeText: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  launchBadgeText: {
+    color: createTheme.colors.white,
+  },
+
+  primaryBadgeText: {
+    color: createTheme.colors.white,
   },
 });

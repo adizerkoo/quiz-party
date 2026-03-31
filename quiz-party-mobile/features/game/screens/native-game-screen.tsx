@@ -59,9 +59,9 @@ export function NativeGameScreen({ role, roomCode, source }: NativeGameScreenPro
             maxReachedQuestion={controller.maxReachedQuestion}
             onBackToCreate={controller.handleBackToCreate}
             onChangeScore={controller.handleChangeScore}
-            onCopyRoom={controller.handleCopyRoom}
             onJumpToQuestion={controller.handleJumpToQuestion}
             onKickPlayer={controller.handleKickPlayer}
+            onLeaveGame={controller.handleHostCancelGame}
             onNextQuestion={controller.handleNextQuestion}
             onShareRoom={controller.handleShareRoom}
             onStartGame={controller.handleStartGame}
@@ -113,6 +113,16 @@ export function NativeGameScreen({ role, roomCode, source }: NativeGameScreenPro
           onConfirm={() => controller.setHostNoPlayersWarningVisible(false)}
           title="Тут пока пусто!"
           visible={controller.hostNoPlayersWarningVisible}
+        />
+
+        <GameDialog
+          cancelLabel="Остаться"
+          confirmLabel="Завершить игру"
+          description="Если хост выйдет, игра завершится для всех участников и будет помечена как отменённая."
+          onCancel={controller.handleCancelHostCancelGame}
+          onConfirm={controller.handleConfirmHostCancelGame}
+          title="Выйти из игры?"
+          visible={controller.hostCancelConfirmVisible}
         />
 
         <GameDialog

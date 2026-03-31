@@ -240,7 +240,11 @@ export function ProfileHistorySection({
               <View style={styles.cardTopRow}>
                 <Text style={styles.cardDate}>{formatHistoryDate(entry)}</Text>
 
-                {entry.is_winner ? <Text style={[styles.headerBadge, styles.winnerBadge]}>{UI_TEXT.win}</Text> : null}
+                {entry.is_winner ? (
+                  <Text style={[styles.headerBadge, styles.winnerBadge]}>{UI_TEXT.win}</Text>
+                ) : isHostEntry ? (
+                  <Text style={[styles.headerBadge, styles.hostBadge]}>{UI_TEXT.host}</Text>
+                ) : null}
               </View>
 
               <Text style={styles.cardTitle}>{entry.title}</Text>
@@ -269,12 +273,7 @@ export function ProfileHistorySection({
                   </View>
                 ))}
 
-                {isHostEntry ? (
-                  <View style={[styles.metaChip, styles.hostMetaChip]}>
-                    <View style={styles.hostMetaDot} />
-                    <Text style={[styles.metaChipText, styles.hostMetaChipText]}>{UI_TEXT.host}</Text>
-                  </View>
-                ) : !shouldHidePerformance ? (
+                {!shouldHidePerformance ? (
                   <>
                     <View style={[styles.metaChip, styles.rankMetaChip]}>
                       <Text style={styles.metaChipLabel}>{UI_TEXT.rank}</Text>
@@ -501,6 +500,10 @@ const styles = StyleSheet.create({
   winnerBadge: {
     color: '#8a5a00',
     backgroundColor: '#ffe08a',
+  },
+  hostBadge: {
+    color: menuTheme.colors.create,
+    backgroundColor: 'rgba(255, 95, 135, 0.14)',
   },
   metaRow: {
     flexDirection: 'row',

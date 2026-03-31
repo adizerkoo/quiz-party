@@ -19,6 +19,7 @@ from backend.games.friends_game.repository import (
 from backend.games.friends_game.resume import (
     HOST_TIMEOUT,
     build_game_cancelled_payload,
+    cancel_quiz,
     evaluate_quiz_state,
     mark_participant_left,
     mark_quiz_activity,
@@ -521,6 +522,75 @@ def register_lobby_handlers(sio_manager):
                 await sio_manager.emit("update_answers", get_players_in_quiz(db, quiz.id), room=room)
             await sio_manager.leave_room(sid, room)
             await sio_manager.disconnect(sid)
+
+    @logged_socket_handler(sio_manager, "cancel_game_signal", logger)
+    async def handle_cancel_game(sid, data):
+        """Позволяет хосту вручную отменить уже начатую игру для всех участников."""
+        room = data.get("room")
+        if not validate_quiz_code(room):
+            return
+
+        with database.get_db_session() as db:
+            quiz = get_quiz_by_code(db, room)
+            if quiz is None:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.cancel_game_signal.quiz_missing",
+                    "cancel_game_signal ignored because the quiz does not exist",
+                    room=room,
+                    sid=sid,
+                )
+                return
+
+            state = evaluate_quiz_state(db, quiz=quiz)
+            if state.cancelled:
+                if state.just_cancelled:
+                    db.commit()
+                await _emit_game_cancelled(room, quiz)
+                return
+
+            if not verify_host(db, quiz.id, sid):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "socket.cancel_game_signal.host_required",
+                    "cancel_game_signal ignored because sender is not the host",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                )
+                return
+
+            if quiz.status != "playing":
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "socket.cancel_game_signal.skipped",
+                    "cancel_game_signal ignored because the quiz is not active",
+                    **build_log_extra(quiz=quiz, sid=sid),
+                    status=quiz.status,
+                )
+                return
+
+            host = get_player_by_sid(db, sid)
+            cancelled_at = utc_now_naive()
+            cancel_quiz(
+                db,
+                quiz=quiz,
+                reason="host_left",
+                cancelled_at=cancelled_at,
+            )
+            mark_quiz_activity(quiz, occurred_at=cancelled_at)
+            db.commit()
+
+            log_game_event(
+                logger,
+                logging.INFO,
+                "socket.cancel_game_signal.completed",
+                "Game cancelled by host",
+                **build_log_extra(quiz=quiz, participant=host, sid=sid),
+                cancel_reason=quiz.cancel_reason,
+            )
+            await _emit_game_cancelled(room, quiz)
 
     @logged_socket_handler(sio_manager, "join_room", logger)
     async def handle_join(sid, data):
