@@ -1161,15 +1161,24 @@ export function NativeCreateScreen() {
                   <Text style={styles.sectionLabel}>Твой вопрос</Text>
 
                   <View style={styles.inlineActions}>
-                    <Pressable onPress={handleSaveDraftToFavorites} style={({ pressed }) => [
-                      styles.inlineFavoriteButton,
-                      isSavingFavorite && styles.inlineFavoriteButtonDisabled,
-                      pressed && !isSavingFavorite && styles.inlineFavoriteButtonPressed,
-                    ]}>
-                      <FontAwesome6 color={createTheme.colors.pink} iconStyle="solid" name="heart" size={12} />
-                      <Text style={styles.inlineFavoriteButtonText}>
-                        {isSavingFavorite ? 'Сохраняем...' : 'В избранное'}
-                      </Text>
+                    <Pressable
+                      accessibilityHint="Сохраняет текущий вопрос в избранное"
+                      accessibilityLabel={isSavingFavorite ? 'Сохраняем в избранное' : 'Добавить в избранное'}
+                      accessibilityRole="button"
+                      disabled={isSavingFavorite}
+                      hitSlop={6}
+                      onPress={handleSaveDraftToFavorites}
+                      style={({ pressed }) => [
+                        styles.inlineFavoriteButton,
+                        isSavingFavorite && styles.inlineFavoriteButtonDisabled,
+                        pressed && !isSavingFavorite && styles.inlineFavoriteButtonPressed,
+                      ]}>
+                      <FontAwesome6
+                        color={createTheme.colors.pink}
+                        iconStyle="solid"
+                        name="heart"
+                        size={14}
+                      />
                     </Pressable>
 
                     <Pressable onPress={() => setLibraryModalVisible(true)} style={({ pressed }) => [
@@ -1493,11 +1502,10 @@ const styles = StyleSheet.create({
   },
   inlineFavoriteButton: {
     flexShrink: 0,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    justifyContent: 'center',
+    width: 34,
+    height: 34,
     borderWidth: 1.5,
     borderColor: 'rgba(255, 133, 161, 0.22)',
     borderRadius: createTheme.radius.pill,
@@ -1509,13 +1517,6 @@ const styles = StyleSheet.create({
   },
   inlineFavoriteButtonDisabled: {
     opacity: 0.6,
-  },
-  inlineFavoriteButtonText: {
-    color: createTheme.colors.pinkDark,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
 
   // Блок вариантов ответа под типом "Выбор".
