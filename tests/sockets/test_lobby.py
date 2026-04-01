@@ -5,16 +5,21 @@
 зарегистрированных обработчиков с mock sio_manager.
 """
 
+import asyncio
+from datetime import timedelta
+
 import allure
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from backend.games.friends_game.sockets import lobby as lobby_module
 from backend.games.friends_game.cache import _quiz_cache
 from backend.games.friends_game.models import Player, Quiz
 from backend.games.friends_game.runtime_state import connection_registry
 from backend.games.friends_game.service import hash_secret
 from backend.games.friends_game.sockets.lobby import register_lobby_handlers
 from backend.platform.identity.models import User, UserInstallation
+from backend.shared.utils import utc_now_naive
 
 
 class FakeSioManager:
@@ -51,6 +56,35 @@ def clear_cache():
     _quiz_cache.clear()
     yield
     _quiz_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+async def clear_lobby_background_tasks():
+    for tasks in (
+        lobby_module._pending_disconnects,
+        lobby_module._pending_host_timeouts,
+        lobby_module._pending_inactivity_timeouts,
+    ):
+        pending = list(tasks.values())
+        tasks.clear()
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    yield
+
+    for tasks in (
+        lobby_module._pending_disconnects,
+        lobby_module._pending_host_timeouts,
+        lobby_module._pending_inactivity_timeouts,
+    ):
+        pending = list(tasks.values())
+        tasks.clear()
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
 
 def _get_emitted_payload(sio, event_name):
@@ -596,3 +630,57 @@ class TestCancelGame:
         payload = _get_emitted_payload(sio, "game_cancelled")
         assert payload["status"] == "cancelled"
         assert payload["reason"] == "host_left"
+
+
+@allure.feature("Socket.IO")
+@allure.story("Waiting Lobby Inactivity")
+class TestWaitingLobbyInactivity:
+    @allure.title("Waiting lobby auto-cancels after inactivity without extra client events")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @pytest.mark.asyncio
+    async def test_waiting_lobby_auto_cancels_after_inactivity(self, sio, db_session, sample_quiz):
+        sample_quiz.created_at = utc_now_naive()
+        sample_quiz.last_activity_at = utc_now_naive()
+        db_session.commit()
+
+        scheduled_coroutines = []
+        real_create_task = asyncio.create_task
+
+        def capture_task(coro):
+            scheduled_coroutines.append(coro)
+            return real_create_task(asyncio.sleep(0))
+
+        with patch("backend.games.friends_game.sockets.lobby.database.get_db_session") as mock_ctx, patch(
+            "backend.games.friends_game.sockets.lobby.INACTIVITY_CANCEL_TIMEOUT",
+            timedelta(seconds=2),
+        ), patch(
+            "backend.games.friends_game.sockets.lobby.asyncio.create_task",
+            side_effect=capture_task,
+        ):
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=db_session)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            await sio.call("join_room", "host-inactivity-sid", {
+                "room": sample_quiz.code,
+                "name": "Host",
+                "role": "host",
+            })
+
+            assert len(scheduled_coroutines) == 1
+            with patch(
+                "backend.games.friends_game.resume.INACTIVITY_CANCEL_TIMEOUT",
+                timedelta(seconds=2),
+            ):
+                await asyncio.wait_for(scheduled_coroutines[0], timeout=5)
+
+        db_session.refresh(sample_quiz)
+        assert sample_quiz.status == "cancelled"
+        assert sample_quiz.cancel_reason == "inactivity_timeout"
+        assert sample_quiz.cancelled_at is not None
+
+        events = [call.args[0] for call in sio.emit.call_args_list]
+        assert "game_cancelled" in events
+
+        payload = _get_emitted_payload(sio, "game_cancelled")
+        assert payload["status"] == "cancelled"
+        assert payload["reason"] == "inactivity_timeout"

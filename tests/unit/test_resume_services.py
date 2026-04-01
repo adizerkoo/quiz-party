@@ -52,6 +52,18 @@ def test_evaluate_quiz_state_cancels_after_full_inactivity_timeout(db_session, p
     assert playing_quiz.cancel_reason == "inactivity_timeout"
 
 
+def test_evaluate_quiz_state_cancels_waiting_quiz_after_full_inactivity_timeout(db_session, sample_quiz):
+    sample_quiz.created_at = utc_now_naive() - INACTIVITY_CANCEL_TIMEOUT - timedelta(minutes=1)
+    db_session.commit()
+
+    state = evaluate_quiz_state(db_session, quiz=sample_quiz, now=utc_now_naive())
+
+    assert state.cancelled is True
+    assert state.cancel_reason == "inactivity_timeout"
+    assert sample_quiz.status == "cancelled"
+    assert sample_quiz.cancel_reason == "inactivity_timeout"
+
+
 def test_mark_participant_left_clears_reconnect_state(sample_player):
     sample_player.reconnect_token_hash = "secret-hash"
     sample_player.sid = "player-sid-001"

@@ -18,9 +18,11 @@ from backend.games.friends_game.repository import (
 )
 from backend.games.friends_game.resume import (
     HOST_TIMEOUT,
+    INACTIVITY_CANCEL_TIMEOUT,
     build_game_cancelled_payload,
     cancel_quiz,
     evaluate_quiz_state,
+    get_quiz_activity_at,
     mark_participant_left,
     mark_quiz_activity,
 )
@@ -43,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 _pending_disconnects: dict[int, asyncio.Task] = {}
 _pending_host_timeouts: dict[int, asyncio.Task] = {}
+_pending_inactivity_timeouts: dict[int, asyncio.Task] = {}
 DEFAULT_PLAYER_NAME = "Игрок"
 DEFAULT_HOST_NAME = "Ведущий"
 HOST_NAME_PLACEHOLDERS = {"HOST", DEFAULT_HOST_NAME, DEFAULT_PLAYER_NAME}
@@ -253,7 +256,18 @@ async def _emit_credentials(sio_manager, sid: str, *, participant: models.Player
 
 def register_lobby_handlers(sio_manager):
     """Регистрирует socket-события лобби: join, disconnect и kick."""
+    def _cancel_inactivity_timeout(quiz_id: int) -> None:
+        """Останавливает фоновый monitor таймаута неактивности для waiting-лобби."""
+        pending_task = _pending_inactivity_timeouts.pop(quiz_id, None)
+        if (
+            pending_task
+            and not pending_task.done()
+            and pending_task is not asyncio.current_task()
+        ):
+            pending_task.cancel()
+
     async def _emit_game_cancelled(room: str, quiz: models.Quiz, *, target_sid: str | None = None):
+        _cancel_inactivity_timeout(quiz.id)
         await sio_manager.emit("game_cancelled", build_game_cancelled_payload(quiz), room=target_sid or room)
 
     async def _emit_resume_unavailable(target_sid: str, *, reason: str):
@@ -265,6 +279,75 @@ def register_lobby_handlers(sio_manager):
             "host_connection_state",
             {"hostOffline": host_offline},
             room=target_sid or room,
+        )
+
+    async def _monitor_waiting_inactivity_timeout(quiz_id: int, quiz_code: str):
+        """Следит за неактивным waiting-лобби и переводит его в cancelled без нового client-события."""
+        try:
+            while True:
+                with database.get_db_session() as db:
+                    quiz = get_quiz_by_code(db, quiz_code)
+                    if quiz is None or quiz.id != quiz_id or quiz.status != "waiting":
+                        return
+
+                    activity_at = get_quiz_activity_at(quiz)
+                    if activity_at is None:
+                        return
+
+                    inactivity_seconds = max(
+                        0.0,
+                        (utc_now_naive() - activity_at).total_seconds(),
+                    )
+                    remaining_seconds = INACTIVITY_CANCEL_TIMEOUT.total_seconds() - inactivity_seconds
+
+                if remaining_seconds > 0:
+                    await asyncio.sleep(remaining_seconds)
+                    continue
+
+                with database.get_db_session() as db:
+                    quiz = get_quiz_by_code(db, quiz_code)
+                    if quiz is None or quiz.id != quiz_id or quiz.status != "waiting":
+                        return
+
+                    state = evaluate_quiz_state(db, quiz=quiz)
+                    if not state.cancelled:
+                        await asyncio.sleep(0)
+                        continue
+
+                    if state.just_cancelled:
+                        db.commit()
+                    if state.cancel_reason == "inactivity_timeout":
+                        await _emit_game_cancelled(quiz.code, quiz)
+                    return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log_event(
+                logger,
+                logging.WARNING,
+                "socket.waiting_inactivity_timeout.failed",
+                "Waiting inactivity monitor failed",
+                room=quiz_code,
+                quiz_id=quiz_id,
+                exc_info=True,
+            )
+        finally:
+            current_task = _pending_inactivity_timeouts.get(quiz_id)
+            if current_task is asyncio.current_task():
+                _pending_inactivity_timeouts.pop(quiz_id, None)
+
+    def _ensure_waiting_inactivity_timeout(quiz: models.Quiz) -> None:
+        """Гарантирует один активный background-monitor для waiting-лобби."""
+        if quiz.status != "waiting":
+            _cancel_inactivity_timeout(quiz.id)
+            return
+
+        pending_task = _pending_inactivity_timeouts.get(quiz.id)
+        if pending_task and not pending_task.done():
+            return
+
+        _pending_inactivity_timeouts[quiz.id] = asyncio.create_task(
+            _monitor_waiting_inactivity_timeout(quiz.id, quiz.code)
         )
 
     async def _schedule_host_timeout(quiz_id: int, quiz_code: str, expected_host_left_at):
@@ -391,6 +474,8 @@ def register_lobby_handlers(sio_manager):
                         quiz.code,
                     )
                 )
+
+            _ensure_waiting_inactivity_timeout(quiz)
 
     @logged_socket_handler(sio_manager, "kick_player", logger)
     async def handle_kick_player(sid, data):
@@ -977,4 +1062,5 @@ def register_lobby_handlers(sio_manager):
                 assigned_name=name_assigned,
                 status=quiz.status,
             )
+            _ensure_waiting_inactivity_timeout(quiz)
 

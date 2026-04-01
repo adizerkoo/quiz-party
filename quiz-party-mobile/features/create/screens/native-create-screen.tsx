@@ -1482,11 +1482,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: 0,
     // Небольшой внутренний отступ оставляем, но делаем экран шире и ближе к краям.
-    paddingHorizontal: 4,
-    paddingTop: 18,
+    paddingHorizontal: 1,
+    paddingTop: 5,
     // Дополнительный запас внутри основного контента.
     // Уменьшаем его, чтобы снизу не было лишнего пустого воздуха.
-    paddingBottom: 16,
+    paddingBottom: 5,
     backgroundColor: 'transparent',
   },
 
