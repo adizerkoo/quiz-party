@@ -143,6 +143,11 @@ async function saveAndGo() {
 
         const data = await response.json();
         const roomCode = data.code;
+        localStorage.setItem('quizEditorReturnSnapshot', JSON.stringify({
+            roomCode,
+            title,
+            questions: quizQuestions,
+        }));
         window.QuizUserProfile?.saveStoredSessionCredentials?.({
             roomCode,
             role: 'host',

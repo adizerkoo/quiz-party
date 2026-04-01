@@ -8,6 +8,46 @@ const createInitLogger = window.QuizFeatureLogger?.createLogger?.('web.create.in
     || console;
 let createIdeaIntervalId = null;
 
+function readStoredEditorReturnSnapshot() {
+    try {
+        const raw = localStorage.getItem('quizEditorReturnSnapshot');
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function isLaunchReadyQuestion(question) {
+    if (!question || !String(question.text || '').trim()) {
+        return false;
+    }
+
+    if (question.type === 'text') {
+        return Boolean(String(question.correct || '').trim());
+    }
+
+    if (!Array.isArray(question.options) || question.options.length < 2) {
+        return false;
+    }
+
+    const normalizedOptions = question.options.map((item) => String(item || '').trim());
+    if (normalizedOptions.some((item) => !item)) {
+        return false;
+    }
+
+    return normalizedOptions.includes(String(question.correct || '').trim());
+}
+
+function shouldRepairStoredQuestions(questions) {
+    return Array.isArray(questions)
+        && questions.length > 0
+        && questions.some((question) => !isLaunchReadyQuestion(question));
+}
+
 function setIdeaPlaceholder(message) {
     const ideaText = document.getElementById('random-idea-text');
     if (ideaText) {
@@ -85,6 +125,34 @@ async function loadCreateLibraryData() {
 
 function hydrateStoredCreateQuestions() {
     quizQuestions = readStoredQuizQuestions();
+
+    if (shouldRepairStoredQuestions(quizQuestions)) {
+        const storedSnapshot = readStoredEditorReturnSnapshot();
+        const snapshotQuestions = Array.isArray(storedSnapshot?.questions)
+            ? storedSnapshot.questions.map(normalizeTemplateQuestion)
+            : [];
+
+        if (snapshotQuestions.length && snapshotQuestions.every(isLaunchReadyQuestion)) {
+            quizQuestions = snapshotQuestions;
+            localStorage.setItem('quizQuestions', JSON.stringify(quizQuestions));
+
+            const titleInput = document.getElementById('quiz-title-input');
+            if (titleInput && !titleInput.value.trim() && storedSnapshot?.title) {
+                titleInput.value = storedSnapshot.title;
+            }
+
+            createInitLogger.info('create.draft.repaired_from_snapshot', {
+                questionCount: snapshotQuestions.length,
+                roomCode: storedSnapshot?.roomCode || null,
+            });
+        } else {
+            createInitLogger.warn('create.draft.repair_skipped', {
+                reason: 'missing_valid_snapshot',
+                questionCount: quizQuestions.length,
+            });
+        }
+    }
+
     renderQuestions();
 }
 

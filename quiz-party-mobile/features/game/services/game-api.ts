@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from '@/features/shared/services/fetch-with-timeout';
 import { buildWebAppUrl, WEB_APP_ORIGIN } from '@/features/web/config/web-app';
 import { GameQuizResponse, GameResultsPayload, GameResumeCheckResponse, GameRole } from '@/features/game/types';
 
@@ -19,7 +20,7 @@ export async function fetchGameQuiz(roomCode: string, role: GameRole, hostToken?
     }
   }
   const querySuffix = params.toString() ? `?${params.toString()}` : '';
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/quizzes/${encodeURIComponent(roomCode)}${querySuffix}`);
+  const response = await fetchWithTimeout(`${WEB_APP_ORIGIN}/api/v1/quizzes/${encodeURIComponent(roomCode)}${querySuffix}`);
 
   if (!response.ok) {
     throw new Error(`Failed to load quiz: HTTP ${response.status}`);
@@ -29,7 +30,7 @@ export async function fetchGameQuiz(roomCode: string, role: GameRole, hostToken?
 }
 
 export async function fetchGameResults(roomCode: string) {
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/quizzes/${encodeURIComponent(roomCode)}/results`);
+  const response = await fetchWithTimeout(`${WEB_APP_ORIGIN}/api/v1/quizzes/${encodeURIComponent(roomCode)}/results`);
 
   if (!response.ok) {
     throw new Error(`Failed to load results: HTTP ${response.status}`);
@@ -43,7 +44,7 @@ export async function checkStoredGameResume(params: {
   userId?: number | null;
   installationPublicId?: string | null;
 }) {
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/resume/check`, {
+  const response = await fetchWithTimeout(`${WEB_APP_ORIGIN}/api/v1/resume/check`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

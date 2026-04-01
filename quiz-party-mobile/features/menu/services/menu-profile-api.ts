@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 import { normalizeMenuAvatar } from '@/features/menu/data/avatar-options';
+import { fetchWithTimeout } from '@/features/shared/services/fetch-with-timeout';
 import {
   getMenuProfileStateSnapshot,
   getMenuSessionProfile,
@@ -170,7 +171,7 @@ async function parseUserResponse(response: Response, failureMessage: string) {
 }
 
 async function createRemoteProfile(profile: MenuProfile) {
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/users`, {
+  const response = await fetchWithTimeout(`${WEB_APP_ORIGIN}/api/v1/users`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(buildProfilePayload(profile)),
@@ -200,7 +201,7 @@ async function exchangeRemoteProfileSession(profile: MenuProfile) {
     throw new Error('Profile id is required for session exchange');
   }
 
-  const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/users/${profile.id}/session`, {
+  const response = await fetchWithTimeout(`${WEB_APP_ORIGIN}/api/v1/users/${profile.id}/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -297,7 +298,7 @@ export async function fetchWithMenuProfileAuth(
     }
   }
 
-  const sendRequest = (requestProfile: MenuProfile | null) => fetch(input, {
+  const sendRequest = (requestProfile: MenuProfile | null) => fetchWithTimeout(input, {
     ...init,
     headers: buildMenuProfileAuthHeaders(init?.headers, requestProfile),
   });

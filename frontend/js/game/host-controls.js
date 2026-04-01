@@ -9,8 +9,82 @@ let _nextLocked = false;
 
 
 // Возврат в редактор викторины (с сохранением данных)
-function goBackToEditor() {
-  localStorage.setItem('quizQuestions', JSON.stringify(currentQuestions));
+async function goBackToEditor() {
+  let draftQuestions = currentQuestions;
+  const storedSnapshotRaw = localStorage.getItem('quizEditorReturnSnapshot');
+  if (storedSnapshotRaw) {
+    try {
+      const storedSnapshot = JSON.parse(storedSnapshotRaw);
+      if (
+        String(storedSnapshot?.roomCode || '').trim().toUpperCase() === String(roomCode || '').trim().toUpperCase()
+        && Array.isArray(storedSnapshot?.questions)
+        && storedSnapshot.questions.length > 0
+      ) {
+        draftQuestions = storedSnapshot.questions;
+      }
+    } catch (error) {
+      // Игнорируем битый snapshot и продолжаем fallback-цепочку.
+    }
+  }
+
+  const hasCompleteDraftQuestions = Array.isArray(draftQuestions) && draftQuestions.every((question) => {
+    if (!question?.text) {
+      return false;
+    }
+    if (question.type === 'text') {
+      return Boolean(question?.correct);
+    }
+    if (!Array.isArray(question?.options) || !question.options.length) {
+      return false;
+    }
+    return Boolean(question?.correct) && question.options.includes(question.correct);
+  });
+
+  if (hasCompleteDraftQuestions) {
+    localStorage.setItem('quizQuestions', JSON.stringify(draftQuestions));
+    localStorage.setItem('quizDraft', JSON.stringify({
+      title: quizTitle,
+      questionText: '',
+      type: 'text',
+      correctText: '',
+      options: ['', '', '', ''],
+      selectedIndex: 0
+    }));
+    window.location.href = "create.html";
+    return;
+  }
+
+  const currentProfile = window.QuizUserProfile?.getStoredUserProfile?.() || null;
+  const installationPublicId =
+    currentProfile?.installation_public_id ||
+    window.QuizUserProfile?.getOrCreateInstallationPublicId?.() ||
+    null;
+  const hostCredentials =
+    window.QuizUserProfile?.getStoredSessionCredentials?.({
+      roomCode,
+      role: 'host',
+      installation_public_id:
+        currentProfile?.installation_public_id ||
+        installationPublicId,
+    }) || null;
+
+  if (hostCredentials?.host_token) {
+    try {
+      const response = await fetch(
+        `/api/v1/quizzes/${encodeURIComponent(roomCode)}?role=host&host_token=${encodeURIComponent(hostCredentials.host_token)}`,
+      );
+      if (response.ok) {
+        const payload = await response.json();
+        if (Array.isArray(payload?.questions_data) && payload.questions_data.length > 0) {
+          draftQuestions = payload.questions_data;
+        }
+      }
+    } catch (error) {
+      // Если сеть недоступна, оставляем локальное состояние как fallback.
+    }
+  }
+
+  localStorage.setItem('quizQuestions', JSON.stringify(draftQuestions));
   localStorage.setItem('quizDraft', JSON.stringify({
     title: quizTitle,
     questionText: '',

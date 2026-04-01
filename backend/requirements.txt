@@ -40,6 +40,7 @@ python-dotenv==1.2.2
 python-engineio==4.13.1
 python-multipart==0.0.22
 python-socketio==5.16.1
+redis==5.2.1
 simple-websocket==1.1.0
 slowapi==0.1.9
 SQLAlchemy==2.0.48

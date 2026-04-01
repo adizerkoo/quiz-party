@@ -194,7 +194,17 @@ async function init() {
   }
 
   try {
-    const response = await fetch(`/api/v1/quizzes/${roomCode}${role === "host" ? "?role=host" : ""}`);
+    const quizParams = new URLSearchParams();
+    if (role === "host") {
+      quizParams.set("role", "host");
+      if (latestCredentials?.host_token) {
+        quizParams.set("host_token", latestCredentials.host_token);
+      }
+    }
+    const quizQuery = quizParams.toString();
+    const response = await fetch(
+      `/api/v1/quizzes/${encodeURIComponent(roomCode)}${quizQuery ? `?${quizQuery}` : ""}`,
+    );
 
     if (!response.ok) {
       window.location.href = "index.html?error=not_found";

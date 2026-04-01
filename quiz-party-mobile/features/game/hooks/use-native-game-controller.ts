@@ -177,9 +177,23 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
   }
 
   async function handleBackToCreate() {
+    let draftQuestions = questions;
+    const hostCredentials = getGameSessionCredentials(roomCode, 'host');
+
+    if (role === 'host' && hostCredentials?.hostToken) {
+      try {
+        const latestQuiz = await fetchGameQuiz(roomCode, 'host', hostCredentials.hostToken);
+        if (latestQuiz.questions_data?.length) {
+          draftQuestions = latestQuiz.questions_data;
+        }
+      } catch {
+        // Если сеть недоступна, сохраняем локальное состояние как fallback.
+      }
+    }
+
     await saveCreateDraft({
       title: quizTitle,
-      questions: questions.map((question) => ({
+      questions: draftQuestions.map((question) => ({
         text: question.text,
         type: question.type,
         correct: question.correct ?? '',
@@ -621,6 +635,10 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
           transports: ['websocket'],
           forceNew: true,
           autoConnect: true,
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
         });
 
         socketRef.current = socket;
