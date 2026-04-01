@@ -140,6 +140,12 @@ class TestGetQuiz:
         assert response.status_code == 200
         return response.json()["code"]
 
+    def _create_quiz_with_token(self, client) -> tuple[str, str]:
+        response = client.post("/api/v1/quizzes", json=VALID_QUIZ_PAYLOAD)
+        assert response.status_code == 200
+        data = response.json()
+        return data["code"], data["host_token"]
+
     @allure.title("Player does not see correct answers")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_get_quiz_player_no_correct(self, client):
@@ -151,16 +157,38 @@ class TestGetQuiz:
         for question in response.json()["questions_data"]:
             assert "correct" not in question
 
-    @allure.title("Host sees correct answers")
+    @allure.title("Host sees correct answers with valid token")
     @allure.severity(allure.severity_level.CRITICAL)
     def test_get_quiz_host_sees_correct(self, client):
+        code, host_token = self._create_quiz_with_token(client)
+
+        response = client.get(f"/api/v1/quizzes/{code}", params={"role": "host", "host_token": host_token})
+
+        assert response.status_code == 200
+        for question in response.json()["questions_data"]:
+            assert "correct" in question
+
+    @allure.title("Host role without valid token does not see correct answers")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_quiz_host_without_token_no_correct(self, client):
         code = self._create_quiz(client)
 
         response = client.get(f"/api/v1/quizzes/{code}", params={"role": "host"})
 
         assert response.status_code == 200
         for question in response.json()["questions_data"]:
-            assert "correct" in question
+            assert "correct" not in question
+
+    @allure.title("Host role with wrong token does not see correct answers")
+    @allure.severity(allure.severity_level.CRITICAL)
+    def test_get_quiz_host_with_wrong_token_no_correct(self, client):
+        code = self._create_quiz(client)
+
+        response = client.get(f"/api/v1/quizzes/{code}", params={"role": "host", "host_token": "wrong-token"})
+
+        assert response.status_code == 200
+        for question in response.json()["questions_data"]:
+            assert "correct" not in question
 
     @allure.title("Unknown quiz code returns 404")
     @allure.severity(allure.severity_level.NORMAL)

@@ -21,6 +21,7 @@ from backend.games.friends_game.service import (
     create_quiz_session,
     load_quiz_graph,
     serialize_quiz_questions,
+    verify_secret,
 )
 from backend.platform.identity.service import (
     AuthenticatedUserContext,
@@ -145,6 +146,7 @@ def register_friends_game_routes(app):
     def get_quiz(
         code: str,
         role: str = Query(default=None),
+        host_token: str = Query(default=None),
         db: Session = Depends(database.get_db),
     ):
         """Возвращает текущую игровую сессию в клиент-совместимом формате."""
@@ -157,7 +159,12 @@ def register_friends_game_routes(app):
             db.commit()
             db.refresh(quiz)
 
-        questions = serialize_quiz_questions(quiz, include_correct=(role == "host"))
+        include_correct = (
+            role == "host"
+            and host_token is not None
+            and verify_secret(host_token, quiz.host_secret_hash)
+        )
+        questions = serialize_quiz_questions(quiz, include_correct=include_correct)
         return {
             "id": quiz.id,
             "code": quiz.code,

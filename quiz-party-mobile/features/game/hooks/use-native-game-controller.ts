@@ -568,7 +568,7 @@ export function useNativeGameController({ role, roomCode, source }: UseNativeGam
           }
         }
 
-        const quiz = await fetchGameQuiz(roomCode, role);
+        const quiz = await fetchGameQuiz(roomCode, role, currentCredentials?.hostToken ?? null);
 
         if (cancelled) {
           return;

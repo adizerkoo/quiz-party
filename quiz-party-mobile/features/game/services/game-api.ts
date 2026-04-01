@@ -10,8 +10,15 @@ type ResumeCheckSessionInput = {
   installationPublicId?: string | null;
 };
 
-export async function fetchGameQuiz(roomCode: string, role: GameRole) {
-  const querySuffix = role === 'host' ? '?role=host' : '';
+export async function fetchGameQuiz(roomCode: string, role: GameRole, hostToken?: string | null) {
+  const params = new URLSearchParams();
+  if (role === 'host') {
+    params.set('role', 'host');
+    if (hostToken) {
+      params.set('host_token', hostToken);
+    }
+  }
+  const querySuffix = params.toString() ? `?${params.toString()}` : '';
   const response = await fetch(`${WEB_APP_ORIGIN}/api/v1/quizzes/${encodeURIComponent(roomCode)}${querySuffix}`);
 
   if (!response.ok) {
